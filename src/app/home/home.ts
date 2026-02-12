@@ -1,6 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { LoginForm } from '../login-form/login-form.js';
 import { Auth } from '../services/auth.js';
+import { Router } from '@angular/router';
 @Component({
   selector: 'app-home',
   standalone: true,
@@ -9,7 +10,7 @@ import { Auth } from '../services/auth.js';
     <h1>A Tale of Recognition</h1>
     @if (!auth.isLoggedIn()) {
       <div class="login-form-wrapper">
-        <app-login-form [logIn]="auth.LogIn.bind(auth)" (usernameOut)="this.username = $event"></app-login-form>
+        <app-login-form [logIn]="handleLogin.bind(this)" (usernameOut)="username = $event"></app-login-form>
       </div>
     }
     <h2>{{username}}</h2>
@@ -35,6 +36,14 @@ import { Auth } from '../services/auth.js';
   `,
 })
 export class Home {
-  auth = new Auth();
+  auth = inject(Auth);
+  private router = inject(Router);
   username='';
+
+  handleLogin(username: string, password: string): void {
+    const isLoggedIn = this.auth.LogIn(username, password);
+    if (isLoggedIn) {
+      this.router.navigateByUrl('/games');
+    }
+  }
 }
