@@ -3,7 +3,7 @@ import { App } from './app';
 import { GamesView } from './games-view/games-view';
 import { Home } from './home/home';
 import { Details } from './details/details';
-
+import { Store } from './store/store';
 export const routes: Routes = [
     {
         path: '',
@@ -19,5 +19,10 @@ export const routes: Routes = [
         path: 'games/:id',
         title: 'Game Details',
         component: Details,
+    },
+    {
+        path: 'store',
+        title: 'Store',
+        component: Store,
     },
 ];
