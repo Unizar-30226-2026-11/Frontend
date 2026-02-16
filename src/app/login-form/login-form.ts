@@ -36,7 +36,7 @@ import { required } from '@angular/forms/signals';
       text-align: center;
       top: 25%;
       padding-top: 20px;
-      // margin-top: 70px;
+      /* margin-top: 70px; */
       width: 100%;
       z-index: 1;
       pointer-events: auto;
