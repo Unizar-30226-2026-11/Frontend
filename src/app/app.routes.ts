@@ -4,6 +4,7 @@ import { GamesView } from './games-view/games-view';
 import { Home } from './home/home';
 import { Details } from './details/details';
 import { Store } from './store/store';
+import { Settings } from './settings/settings';
 export const routes: Routes = [
     {
         path: '',
@@ -24,5 +25,10 @@ export const routes: Routes = [
         path: 'store',
         title: 'Store',
         component: Store,
+    },
+    {
+        path: 'settings',
+        title: 'Settings',
+        component: Settings,
     },
 ];
