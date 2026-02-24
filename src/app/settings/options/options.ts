@@ -1,6 +1,7 @@
-﻿import { Component } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { SettingsPreferencesStore } from '../../services/settings-preferences-store';
 
 @Component({
   selector: 'app-options',
@@ -57,10 +58,13 @@ import { FormsModule } from '@angular/forms';
       </div>
 
       <div class="acciones-configuracion">
+        @if (saveMessage(); as message) {
+          <p class="estado-guardado">{{ message }}</p>
+        }
         <button type="button" class="btn-config btn-secundario" (click)="restablecerValores()">
           Restablecer configuraciones por defecto
         </button>
-        <button type="button" class="btn-config btn-primario">
+        <button type="button" class="btn-config btn-primario" (click)="guardarCambios()">
           Guardar cambios
         </button>
       </div>
@@ -69,16 +73,30 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./options.css'],
 })
 export class Options {
-  volumenSonido = 100;
-  volumenMusica = 100;
-  notificacionesActivas = false;
-  estadoOnlineActivo = false;
+  private readonly settingsStore = inject(SettingsPreferencesStore);
+
+  saveMessage = signal<string | null>(null);
+
+  volumenSonido = this.settingsStore.settings().soundVolume;
+  volumenMusica = this.settingsStore.settings().musicVolume;
+  notificacionesActivas = this.settingsStore.settings().notificationsEnabled;
+  estadoOnlineActivo = this.settingsStore.settings().showOnlineStatus;
 
   restablecerValores(): void {
     this.volumenSonido = 100;
     this.volumenMusica = 100;
     this.notificacionesActivas = false;
     this.estadoOnlineActivo = false;
+    this.saveMessage.set(null);
+  }
+
+  guardarCambios(): void {
+    this.settingsStore.save({
+      soundVolume: this.volumenSonido,
+      musicVolume: this.volumenMusica,
+      notificationsEnabled: this.notificacionesActivas,
+      showOnlineStatus: this.estadoOnlineActivo,
+    });
+    this.saveMessage.set('Configuracion guardada localmente');
   }
 }
-

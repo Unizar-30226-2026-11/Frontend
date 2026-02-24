@@ -12,12 +12,12 @@ export class PlayerStore {
   loading = signal(false);
   error = signal<string | null>(null);
 
-  loadPlayer(username: string): Promise<void> {
+  loadPlayer(username: string, options: { forceRefresh?: boolean } = {}): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
 
     return this.playerInfoPull
-      .getPlayerInfo(username)
+      .getPlayerInfo(username, options)
       .then((playerInfo) => {
         this.player.set(playerInfo);
       })
@@ -49,10 +49,12 @@ export class PlayerStore {
       return false;
     }
 
-    this.player.set({
+    const updatedPlayer = {
       ...currentPlayer,
       coins: currentPlayer.coins - amount,
-    });
+    };
+    this.player.set(updatedPlayer);
+    this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
     return true;
   }
 
@@ -61,10 +63,12 @@ export class PlayerStore {
     if (!currentPlayer) {
       return;
     }
-    this.player.set({
+    const updatedPlayer = {
       ...currentPlayer,
       coins: nextCoins,
-    });
+    };
+    this.player.set(updatedPlayer);
+    this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
   }
 
   clearPlayer(): void {

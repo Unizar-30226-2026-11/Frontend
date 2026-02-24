@@ -20,9 +20,9 @@ interface StoreDeck {
       <h1>Tienda</h1>
 
       @if (!auth.isLoggedIn()) {
-        <p class="store-info">Inicia sesion para ver tu perfil de jugador.</p>
+        <p class="store-info">Inicia sesión para ver tu perfil de jugador.</p>
       } @else if (playerStore.loading()) {
-        <p class="store-info">Cargando informacion del jugador...</p>
+        <p class="store-info">Cargando información del jugador...</p>
       } @else if (playerStore.error()) {
         <p class="store-error">{{ playerStore.error() }}</p>
         <button type="button" (click)="reloadPlayer()">Reintentar</button>
@@ -231,7 +231,7 @@ export class Store {
       return;
     }
     this.purchaseError.set(null);
-    void this.playerStore.loadPlayer(this.auth.username);
+    void this.playerStore.loadPlayer(this.auth.username, { forceRefresh: true });
   }
 
   canBuy(deck: StoreDeck): boolean {
