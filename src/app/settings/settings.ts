@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { Options } from './options/options';
+import { Options } from './components/options/options';
 @Component({
   selector: 'app-settings',
   standalone: true,

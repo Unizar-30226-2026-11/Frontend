@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { LoginForm } from '../login-form/login-form.js';
+import { LoginForm } from './components/login-form/login-form.js';
 import { Auth } from '../services/auth.js';
 import { Router } from '@angular/router';
 @Component({
@@ -17,8 +17,8 @@ import { Router } from '@angular/router';
   `,
   styles: `
     h1 {
-      margin: 0;
-      margin-top: 20px;
+      margin-top: 0px;
+      padding-top: 20px;
       margin-bottom: 20px;
       font-style: normal;
       font-synthesis: none;

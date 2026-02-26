@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SettingsPreferencesStore } from '../../services/settings-preferences-store';
+import { SettingsPreferencesStore } from '../../../services/settings-preferences-store';
 
 @Component({
   selector: 'app-options',

@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { Auth } from '../services/auth';
 import { PlayerStore } from '../services/player-store';
-import { DecksCard } from './component/decks-card/decks-card';
+import { DecksCard } from './components/decks-card/decks-card';
 import { DecksPull } from '../services/decks-pull';
 
 interface StoreDeck {

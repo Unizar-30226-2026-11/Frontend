@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Game } from '../interfaces/game';
 import { GamesPull } from '../services/games-pull';
-import { GameCard } from '../game-card/game-card';
+import { GameCard } from './components/game-card/game-card';
 @Component({
   selector: 'app-games-view',
   standalone: true,
@@ -106,7 +106,7 @@ import { GameCard } from '../game-card/game-card';
     }
   `,
 })
-export class GamesView {
+export class Games {
   games = signal<Game[]>([]);
   loading = signal(false);
   error = signal<string | null>(null);
