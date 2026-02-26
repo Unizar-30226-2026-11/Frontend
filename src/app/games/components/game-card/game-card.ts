@@ -46,16 +46,21 @@ import { RouterModule } from '@angular/router';
 
     .game-image {
       position: relative;
-      aspect-ratio: 16 / 9;
+      height: clamp(180px, 24vw, 240px);
       overflow: hidden;
+      background: #101826;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .game-image img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      object-position: center;
       display: block;
-      filter: saturate(1.1) contrast(1.05);
+      filter: saturate(1.08) contrast(1.03);
     }
 
     .game-image::after {

@@ -1,9 +1,10 @@
 import { Routes } from '@angular/router';
 import { App } from './app';
-import { GamesView } from './games-view/games-view';
+import { Games } from './games/games';
 import { Home } from './home/home';
-import { Details } from './details/details';
+import { Details } from './games/details/details';
 import { Store } from './store/store';
+import { Settings } from './settings/settings';
 export const routes: Routes = [
     {
         path: '',
@@ -12,8 +13,8 @@ export const routes: Routes = [
     },
     {
         path: 'games',
-        title: 'Games View',
-        component: GamesView, 
+        title: 'Games List',
+        component: Games, 
     },
     {
         path: 'games/:id',
@@ -24,5 +25,10 @@ export const routes: Routes = [
         path: 'store',
         title: 'Store',
         component: Store,
+    },
+    {
+        path: 'settings',
+        title: 'Settings',
+        component: Settings,
     },
 ];

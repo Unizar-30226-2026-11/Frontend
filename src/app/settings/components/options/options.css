@@ -1,0 +1,235 @@
+﻿:host {
+  display: block;
+}
+
+.configuracion-layout {
+  --panel-bg: #d7d7d7;
+  --control-bg: #ababab;
+  --text-color: #111111;
+  --stroke: #9ea4a8;
+  --thumb: #f4f4f4;
+  --btn-primary: #b8d8cf;
+  --btn-secondary: #d8cfd4;
+
+  width: 100%;
+  padding: 1.5rem 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-color);
+  box-sizing: border-box;
+}
+
+.configuracion-container {
+  width: min(92vw, 660px);
+  background: var(--panel-bg);
+  border-radius: 10px;
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 12%);
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.configuracion-container h1 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.9rem, 3vw, 2.2rem);
+  font-weight: 500;
+}
+
+.contenido-scroll {
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.contenido-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.contenido-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.contenido-scroll::-webkit-scrollbar-thumb {
+  background: #8c8c8c;
+  border-radius: 999px;
+}
+
+.grupo-control {
+  margin-bottom: 1rem;
+}
+
+.grupo-control:last-child {
+  margin-bottom: 0;
+}
+
+.grupo-control > label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+
+.caja-control {
+  background: var(--control-bg);
+  border-radius: 6px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.slider-rango {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+}
+
+.slider-rango:focus {
+  outline: none;
+}
+
+.slider-rango::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #000;
+  border-radius: 999px;
+}
+
+.slider-rango::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 999px;
+  border: 1px solid #d5d5d5;
+  background: var(--thumb);
+  cursor: pointer;
+}
+
+.slider-rango::-moz-range-track {
+  height: 4px;
+  background: #000;
+  border-radius: 999px;
+}
+
+.slider-rango::-moz-range-thumb {
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid #d5d5d5;
+  background: var(--thumb);
+  cursor: pointer;
+}
+
+.caja-toggle {
+  justify-content: flex-start;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.etiqueta-estado {
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-toggle {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.slider-toggle.redondo {
+  border-radius: 999px;
+}
+
+.slider-toggle::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 16px;
+  left: 2px;
+  top: 3px;
+  background: #fff;
+  border-radius: 999px;
+  transition: transform 0.2s ease;
+}
+
+.switch input:checked + .slider-toggle::before {
+  transform: translateX(20px);
+}
+
+.acciones-configuracion {
+  width: min(92vw, 660px);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.btn-config {
+  border: 2px solid var(--stroke);
+  border-radius: 16px;
+  padding: 0.85rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-config:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 14%);
+}
+
+.btn-config:active {
+  transform: translateY(0);
+}
+
+.btn-secundario {
+  background: var(--btn-secondary);
+  flex: 1.35;
+}
+
+.btn-primario {
+  background: var(--btn-primary);
+  flex: 0.85;
+}
+
+@media (max-width: 640px) {
+  .configuracion-container {
+    width: 100%;
+    max-height: 70vh;
+    padding: 1rem;
+  }
+
+  .acciones-configuracion {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .btn-secundario,
+  .btn-primario {
+    flex: 1;
+  }
+}
+

@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Game } from '../interfaces/game';
 import { GamesPull } from '../services/games-pull';
-import { GameCard } from '../game-card/game-card';
+import { GameCard } from './components/game-card/game-card';
 @Component({
   selector: 'app-games-view',
   standalone: true,
@@ -14,16 +14,30 @@ import { GameCard } from '../game-card/game-card';
         <span class="games-count">{{ games().length }} results</span>
       </header>
 
-      <div class="games-grid">
-        @for (game of games(); track game.id) {
-          <app-game-card
-            [gameTitle]="game.title"
-            [gameImage]="game.image"
-            [gameDescription]="game.body"
-            [gameId]="game.id"
-          ></app-game-card>
-        }
-      </div>
+      @if (loading()) {
+        <div class="loading-state">
+          <img src="/assets/loading.gif" alt="Cargando juegos..." />
+        </div>
+      } @else if (error()) {
+        <div class="loading-error">
+          {{ error() }}
+        </div>
+      } @else if (games().length === 0) {
+        <div class="loading-error">
+          No hay juegos disponibles
+        </div>
+      } @else {
+        <div class="games-grid">
+          @for (game of games(); track game.id) {
+            <app-game-card
+              [gameTitle]="game.title"
+              [gameImage]="game.image"
+              [gameDescription]="game.body"
+              [gameId]="game.id"
+            ></app-game-card>
+          }
+        </div>
+      }
     </section>
   `,
   styles: `
@@ -38,6 +52,7 @@ import { GameCard } from '../game-card/game-card';
       justify-content: space-between;
       gap: 16px;
       margin-bottom: 20px;
+      color: black;
     }
 
     .games-header h1 {
@@ -47,14 +62,35 @@ import { GameCard } from '../game-card/game-card';
     }
 
     .games-count {
-      font-size: 0.95rem;
-      color: rgba(230, 231, 235, 0.7);
+      padding-top: 10px;
+      font-size: 1.5rem;
+      color: black;
     }
 
     .games-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 20px;
+    }
+
+    .loading-state {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 260px;
+    }
+
+    .loading-state img {
+      width: min(220px, 80vw);
+      height: auto;
+    }
+
+    .loading-error {
+      margin: auto;
+      padding-top: 20px;
+      font-size: 40px;
+      color: black;
+      text-align: center;
     }
 
     @media (min-width: 1200px) {
@@ -70,21 +106,30 @@ import { GameCard } from '../game-card/game-card';
     }
   `,
 })
-export class GamesView {
+export class Games {
   games = signal<Game[]>([]);
+  loading = signal(false);
+  error = signal<string | null>(null);
 
   constructor(private gameService: GamesPull) {
     this.loadGames(1, 20);
   }
 
   loadGames(page: number, pageSize: number) {
+    this.loading.set(true);
+    this.error.set(null);
+
     this.gameService
       .getGames(page, pageSize)
       .then((games) => {
         this.games.set(games);
       })
       .catch((error) => {
+        this.error.set('No se ha podido cargar nada de la API de games-view');
         console.error('games load failed', error);
+      })
+      .finally(() => {
+        this.loading.set(false);
       });
   }
 }
