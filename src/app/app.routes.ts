@@ -5,6 +5,7 @@ import { Home } from './home/home';
 import { Details } from './games/details/details';
 import { Store } from './store/store';
 import { Settings } from './settings/settings';
+import { Dixit } from './dixit/dixit';
 export const routes: Routes = [
     {
         path: '',
@@ -30,5 +31,10 @@ export const routes: Routes = [
         path: 'settings',
         title: 'Settings',
         component: Settings,
+    },
+    {
+        path: 'dixit/:id',
+        title: 'Dixit',
+        component: Dixit,
     },
 ];
