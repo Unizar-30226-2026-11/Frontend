@@ -16,7 +16,7 @@ import { DeckCard } from '../../services/card-pull';
             (click)="selectCard(card)"
           >
             <article class="card">
-              <img [src]="card.image" [alt]="card.value + ' de ' + card.suit" />
+              <img draggable="false" [src]="card.image" [alt]="card.value + ' de ' + card.suit" />
             </article>
           </div>
         }
@@ -33,7 +33,7 @@ import { DeckCard } from '../../services/card-pull';
     .fan-shell {
       width: 100%;
       overflow-x: auto;
-      overflow-y: visible;
+      overflow-y: hidden;
       padding: 8px 0 max(18px, env(safe-area-inset-bottom));
     }
 
