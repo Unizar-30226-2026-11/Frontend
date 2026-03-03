@@ -27,11 +27,14 @@ import { Router } from '@angular/router';
       color: black;
       -webkit-text-stroke: 2px #e8d9a8;
       text-align: center;
-    } 
+      padding-inline: 16px;
+    }
+
     .login-form-wrapper {
       display: flex;
       justify-content: center;
       align-items: center;
+      width: 100%;
     }
   `,
 })
