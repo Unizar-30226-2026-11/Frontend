@@ -8,7 +8,6 @@ import { required } from '@angular/forms/signals';
   template: `
     <div class="page-center">
       <div class="img-box">
-        <div class="img-title">Inicia Sesion</div>
         <form class="img-login-form" [formGroup]="profileForm" (ngSubmit)="onSubmit()">
           <div class="form-grid">
             <label for="username">Usuario:</label>
@@ -18,38 +17,26 @@ import { required } from '@angular/forms/signals';
             <button class="form-submit" type="submit" [disabled]="!profileForm.valid">Iniciar Sesion</button>
           </div>
         </form>
-        <img src="/assets/LoginFormImage.jpg" alt="Imagen para formulario de login">
+        <img src="/assets/LoginFormImage.png" alt="Imagen para formulario de login">
       </div>
     </div>
   `,
   styles: `
     .img-box {
+      padding-top: 30px;
       position: relative;
-      width: 500px;
-      height: 300px;
+      width: 450px;
+      height: 250px;
       overflow: hidden;
       border-radius: 8px;
-    }
-
-    .img-title {
-      position: absolute;
-      padding-top: 10px;
-      top: 10%;
-      left: 0;
-      right: 0;
-      text-align: center;
-      color: #fff;
-      font-weight: 600;
-      font-size: 24px;
-      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-      z-index: 1;
-      pointer-events: none;
     }
 
     .img-login-form {
       position: absolute;
       text-align: center;
-      top: 33%;
+      top: 25%;
+      padding-top: 20px;
+      /* margin-top: 70px; */
       width: 100%;
       z-index: 1;
       pointer-events: auto;
@@ -122,9 +109,10 @@ import { required } from '@angular/forms/signals';
 
     .img-box img {
       width: 100%;
-      height: 100%;
+      height: 150%;
       object-fit: cover; /* o "contain" si no quieres recorte */
       display: block;
+      border-radius: 8px;
     }
   `,
 })

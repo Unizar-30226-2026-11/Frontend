@@ -3,7 +3,10 @@ import { App } from './app';
 import { GamesView } from './games-view/games-view';
 import { Home } from './home/home';
 import { Details } from './details/details';
-
+import { Store } from './store/store';
+import { Register } from './register/register';
+import { MainMenu } from './main-menu/main-menu';
+import { Settings } from './settings/settings';
 export const routes: Routes = [
     {
         path: '',
@@ -20,4 +23,24 @@ export const routes: Routes = [
         title: 'Game Details',
         component: Details,
     },
+    {
+        path: 'store',
+        title: 'Store',
+        component: Store,
+    },
+    {
+        path: 'main-menu',
+        title: 'Main Menu',
+        component: MainMenu,
+    },
+    {
+        path: 'settings',
+        title: 'Settings',
+        component: Settings,
+    },
+    {
+    path: 'register',
+    title: 'Register',
+    component: Register,
+  },
 ];
