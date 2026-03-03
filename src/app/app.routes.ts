@@ -4,7 +4,11 @@ import { Games } from './games/games';
 import { Home } from './home/home';
 import { Details } from './games/details/details';
 import { Store } from './store/store';
+import { Register } from './register/register';
+import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
+import { Login } from './login/login';
+
 export const routes: Routes = [
     {
         path: '',
@@ -27,8 +31,23 @@ export const routes: Routes = [
         component: Store,
     },
     {
+        path: 'menu',
+        title: 'Main Menu',
+        component: MainMenu,
+    },
+    {
         path: 'settings',
         title: 'Settings',
         component: Settings,
+    },
+    {
+        path: 'register',
+        title: 'Register',
+        component: Register,
+    },
+    {
+        path: 'login',
+        title: 'Login',
+        component: Login,
     },
 ];

@@ -1,8 +1,9 @@
 :host {
+    --navbar-height: 72px;
     display: block;
     width: 100%;
     min-height: 100dvh;
-    background-image: url("/background.jpg");
+    background-image: url('/background.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
