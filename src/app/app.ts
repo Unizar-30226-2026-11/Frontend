@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { NavigationBar } from './navigation-bar/navigation-bar';
+import { NavigationBar } from './components/navigation-bar/navigation-bar';
 import { Router, RouterOutlet } from '@angular/router';
 
 @Component({

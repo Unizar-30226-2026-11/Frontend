@@ -1,5 +1,4 @@
 import { Component } from '@angular/core';
-<<<<<<< HEAD
 import { Options } from './components/options/options';
 @Component({
   selector: 'app-settings',
@@ -20,12 +19,3 @@ import { Options } from './components/options/options';
 export class Settings {
 
 }
-=======
-
-@Component({
-  selector: 'app-settings',
-  standalone: true,
-  template: ``,
-})
-export class Settings {}
->>>>>>> Menus-Regis

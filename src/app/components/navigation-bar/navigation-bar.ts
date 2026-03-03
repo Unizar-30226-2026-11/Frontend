@@ -8,7 +8,7 @@ import { Router, RouterLink } from '@angular/router';
   imports: [RouterLink],
   template: `
     <header class="store-navbar">
-      <a class="brand" routerLink="/main-menu" aria-label="Ir al menu principal">
+      <a class="brand" routerLink="/menu" aria-label="Ir al menu principal">
         A Tale of Recognition
       </a>
 

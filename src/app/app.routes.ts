@@ -2,11 +2,13 @@ import { Routes } from '@angular/router';
 import { App } from './app';
 import { Games } from './games/games';
 import { Home } from './home/home';
-import { Details } from './details/details';
+import { Details } from './games/details/details';
 import { Store } from './store/store';
 import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
+import { Login } from './login/login';
+
 export const routes: Routes = [
     {
         path: '',
@@ -29,7 +31,7 @@ export const routes: Routes = [
         component: Store,
     },
     {
-        path: 'main-menu',
+        path: 'menu',
         title: 'Main Menu',
         component: MainMenu,
     },
@@ -39,8 +41,13 @@ export const routes: Routes = [
         component: Settings,
     },
     {
-    path: 'register',
-    title: 'Register',
-    component: Register,
-  },
+        path: 'register',
+        title: 'Register',
+        component: Register,
+    },
+    {
+        path: 'login',
+        title: 'Login',
+        component: Login,
+    },
 ];

@@ -1,11 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { Auth } from '../services/auth';
 import { PlayerStore } from '../services/player-store';
-<<<<<<< HEAD
 import { DecksCard } from './components/decks-card/decks-card';
-=======
-import { DecksCard } from './component/decks-card/decks-card';
->>>>>>> Menus-Regis
 import { DecksPull } from '../services/decks-pull';
 
 interface StoreDeck {
@@ -24,15 +20,9 @@ interface StoreDeck {
       <h1>Tienda</h1>
 
       @if (!auth.isLoggedIn()) {
-<<<<<<< HEAD
         <p class="store-info">Inicia sesión para ver tu perfil de jugador.</p>
       } @else if (playerStore.loading()) {
         <p class="store-info">Cargando información del jugador...</p>
-=======
-        <p class="store-info">Inicia sesion para ver tu perfil de jugador.</p>
-      } @else if (playerStore.loading()) {
-        <p class="store-info">Cargando informacion del jugador...</p>
->>>>>>> Menus-Regis
       } @else if (playerStore.error()) {
         <p class="store-error">{{ playerStore.error() }}</p>
         <button type="button" (click)="reloadPlayer()">Reintentar</button>
@@ -241,11 +231,7 @@ export class Store {
       return;
     }
     this.purchaseError.set(null);
-<<<<<<< HEAD
     void this.playerStore.loadPlayer(this.auth.username, { forceRefresh: true });
-=======
-    void this.playerStore.loadPlayer(this.auth.username);
->>>>>>> Menus-Regis
   }
 
   canBuy(deck: StoreDeck): boolean {

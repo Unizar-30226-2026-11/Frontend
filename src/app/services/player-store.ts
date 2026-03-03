@@ -12,20 +12,12 @@ export class PlayerStore {
   loading = signal(false);
   error = signal<string | null>(null);
 
-<<<<<<< HEAD
   loadPlayer(username: string, options: { forceRefresh?: boolean } = {}): Promise<void> {
-=======
-  loadPlayer(username: string): Promise<void> {
->>>>>>> Menus-Regis
     this.loading.set(true);
     this.error.set(null);
 
     return this.playerInfoPull
-<<<<<<< HEAD
       .getPlayerInfo(username, options)
-=======
-      .getPlayerInfo(username)
->>>>>>> Menus-Regis
       .then((playerInfo) => {
         this.player.set(playerInfo);
       })
@@ -57,19 +49,12 @@ export class PlayerStore {
       return false;
     }
 
-<<<<<<< HEAD
     const updatedPlayer = {
       ...currentPlayer,
       coins: currentPlayer.coins - amount,
     };
     this.player.set(updatedPlayer);
     this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
-=======
-    this.player.set({
-      ...currentPlayer,
-      coins: currentPlayer.coins - amount,
-    });
->>>>>>> Menus-Regis
     return true;
   }
 
@@ -78,19 +63,12 @@ export class PlayerStore {
     if (!currentPlayer) {
       return;
     }
-<<<<<<< HEAD
     const updatedPlayer = {
       ...currentPlayer,
       coins: nextCoins,
     };
     this.player.set(updatedPlayer);
     this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
-=======
-    this.player.set({
-      ...currentPlayer,
-      coins: nextCoins,
-    });
->>>>>>> Menus-Regis
   }
 
   clearPlayer(): void {
