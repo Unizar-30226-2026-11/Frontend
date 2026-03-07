@@ -1,8 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Game } from '../interfaces/game';
 import { GamesPull } from '../services/games-pull';
 import { GameCard } from './components/game-card/game-card';
+import { Auth } from '../services/auth';
+
 @Component({
   selector: 'app-games-view',
   standalone: true,
@@ -10,13 +12,17 @@ import { GameCard } from './components/game-card/game-card';
   template: `
     <section class="games-view">
       <header class="games-header">
-        <h1>Games</h1>
-        <span class="games-count">{{ games().length }} results</span>
+        <h1>Salas disponibles</h1>
+        <span class="games-count">{{ games().length }} resultados</span>
       </header>
 
-      @if (loading()) {
+      @if (!auth.isLoggedIn()) {
+        <div class="loading-error">
+          Debes iniciar sesion para consultar las salas.
+        </div>
+      } @else if (loading()) {
         <div class="loading-state">
-          <img src="/assets/loading.gif" alt="Cargando juegos..." />
+          <img src="/assets/loading.gif" alt="Cargando salas..." />
         </div>
       } @else if (error()) {
         <div class="loading-error">
@@ -24,7 +30,7 @@ import { GameCard } from './components/game-card/game-card';
         </div>
       } @else if (games().length === 0) {
         <div class="loading-error">
-          No hay juegos disponibles
+          No hay salas disponibles.
         </div>
       } @else {
         <div class="games-grid">
@@ -32,9 +38,9 @@ import { GameCard } from './components/game-card/game-card';
             <app-game-card
               [gameTitle]="game.title"
               [gameImage]="game.image"
-              [gameDescription]="game.body"
+              [gameDescription]="game.description"
               [gameId]="game.id"
-            ></app-game-card>
+            />
           }
         </div>
       }
@@ -107,26 +113,30 @@ import { GameCard } from './components/game-card/game-card';
   `,
 })
 export class Games {
-  games = signal<Game[]>([]);
-  loading = signal(false);
-  error = signal<string | null>(null);
+  readonly auth = inject(Auth);
+  private readonly gameService = inject(GamesPull);
 
-  constructor(private gameService: GamesPull) {
-    this.loadGames(1, 20);
+  readonly games = signal<Game[]>([]);
+  readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
+
+  constructor() {
+    if (this.auth.isLoggedIn()) {
+      void this.loadGames(1, 20);
+    }
   }
 
-  loadGames(page: number, pageSize: number) {
+  loadGames(page: number, pageSize: number): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
 
-    this.gameService
+    return this.gameService
       .getGames(page, pageSize)
       .then((games) => {
         this.games.set(games);
       })
-      .catch((error) => {
-        this.error.set('No se ha podido cargar nada de la API de games-view');
-        console.error('games load failed', error);
+      .catch((error: unknown) => {
+        this.error.set(error instanceof Error ? error.message : 'No se pudieron cargar las salas');
       })
       .finally(() => {
         this.loading.set(false);

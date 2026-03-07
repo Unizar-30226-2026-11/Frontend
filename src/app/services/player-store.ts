@@ -12,12 +12,12 @@ export class PlayerStore {
   loading = signal(false);
   error = signal<string | null>(null);
 
-  loadPlayer(username: string, options: { forceRefresh?: boolean } = {}): Promise<void> {
+  loadPlayer(options: { forceRefresh?: boolean } = {}): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
 
     return this.playerInfoPull
-      .getPlayerInfo(username, options)
+      .getPlayerInfo(options)
       .then((playerInfo) => {
         this.player.set(playerInfo);
       })
@@ -35,37 +35,38 @@ export class PlayerStore {
   }
 
   canAfford(amount: number): boolean {
-    // const currentPlayer = this.player();
-    // if (!currentPlayer) {
-    //   return false;
-    // }
-    // return currentPlayer.coins >= amount;
-    return true;
+    const currentPlayer = this.player();
+    if (!currentPlayer) {
+      return false;
+    }
+
+    return currentPlayer.balance >= amount;
   }
 
   spendCoins(amount: number): boolean {
     const currentPlayer = this.player();
-    if (!currentPlayer || currentPlayer.coins < amount) {
+    if (!currentPlayer || currentPlayer.balance < amount) {
       return false;
     }
 
     const updatedPlayer = {
       ...currentPlayer,
-      coins: currentPlayer.coins - amount,
+      balance: currentPlayer.balance - amount,
     };
     this.player.set(updatedPlayer);
     this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
     return true;
   }
 
-  updateCoins(nextCoins: number): void {
+  updateBalance(nextBalance: number): void {
     const currentPlayer = this.player();
     if (!currentPlayer) {
       return;
     }
+
     const updatedPlayer = {
       ...currentPlayer,
-      coins: nextCoins,
+      balance: nextBalance,
     };
     this.player.set(updatedPlayer);
     this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
@@ -75,5 +76,6 @@ export class PlayerStore {
     this.player.set(null);
     this.loading.set(false);
     this.error.set(null);
+    this.playerInfoPull.invalidatePlayerInfo();
   }
 }

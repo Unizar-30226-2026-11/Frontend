@@ -1,73 +1,92 @@
-import { Injectable } from '@angular/core';
-import { PlayerInfo } from '../interfaces/player-info';
+import { Injectable, inject } from '@angular/core';
+import {
+  PlayerInfo,
+  UserBalanceResponse,
+  UserProfileApi,
+  UserProfileResponse,
+} from '../interfaces/player-info';
+import { Auth } from './auth';
+import { ApiClient } from './api-client';
+
 @Injectable({
   providedIn: 'root',
 })
 export class PlayerInfoPull {
-  private readonly playerInfoEndpoint = 'https://jsonplaceholder.typicode.com/users/1';
-  private readonly cache = new Map<string, PlayerInfo>();
+  private readonly apiClient = inject(ApiClient);
+  private readonly auth = inject(Auth);
 
-  getPlayerInfo(
-    username: string,
-    options: { forceRefresh?: boolean } = {}
-  ): Promise<PlayerInfo> {
-    const cacheKey = this.getCacheKey(username);
-    const cachedPlayer = this.cache.get(cacheKey);
-    if (cachedPlayer && !options.forceRefresh) {
-      return Promise.resolve(cachedPlayer);
-    }
+  getPlayerInfo(options: { forceRefresh?: boolean } = {}): Promise<PlayerInfo> {
+    const token = this.requireToken();
 
-    return this.fetchPlayerInfo(username).then((playerInfo) => {
-      this.cache.set(cacheKey, playerInfo);
-      return playerInfo;
-    });
+    return Promise.all([
+      this.apiClient.request<UserProfileResponse>('/users/profile', {
+        token,
+        ttlMs: 60_000,
+        forceRefresh: options.forceRefresh,
+      }),
+      this.apiClient.request<UserBalanceResponse>('/users/balance', {
+        token,
+        ttlMs: 15_000,
+        forceRefresh: options.forceRefresh,
+      }),
+    ]).then(([profileResponse, balanceResponse]) =>
+      this.normalizePlayer(profileResponse.profile, balanceResponse.balance.balance)
+    );
   }
 
   savePlayerInfoToCache(playerInfo: PlayerInfo): void {
-    this.cache.set(this.getCacheKey(playerInfo.username), playerInfo);
+    this.apiClient.setCache<UserProfileResponse>(
+      'GET:/users/profile',
+      {
+        profile: {
+          id_user: playerInfo.legacyUserId,
+          username: playerInfo.username,
+          email: playerInfo.email,
+          exp_level: playerInfo.experienceLevel,
+          progress_level: playerInfo.progressLevel,
+          state: playerInfo.state,
+          personal_state: playerInfo.personalState,
+          id: playerInfo.id,
+        },
+      },
+      60_000
+    );
+
+    this.apiClient.setCache<UserBalanceResponse>(
+      'GET:/users/balance',
+      {
+        balance: {
+          balance: playerInfo.balance,
+        },
+      },
+      15_000
+    );
   }
 
-  invalidatePlayerInfo(username: string): void {
-    this.cache.delete(this.getCacheKey(username));
+  invalidatePlayerInfo(): void {
+    this.apiClient.invalidateCache('/users/profile');
+    this.apiClient.invalidateCache('/users/balance');
   }
 
-  private async fetchPlayerInfo(username: string): Promise<PlayerInfo> {
-    const response = await fetch(this.playerInfoEndpoint);
-    if (!response.ok) {
-      throw new Error('No se pudo cargar la informacion del jugador');
-    }
-
-    const data: unknown = await response.json();
-    if (!this.isUserResponse(data)) {
-      throw new Error('Formato de respuesta invalido para la informacion del jugador');
-    }
-
-    const normalizedUsername = username.trim() || data.username || 'player';
-    const hash = normalizedUsername
-      .split('')
-      .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-
+  private normalizePlayer(profile: UserProfileApi, balance: number): PlayerInfo {
     return {
-      id: String(data.id),
-      username: normalizedUsername,
-      coins: 1000 + hash * 7,
-      level: 1 + (hash % 30),
+      id: profile.id,
+      legacyUserId: profile.id_user,
+      username: profile.username,
+      email: profile.email,
+      experienceLevel: profile.exp_level,
+      progressLevel: profile.progress_level,
+      state: profile.state,
+      personalState: profile.personal_state,
+      balance,
     };
   }
 
-  private getCacheKey(username: string): string {
-    const normalizedUsername = username.trim().toLowerCase() || 'anonymous';
-    return `player:info:${normalizedUsername}`;
-  }
-
-  private isUserResponse(value: unknown): value is { id: number; username?: string } {
-    if (typeof value !== 'object' || value === null) {
-      return false;
+  private requireToken(): string {
+    const token = this.auth.token();
+    if (!token) {
+      throw new Error('Debes iniciar sesion para cargar tu perfil');
     }
-
-    const candidate = value as { id?: unknown; username?: unknown };
-    const usernameIsValid =
-      typeof candidate.username === 'undefined' || typeof candidate.username === 'string';
-    return typeof candidate.id === 'number' && usernameIsValid;
+    return token;
   }
 }

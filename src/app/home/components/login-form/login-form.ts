@@ -1,23 +1,33 @@
-﻿import { Component, Input, output } from '@angular/core';
-import { FormsModule, FormControl, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { required } from '@angular/forms/signals';
+import { Component, Input } from '@angular/core';
+import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 
 @Component({
   selector: 'app-login-form',
+  standalone: true,
   imports: [FormsModule, ReactiveFormsModule],
   template: `
     <div class="page-center">
       <div class="img-box">
         <form class="img-login-form" [formGroup]="profileForm" (ngSubmit)="onSubmit()">
           <div class="form-grid">
-            <label for="username">Usuario:</label>
-            <input id="username" type="text" formControlName="username" name="username">
+            <label for="email">Email:</label>
+            <input id="email" type="email" formControlName="email" name="email" />
             <label for="password">Contrasena:</label>
-            <input id="password" type="password" formControlName="password" name="password">
-            <button class="form-submit" type="submit" [disabled]="!profileForm.valid">Iniciar Sesion</button>
+            <input id="password" type="password" formControlName="password" name="password" />
+            <button class="form-submit" type="submit" [disabled]="!profileForm.valid || submitting">
+              @if (submitting) {
+                Iniciando...
+              } @else {
+                Iniciar sesion
+              }
+            </button>
           </div>
+
+          @if (errorMessage) {
+            <p class="form-error">{{ errorMessage }}</p>
+          }
         </form>
-        <img src="/assets/LoginFormImage.png" alt="Imagen para formulario de login">
+        <img src="/assets/LoginFormImage.png" alt="Imagen para formulario de login" />
       </div>
     </div>
   `,
@@ -36,7 +46,6 @@ import { required } from '@angular/forms/signals';
       text-align: center;
       top: 25%;
       padding-top: 20px;
-      /* margin-top: 70px; */
       width: 100%;
       z-index: 1;
       pointer-events: auto;
@@ -107,10 +116,18 @@ import { required } from '@angular/forms/signals';
       opacity: 0.65;
     }
 
+    .form-error {
+      margin: 14px auto 0;
+      max-width: 360px;
+      color: #ffd7d7;
+      font-weight: 600;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    }
+
     .img-box img {
       width: 100%;
       height: 150%;
-      object-fit: cover; /* o "contain" si no quieres recorte */
+      object-fit: cover;
       display: block;
       border-radius: 8px;
     }
@@ -118,19 +135,26 @@ import { required } from '@angular/forms/signals';
 })
 export class LoginForm {
   profileForm = new FormGroup({
-    username: new FormControl('', Validators.required),
-    password: new FormControl('', Validators.required),
+    email: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.email],
+    }),
+    password: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
   });
-  @Input() logIn: (username: string, password: string) => void = () => {};
-  usernameOut = output<string>();
 
-  onSubmit() {
-    console.log('Usuario:', this.profileForm.get('username')?.value);
-    console.log('Contrasena:', this.profileForm.get('password')?.value);
-    this.logIn(
-      this.profileForm.get('username')?.value || '',
-      this.profileForm.get('password')?.value || ''
-    );
-    this.usernameOut.emit(this.profileForm.get('username')?.value || '');
+  @Input() logIn: (email: string, password: string) => Promise<void> | void = () => {};
+  @Input() submitting = false;
+  @Input() errorMessage: string | null = null;
+
+  async onSubmit(): Promise<void> {
+    if (this.profileForm.invalid || this.submitting) {
+      return;
+    }
+
+    const { email, password } = this.profileForm.getRawValue();
+    await this.logIn(email, password);
   }
 }
