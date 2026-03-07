@@ -7,6 +7,7 @@ import { Store } from './store/store';
 import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
+import { Dixit } from './dixit/dixit';
 import { Login } from './login/login';
 
 export const routes: Routes = [
@@ -41,6 +42,9 @@ export const routes: Routes = [
         component: Settings,
     },
     {
+        path: 'dixit/:id',
+        title: 'Dixit',
+        component: Dixit,
         path: 'register',
         title: 'Register',
         component: Register,
