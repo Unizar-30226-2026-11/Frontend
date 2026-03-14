@@ -1,7 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+
+const REDIRECT_DELAY_MS = 1500;
 
 @Component({
   selector: 'app-register',
@@ -36,8 +38,8 @@ import { Router } from '@angular/router';
 
         <button class="submit-button"
                 type="submit"
-                [disabled]="!registerForm.valid">
-          Registrarse
+                [disabled]="!registerForm.valid || isRedirecting">
+          {{ isRedirecting ? 'Redirigiendo...' : 'Registrarse' }}
         </button>
 
       </form>
@@ -45,6 +47,7 @@ import { Router } from '@angular/router';
       <button class="login-button" (click)="goLogin()">Ya tengo una cuenta</button>
 
       <p *ngIf="error" class="error">{{ error }}</p>
+      <p *ngIf="successMessage" class="success">{{ successMessage }}</p>
 
     </div>
   `,
@@ -148,13 +151,26 @@ import { Router } from '@angular/router';
       color: red;
       margin-top: 15px;
     }
+
+    .success {
+      color: #d9ece8;
+      margin-top: 15px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(16, 33, 31, 0.78);
+      border: 1px solid rgba(217, 236, 232, 0.35);
+      text-align: center;
+    }
   `
 })
-export class Register {
+export class Register implements OnDestroy {
 
   private router = inject(Router);
+  private redirectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   error: string | null = null;
+  successMessage: string | null = null;
+  isRedirecting = false;
 
   registerForm = new FormGroup({
     username: new FormControl('', Validators.required),
@@ -163,20 +179,38 @@ export class Register {
   });
 
   onSubmit() {
+    this.error = null;
+    this.successMessage = null;
 
     const { password, confirmPassword } = this.registerForm.value;
 
     if (password !== confirmPassword) {
       this.error = 'Las contraseñas no coinciden';
+      this.isRedirecting = false;
       return;
     }
 
-    console.log('Registro correcto', this.registerForm.value);
+    this.isRedirecting = true;
+    this.clearRedirectTimeout();
+    this.successMessage = 'Registro completado correctamente. Redirigiendo a iniciar sesion...';
 
-    this.router.navigate(['/login']);
+    this.redirectTimeoutId = setTimeout(() => {
+      void this.router.navigate(['/login']);
+    }, REDIRECT_DELAY_MS);
   }
 
   goLogin() {
-    this.router.navigate(['/']);
+    void this.router.navigate(['/login']);
+  }
+
+  ngOnDestroy(): void {
+    this.clearRedirectTimeout();
+  }
+
+  private clearRedirectTimeout(): void {
+    if (this.redirectTimeoutId !== null) {
+      clearTimeout(this.redirectTimeoutId);
+      this.redirectTimeoutId = null;
+    }
   }
 }
