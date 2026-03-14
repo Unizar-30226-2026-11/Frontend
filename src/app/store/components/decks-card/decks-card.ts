@@ -32,7 +32,8 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
         </button>
         @if (!deckOwned) {
           <div class="deck-price">
-            {{ deckPrice }}<span>$</span>
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ deckPrice }}</span>
           </div>
         }
       </div>
@@ -41,7 +42,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   styles: [`
     :host {
       --deck-button-width: 168px;
-      --deck-price-width: 86px;
+      --deck-price-width: 112px;
       --deck-controls-gap: 14px;
       display: block;
       width: min(calc(var(--deck-button-width) + var(--deck-price-width) + var(--deck-controls-gap)), 100%);
@@ -149,19 +150,32 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       display: flex;
       justify-content: center;
       align-items: center;
+      gap: 8px;
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
     }
 
-    .deck-price span {
-      font-size: 0.82em;
-      margin-left: 2px;
-      opacity: 0.95;
+    .coin-icon {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: radial-gradient(circle at 32% 32%, #fff1a6 0%, #f4c95d 42%, #c98b19 100%);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.24);
+    }
+
+    .coin-icon::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 1px solid rgba(132, 83, 9, 0.4);
     }
 
     @media (max-width: 640px) {
       :host {
         --deck-button-width: 146px;
-        --deck-price-width: 74px;
+        --deck-price-width: 96px;
         --deck-controls-gap: 10px;
       }
 

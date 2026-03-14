@@ -55,6 +55,7 @@ export class DecksPull {
 
     this.apiClient.invalidateCache('/users/inventory');
     this.apiClient.invalidateCache('/users/balance');
+    this.apiClient.invalidateCache('/collections');
 
     return {
       itemId,

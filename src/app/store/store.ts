@@ -24,7 +24,10 @@ import { StoreItem } from '../interfaces/store-item';
         <article class="player-panel">
           <h2>{{ player.username }}</h2>
           <p>ID: {{ player.id }}</p>
-          <p>Monedas: {{ player.balance }}</p>
+          <div class="balance-chip" aria-label="Balance actual">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ player.balance }}</span>
+          </div>
           <p>Nivel: {{ player.experienceLevel }}</p>
           <p>Estado: {{ player.state }}</p>
           <button type="button" (click)="reloadPlayer()">Actualizar datos</button>
@@ -32,6 +35,10 @@ import { StoreItem } from '../interfaces/store-item';
       }
 
       @if (auth.isLoggedIn()) {
+        @if (purchaseMessage(); as purchaseMessageText) {
+          <p class="store-success" aria-live="polite">{{ purchaseMessageText }}</p>
+        }
+
         @if (purchaseError(); as purchaseErrorMessage) {
           <p class="store-error">{{ purchaseErrorMessage }}</p>
         }
@@ -80,6 +87,12 @@ import { StoreItem } from '../interfaces/store-item';
       margin-bottom: 12px;
     }
 
+    .store-success {
+      color: #0f5c2c;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
     .player-panel {
       max-width: 380px;
       border: 1px solid rgba(230, 231, 235, 0.2);
@@ -92,6 +105,37 @@ import { StoreItem } from '../interfaces/store-item';
     .player-panel h2 {
       margin-top: 0;
       margin-bottom: 12px;
+    }
+
+    .balance-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin: 4px 0 14px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(240, 196, 78, 0.18);
+      border: 1px solid rgba(240, 196, 78, 0.36);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .coin-icon {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: radial-gradient(circle at 32% 32%, #fff1a6 0%, #f4c95d 42%, #c98b19 100%);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.24);
+    }
+
+    .coin-icon::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 1px solid rgba(132, 83, 9, 0.4);
     }
 
     .store-view > button,
@@ -135,6 +179,7 @@ export class Store {
   private readonly decksPull = inject(DecksPull);
 
   readonly purchaseError = signal<string | null>(null);
+  readonly purchaseMessage = signal<string | null>(null);
   readonly purchasingDeckId = signal<string | null>(null);
   readonly catalogLoading = signal(false);
   readonly catalogError = signal<string | null>(null);
@@ -167,6 +212,7 @@ export class Store {
     }
 
     this.purchaseError.set(null);
+    this.purchaseMessage.set(null);
     void this.playerStore.loadPlayer({ forceRefresh: true });
   }
 
@@ -175,6 +221,8 @@ export class Store {
       return;
     }
 
+    this.purchaseError.set(null);
+    this.purchaseMessage.set(null);
     void this.loadCatalog({ forceRefresh: true });
   }
 
@@ -188,6 +236,7 @@ export class Store {
 
   async buyDeck(deckId: string): Promise<void> {
     if (!this.auth.isLoggedIn()) {
+      this.purchaseMessage.set(null);
       this.purchaseError.set('Debes iniciar sesion para comprar articulos');
       return;
     }
@@ -202,16 +251,19 @@ export class Store {
     }
 
     if (!this.playerStore.canAfford(deck.price)) {
+      this.purchaseMessage.set(null);
       this.purchaseError.set('No tienes monedas suficientes para este articulo');
       return;
     }
 
     this.purchaseError.set(null);
+    this.purchaseMessage.set(null);
     this.purchasingDeckId.set(deck.id);
 
     try {
       const purchaseResult = await this.decksPull.buyDeck(deck.id);
       this.markDeckAsOwned(deck.id);
+      this.purchaseMessage.set(purchaseResult.message);
 
       if (typeof purchaseResult.remainingCoins === 'number') {
         this.playerStore.updateBalance(purchaseResult.remainingCoins);
@@ -219,6 +271,7 @@ export class Store {
         this.playerStore.spendCoins(deck.price);
       }
     } catch (error: unknown) {
+      this.purchaseMessage.set(null);
       this.purchaseError.set(
         error instanceof Error ? error.message : 'No se pudo completar la compra'
       );

@@ -1,6 +1,27 @@
 import { Location } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import {
+  Friend,
+  FriendsPull,
+  PendingFriendRequest,
+} from '../../services/friends-pull';
+
+interface CommunityFriendViewModel {
+  id: string;
+  username: string;
+  status: string;
+  initials: string;
+}
+
+interface PendingFriendRequestViewModel {
+  id: string;
+  fromUserId: string;
+  fromUsername: string;
+  createdAt: string;
+  createdAtLabel: string;
+  initials: string;
+}
 
 @Component({
   selector: 'app-navigation-bar',
@@ -72,7 +93,7 @@ import { Router, RouterLink } from '@angular/router';
           <button
             type="button"
             class="search-placeholder"
-            aria-label="Buscar amigos (proximamente)"
+            aria-label="Mostrar formulario para enviar solicitudes de amistad"
             [attr.aria-expanded]="searchOpen"
             (click)="switchSearchBox()">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -83,34 +104,110 @@ import { Router, RouterLink } from '@angular/router';
         </div>
 
         @if (searchOpen) {
-          <input type="text" placeholder="Buscar amigo" class="community-search-input" />
+          <div class="friend-request-form">
+            <input
+              type="text"
+              placeholder="ID del usuario (u_...)"
+              class="community-search-input"
+              [value]="friendTargetUserId"
+              (input)="updateFriendTargetUserId($event)" />
+            <button
+              type="button"
+              class="action-placeholder"
+              [disabled]="sendingFriendRequest || friendTargetUserId.trim().length === 0"
+              (click)="sendFriendRequest()">
+              {{ sendingFriendRequest ? 'Enviando...' : 'Enviar solicitud' }}
+            </button>
+          </div>
         }
 
-        <p class="community-section">CONECTADOS</p>
-        @for (player of connectedPlayers; track player.name) {
-          <article class="player-card">
-            <div class="avatar">{{ player.initials }}</div>
-            <div class="player-meta">
-              <p class="player-name">{{ player.name }}</p>
-              <p class="player-status">{{ player.status }}</p>
-            </div>
-            <button type="button" class="action-placeholder">Invitar a la sala</button>
-          </article>
+        @if (communityError) {
+          <p class="community-feedback error">{{ communityError }}</p>
         }
 
-        <p class="community-section">DESCONECTADOS</p>
-        @for (player of disconnectedPlayers; track player.name) {
-          <article class="player-card">
-            <div class="avatar offline">{{ player.initials }}</div>
-            <div class="player-meta">
-              <p class="player-name">{{ player.name }}</p>
-              <p class="player-status">{{ player.status }}</p>
-            </div>
-            <button type="button" class="action-placeholder">Escribir mensaje</button>
-          </article>
+        @if (communityMessage) {
+          <p class="community-feedback">{{ communityMessage }}</p>
         }
 
-        <button type="button" class="add-friend-placeholder">Añadir amigo</button>
+        @if (friendsLoading) {
+          <p class="community-status">Cargando amigos...</p>
+        } @else {
+          <p class="community-section">SOLICITUDES PENDIENTES</p>
+          @if (pendingRequests.length === 0) {
+            <p class="community-status">No tienes solicitudes pendientes.</p>
+          } @else {
+            @for (request of pendingRequests; track request.id) {
+              <article class="player-card pending-card">
+                <div class="avatar">{{ request.initials }}</div>
+                <div class="player-meta">
+                  <p class="player-name">{{ request.fromUsername }}</p>
+                  <p class="player-status">ID: {{ request.fromUserId }}</p>
+                  <p class="player-status">Recibida: {{ request.createdAtLabel }}</p>
+                </div>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="action-placeholder"
+                    [disabled]="isRequestBusy(request.id)"
+                    (click)="respondToFriendRequest(request.id, 'accept')">
+                    Aceptar
+                  </button>
+                  <button
+                    type="button"
+                    class="action-placeholder secondary"
+                    [disabled]="isRequestBusy(request.id)"
+                    (click)="respondToFriendRequest(request.id, 'reject')">
+                    Rechazar
+                  </button>
+                </div>
+              </article>
+            }
+          }
+
+          <p class="community-section">CONECTADOS</p>
+          @if (connectedPlayers.length === 0) {
+            <p class="community-status">No hay amigos conectados.</p>
+          } @else {
+            @for (player of connectedPlayers; track player.id) {
+              <article class="player-card">
+                <div class="avatar">{{ player.initials }}</div>
+                <div class="player-meta">
+                  <p class="player-name">{{ player.username }}</p>
+                  <p class="player-status">{{ player.status }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="action-placeholder"
+                  [disabled]="isFriendBusy(player.id)"
+                  (click)="removeFriend(player.id)">
+                  Eliminar
+                </button>
+              </article>
+            }
+          }
+
+          <p class="community-section">DESCONECTADOS</p>
+          @if (disconnectedPlayers.length === 0) {
+            <p class="community-status">No hay amigos desconectados.</p>
+          } @else {
+            @for (player of disconnectedPlayers; track player.id) {
+              <article class="player-card">
+                <div class="avatar offline">{{ player.initials }}</div>
+                <div class="player-meta">
+                  <p class="player-name">{{ player.username }}</p>
+                  <p class="player-status">{{ player.status }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="action-placeholder"
+                  [disabled]="isFriendBusy(player.id)"
+                  (click)="removeFriend(player.id)">
+                  Eliminar
+                </button>
+              </article>
+            }
+          }
+        }
       </aside>
     }
   `,
@@ -279,6 +376,29 @@ import { Router, RouterLink } from '@angular/router';
       color: rgba(233, 241, 247, 0.7);
     }
 
+    .friend-request-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 0 0 14px;
+    }
+
+    .community-feedback {
+      margin: 0 0 12px;
+      color: #c7f0d8;
+      font-size: 0.95rem;
+    }
+
+    .community-feedback.error {
+      color: #ffb7b7;
+    }
+
+    .community-status {
+      margin: 0 0 12px;
+      color: #d8e5ee;
+      font-size: 0.96rem;
+    }
+
     .player-card {
       display: flex;
       align-items: center;
@@ -287,6 +407,10 @@ import { Router, RouterLink } from '@angular/router';
       border-radius: 10px;
       padding: 10px 12px;
       margin-bottom: 12px;
+    }
+
+    .pending-card {
+      align-items: flex-start;
     }
 
     .avatar {
@@ -335,17 +459,19 @@ import { Router, RouterLink } from '@angular/router';
       cursor: pointer;
     }
 
-    .add-friend-placeholder {
-      margin: 16px auto 0;
-      display: block;
-      border: 2px solid rgba(30, 54, 62, 0.45);
-      background: rgba(196, 223, 212, 0.92);
-      color: #11242a;
-      border-radius: 999px;
-      padding: 10px 22px;
-      font-size: 1.8rem;
-      line-height: 1;
-      cursor: pointer;
+    .action-placeholder.secondary {
+      background: rgba(228, 202, 196, 0.92);
+    }
+
+    .action-placeholder:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     @media (max-width: 720px) {
@@ -412,8 +538,13 @@ import { Router, RouterLink } from '@angular/router';
         padding: 5px 10px;
       }
 
-      .add-friend-placeholder {
-        font-size: 1.5rem;
+      .friend-request-form {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .card-actions {
+        width: 100%;
       }
     }
   `,
@@ -421,17 +552,21 @@ import { Router, RouterLink } from '@angular/router';
 export class NavigationBar {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
+  private readonly friendsPull = inject(FriendsPull);
+  private readonly cdr = inject(ChangeDetectorRef);
   communityOpen = false;
   searchOpen = false;
-  connectedPlayers = [
-    { name: 'hachelpez', status: 'en el menu principal', initials: 'HP' },
-    { name: 'diegolool', status: 'en partida', initials: 'DL' },
-    { name: 'marqui1', status: 'en el menu principal', initials: 'M1' },
-  ];
-  disconnectedPlayers = [
-    { name: 'toxisita', status: 'desconectado', initials: 'TX' },
-    { name: 'hector22', status: 'desconectado', initials: 'H2' },
-  ];
+  friendsLoading = false;
+  communityError = '';
+  communityMessage = '';
+  sendingFriendRequest = false;
+  friendTargetUserId = '';
+  connectedPlayers: CommunityFriendViewModel[] = [];
+  disconnectedPlayers: CommunityFriendViewModel[] = [];
+  pendingRequests: PendingFriendRequestViewModel[] = [];
+  private hasLoadedCommunityData = false;
+  private readonly busyRequestIds = new Set<string>();
+  private readonly busyFriendIds = new Set<string>();
 
   isStorePage(): boolean {
     return this.router.url.split('?')[0].split('#')[0] === '/store';
@@ -445,11 +580,24 @@ export class NavigationBar {
     this.communityOpen = !this.communityOpen;
     if (!this.communityOpen) {
       this.searchOpen = false;
+      this.communityError = '';
+      this.communityMessage = '';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    if (!this.hasLoadedCommunityData) {
+      this.cdr.detectChanges();
+      setTimeout(() => {
+        void this.loadCommunityData();
+      }, 0);
     }
   }
 
   switchSearchBox(): void {
     this.searchOpen = !this.searchOpen;
+    this.communityError = '';
+    this.communityMessage = '';
   }
 
   goBack(): void {
@@ -459,5 +607,177 @@ export class NavigationBar {
     }
 
     this.router.navigateByUrl('/main-menu');
+  }
+
+  updateFriendTargetUserId(event: Event): void {
+    this.friendTargetUserId = (event.target as HTMLInputElement).value;
+  }
+
+  async sendFriendRequest(): Promise<void> {
+    const targetUserId = this.friendTargetUserId.trim();
+    if (!targetUserId || this.sendingFriendRequest) {
+      return;
+    }
+
+    this.communityError = '';
+    this.communityMessage = '';
+    this.sendingFriendRequest = true;
+
+    try {
+      this.communityMessage = await this.friendsPull.sendFriendRequest(targetUserId);
+      this.friendTargetUserId = '';
+      await this.loadCommunityData(true);
+    } catch (error) {
+      this.communityError =
+        error instanceof Error ? error.message : 'No se pudo enviar la solicitud';
+    } finally {
+      this.sendingFriendRequest = false;
+    }
+  }
+
+  async respondToFriendRequest(
+    requestId: string,
+    action: 'accept' | 'reject'
+  ): Promise<void> {
+    if (this.busyRequestIds.has(requestId)) {
+      return;
+    }
+
+    this.busyRequestIds.add(requestId);
+    this.communityError = '';
+    this.communityMessage = '';
+
+    try {
+      this.communityMessage = await this.friendsPull.respondToFriendRequest(requestId, action);
+      await this.loadCommunityData(true);
+    } catch (error) {
+      this.communityError =
+        error instanceof Error ? error.message : 'No se pudo procesar la solicitud';
+    } finally {
+      this.busyRequestIds.delete(requestId);
+    }
+  }
+
+  async removeFriend(friendId: string): Promise<void> {
+    if (this.busyFriendIds.has(friendId)) {
+      return;
+    }
+
+    this.busyFriendIds.add(friendId);
+    this.communityError = '';
+    this.communityMessage = '';
+
+    try {
+      this.communityMessage = await this.friendsPull.removeFriend(friendId);
+      await this.loadCommunityData(true);
+    } catch (error) {
+      this.communityError =
+        error instanceof Error ? error.message : 'No se pudo eliminar al amigo';
+    } finally {
+      this.busyFriendIds.delete(friendId);
+    }
+  }
+
+  isRequestBusy(requestId: string): boolean {
+    return this.busyRequestIds.has(requestId);
+  }
+
+  isFriendBusy(friendId: string): boolean {
+    return this.busyFriendIds.has(friendId);
+  }
+
+  private async loadCommunityData(forceRefresh = false): Promise<void> {
+    if (this.friendsLoading) {
+      return;
+    }
+
+    this.friendsLoading = true;
+    this.communityError = '';
+    this.cdr.detectChanges();
+
+    try {
+      const { friends, pendingRequests } = await this.friendsPull.getFriendsPanelData({
+        forceRefresh,
+      });
+      const friendViewModels = friends.map((friend) => this.toFriendViewModel(friend));
+      this.connectedPlayers = friendViewModels.filter((friend) => this.isOnline(friend.status));
+      this.disconnectedPlayers = friendViewModels.filter(
+        (friend) => !this.isOnline(friend.status)
+      );
+      this.pendingRequests = pendingRequests.map((request) =>
+        this.toPendingRequestViewModel(request)
+      );
+      this.hasLoadedCommunityData = true;
+    } catch (error) {
+      this.communityError =
+        error instanceof Error ? error.message : 'No se pudieron cargar los amigos';
+      this.connectedPlayers = [];
+      this.disconnectedPlayers = [];
+      this.pendingRequests = [];
+    } finally {
+      this.friendsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private toFriendViewModel(friend: Friend): CommunityFriendViewModel {
+    return {
+      id: friend.id,
+      username: friend.username,
+      status: this.translateStatus(friend.status),
+      initials: this.buildInitials(friend.username),
+    };
+  }
+
+  private toPendingRequestViewModel(
+    request: PendingFriendRequest
+  ): PendingFriendRequestViewModel {
+    return {
+      id: request.id,
+      fromUserId: request.fromUserId,
+      fromUsername: request.fromUsername,
+      createdAt: request.createdAt,
+      createdAtLabel: this.formatDate(request.createdAt),
+      initials: this.buildInitials(request.fromUsername),
+    };
+  }
+
+  private buildInitials(username: string): string {
+    const compact = username.trim();
+    if (compact.length === 0) {
+      return '--';
+    }
+
+    return compact.slice(0, 2).toUpperCase();
+  }
+
+  private translateStatus(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'online':
+        return 'conectado';
+      case 'offline':
+        return 'desconectado';
+      default:
+        return status;
+    }
+  }
+
+  private isOnline(status: string): boolean {
+    return status.toLowerCase() === 'conectado';
+  }
+
+  private formatDate(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 }

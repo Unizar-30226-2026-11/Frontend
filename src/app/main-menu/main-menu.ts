@@ -1,4 +1,38 @@
-import { Component } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
+import { Game } from '../interfaces/game';
+import { CardCollectionWithCards, CollectionsPull } from '../services/collections-pull';
+import { GamesPull } from '../services/games-pull';
+
+const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
+
+interface MenuCollectionCard {
+  id: string;
+  title: string;
+  imageUrl: string;
+  locked: boolean;
+}
+
+interface MenuCardCollection {
+  id: string;
+  name: string;
+  total: number;
+  collected: number;
+  cards: MenuCollectionCard[];
+}
+
+interface CommunityCard {
+  id: number;
+  title: string;
+  imageUrl: string;
+}
+
+interface RoomSlot {
+  slotId: number;
+  name: string;
+  state: string;
+}
 
 @Component({
   selector: 'app-main-menu',
@@ -13,25 +47,33 @@ import { Component } from '@angular/core';
       </header>
 
       <div class="cards-scroll">
-        @for (collection of collections; track collection.name) {
-          <section>
-            <header class="collection-header">
-              <h3 class="collection-title">{{ collection.name }}</h3>
-              <span class="badge small">{{ collection.collected }}/{{ collection.total }}</span>
-            </header>
+        @if (cardsLoading) {
+          <p class="cards-status">Cargando colecciones...</p>
+        } @else if (cardsError) {
+          <p class="cards-status">{{ cardsError }}</p>
+        } @else if (collections.length === 0) {
+          <p class="cards-status">No hay cartas disponibles.</p>
+        } @else {
+          @for (collection of collections; track collection.id) {
+            <section>
+              <header class="collection-header">
+                <h3 class="collection-title">{{ collection.name }}</h3>
+                <span class="badge small">{{ collection.collected }}/{{ collection.total }}</span>
+              </header>
 
-            <div class="cards-grid">
-              @for (card of collection.cards; track card.id) {
-                <article class="card-tile">
-                  <img [src]="card.imageUrl" [alt]="'Carta ' + card.id" loading="lazy" />
-                  @if (card.locked) {
-                    <div class="locked-overlay" aria-label="Carta bloqueada">🔒</div>
-                  }
-                  <span class="card-id">#{{ card.id }}</span>
-                </article>
-              }
-            </div>
-          </section>
+              <div class="cards-grid">
+                @for (card of collection.cards; track card.id) {
+                  <article class="card-tile" [attr.title]="card.title">
+                    <img [src]="card.imageUrl" [alt]="card.title" loading="lazy" />
+                    @if (card.locked) {
+                      <div class="locked-overlay" aria-label="Carta bloqueada">🔒</div>
+                    }
+                    <span class="card-id">{{ card.title }}</span>
+                  </article>
+                }
+              </div>
+            </section>
+          }
         }
       </div>
     </article>
@@ -68,11 +110,19 @@ import { Component } from '@angular/core';
           <span class="badge">{{ playersInRoom }}/{{ roomCapacity }}</span>
         </header>
         <div class="room-scroll">
-          @for (slot of roomSlots; track slot.slotId) {
-            <div class="room-slot">
-              <span class="slot-name">{{ slot.name }}</span>
-              <span class="slot-state">{{ slot.state }}</span>
-            </div>
+          @if (roomLoading) {
+            <p class="room-status">Cargando sala...</p>
+          } @else if (roomError) {
+            <p class="room-status">{{ roomError }}</p>
+          } @else if (roomSlots.length === 0) {
+            <p class="room-status">No hay jugadores en la sala.</p>
+          } @else {
+            @for (slot of roomSlots; track slot.slotId) {
+              <div class="room-slot">
+                <span class="slot-name">{{ slot.name }}</span>
+                <span class="slot-state">{{ slot.state }}</span>
+              </div>
+            }
           }
         </div>
       </article>
@@ -175,6 +225,12 @@ import { Component } from '@angular/core';
       gap: 16px;
     }
 
+    .cards-status {
+      margin: 0;
+      color: #141414;
+      font-size: 1rem;
+    }
+
     .collection-header {
       display: flex;
       justify-content: space-between;
@@ -229,12 +285,16 @@ import { Component } from '@angular/core';
     .card-id {
       position: absolute;
       left: 8px;
+      right: 8px;
       bottom: 7px;
       background: rgba(15, 17, 20, 0.76);
       color: #fff;
       font-size: 0.75rem;
       border-radius: 5px;
       padding: 2px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .community-card {
@@ -325,6 +385,12 @@ import { Component } from '@angular/core';
       flex-direction: column;
       gap: 10px;
       padding-right: 6px;
+    }
+
+    .room-status {
+      margin: 0;
+      color: #141414;
+      font-size: 1rem;
     }
 
     .room-slot {
@@ -451,84 +517,53 @@ import { Component } from '@angular/core';
     }
   `,
 })
-export class MainMenu {
-  totalCards = 256;
-  collectedCards = 64;
-  roomCapacity = 8;
-  playersInRoom = 3;
+export class MainMenu implements OnInit {
+  private readonly route = inject(ActivatedRoute);
+  private readonly gamesPull = inject(GamesPull);
+  private readonly destroyRef = inject(DestroyRef);
+  private currentLobbyCode = '';
+
+  totalCards = 0;
+  collectedCards = 0;
+  roomCapacity = 0;
+  playersInRoom = 0;
   currentRating = 3;
   currentCardIndex = 0;
+  cardsLoading = true;
+  cardsError = '';
+  roomLoading = true;
+  roomError = '';
+  collections: MenuCardCollection[] = [];
 
   maps = ['Costa Sumergida', 'Bosque Inverso', 'Ciudad Onirica'];
   decks = ['Surrealista', 'Sketch', 'Dream-Core'];
 
-  roomSlots = [
-    { slotId: 1, name: 'hachelpez', state: 'listo' },
-    { slotId: 2, name: 'Azzal-e', state: 'en menu' },
-    { slotId: 3, name: 'Natur4', state: 'eligiendo' },
-    { slotId: 4, name: 'slot libre', state: 'abierto' },
-    { slotId: 5, name: 'slot libre', state: 'abierto' },
-    { slotId: 6, name: 'slot libre', state: 'abierto' },
-    { slotId: 7, name: 'slot libre', state: 'abierto' },
-    { slotId: 8, name: 'slot libre', state: 'abierto' },
-  ];
+  roomSlots: RoomSlot[] = [];
 
-  collections = [
-    {
-      name: 'Coleccion Surrealista',
-      collected: 12,
-      total: 16,
-      cards: [
-        { id: 101, imageUrl: 'https://picsum.photos/seed/atr-card-101/240/330', locked: true },
-        { id: 102, imageUrl: 'https://picsum.photos/seed/atr-card-102/240/330', locked: false },
-        { id: 103, imageUrl: 'https://picsum.photos/seed/atr-card-103/240/330', locked: false },
-        { id: 104, imageUrl: 'https://picsum.photos/seed/atr-card-104/240/330', locked: true },
-        { id: 105, imageUrl: 'https://picsum.photos/seed/atr-card-105/240/330', locked: false },
-        { id: 106, imageUrl: 'https://picsum.photos/seed/atr-card-106/240/330', locked: false },
-        { id: 107, imageUrl: 'https://picsum.photos/seed/atr-card-107/240/330', locked: true },
-        { id: 108, imageUrl: 'https://picsum.photos/seed/atr-card-108/240/330', locked: false },
-      ],
-    },
-    {
-      name: 'Coleccion Sketch',
-      collected: 8,
-      total: 16,
-      cards: [
-        { id: 201, imageUrl: 'https://picsum.photos/seed/atr-card-201/240/330', locked: false },
-        { id: 202, imageUrl: 'https://picsum.photos/seed/atr-card-202/240/330', locked: true },
-        { id: 203, imageUrl: 'https://picsum.photos/seed/atr-card-203/240/330', locked: false },
-        { id: 204, imageUrl: 'https://picsum.photos/seed/atr-card-204/240/330', locked: true },
-        { id: 205, imageUrl: 'https://picsum.photos/seed/atr-card-205/240/330', locked: false },
-        { id: 206, imageUrl: 'https://picsum.photos/seed/atr-card-206/240/330', locked: false },
-        { id: 207, imageUrl: 'https://picsum.photos/seed/atr-card-207/240/330', locked: false },
-        { id: 208, imageUrl: 'https://picsum.photos/seed/atr-card-208/240/330', locked: true },
-      ],
-    },
-    {
-      name: 'Coleccion Dream-Core',
-      collected: 5,
-      total: 16,
-      cards: [
-        { id: 301, imageUrl: 'https://picsum.photos/seed/atr-card-301/240/330', locked: false },
-        { id: 302, imageUrl: 'https://picsum.photos/seed/atr-card-302/240/330', locked: false },
-        { id: 303, imageUrl: 'https://picsum.photos/seed/atr-card-303/240/330', locked: true },
-        { id: 304, imageUrl: 'https://picsum.photos/seed/atr-card-304/240/330', locked: false },
-        { id: 305, imageUrl: 'https://picsum.photos/seed/atr-card-305/240/330', locked: true },
-        { id: 306, imageUrl: 'https://picsum.photos/seed/atr-card-306/240/330', locked: false },
-        { id: 307, imageUrl: 'https://picsum.photos/seed/atr-card-307/240/330', locked: false },
-        { id: 308, imageUrl: 'https://picsum.photos/seed/atr-card-308/240/330', locked: true },
-      ],
-    },
-  ];
-
-  communityCards = [
+  communityCards: CommunityCard[] = [
     { id: 458, title: 'Donde nacen las sombras', imageUrl: 'https://picsum.photos/seed/atr-community-458/520/700' },
     { id: 459, title: 'Sueño fractal en rojo', imageUrl: 'https://picsum.photos/seed/atr-community-459/520/700' },
     { id: 460, title: 'La puerta que respira', imageUrl: 'https://picsum.photos/seed/atr-community-460/520/700' },
     { id: 461, title: 'Jardin de cristal roto', imageUrl: 'https://picsum.photos/seed/atr-community-461/520/700' },
   ];
 
-  get currentCommunityCard() {
+  constructor(
+    private readonly collectionsPull: CollectionsPull,
+    private readonly cdr: ChangeDetectorRef
+  ) {}
+
+  async ngOnInit(): Promise<void> {
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        const lobbyCode = params.get('id')?.trim() ?? '';
+        void this.loadLobby(lobbyCode);
+      });
+
+    await this.loadCollections();
+  }
+
+  get currentCommunityCard(): CommunityCard {
     return this.communityCards[this.currentCardIndex];
   }
 
@@ -542,5 +577,112 @@ export class MainMenu {
 
   setRating(rating: number): void {
     this.currentRating = rating;
+  }
+
+  private async loadCollections(): Promise<void> {
+    this.cardsLoading = true;
+    this.cardsError = '';
+
+    try {
+      const collections = await this.collectionsPull.getCollectionsWithCards();
+      this.collections = this.toMenuCollections(collections);
+      this.collectedCards = this.collections.reduce(
+        (total, collection) => total + collection.collected,
+        0
+      );
+      this.totalCards = this.collections.reduce(
+        (total, collection) => total + collection.total,
+        0
+      );
+    } catch (error) {
+      console.error('[MainMenu] Error al cargar colecciones:', error);
+      this.cardsError =
+        error instanceof Error ? error.message : 'No se pudieron cargar las colecciones';
+      this.collections = [];
+      this.collectedCards = 0;
+      this.totalCards = 0;
+    } finally {
+      this.cardsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private async loadLobby(lobbyCode: string): Promise<void> {
+    if (!lobbyCode) {
+      this.currentLobbyCode = '';
+      this.roomError = 'No se encontro el codigo de la sala';
+      this.roomLoading = false;
+      this.roomCapacity = 0;
+      this.playersInRoom = 0;
+      this.roomSlots = [];
+      return;
+    }
+
+    this.currentLobbyCode = lobbyCode;
+    this.roomLoading = true;
+    this.roomError = '';
+    this.roomCapacity = 0;
+    this.playersInRoom = 0;
+    this.roomSlots = [];
+
+    try {
+      const lobby = await this.gamesPull.getGameDetails(lobbyCode);
+      if (this.currentLobbyCode !== lobbyCode) {
+        return;
+      }
+      this.roomCapacity = lobby.maxPlayers;
+      this.playersInRoom = lobby.playerCount;
+      this.roomSlots = this.toRoomSlots(lobby);
+    } catch (error) {
+      if (this.currentLobbyCode !== lobbyCode) {
+        return;
+      }
+      console.error('[MainMenu] Error al cargar la sala:', error);
+      this.roomError = error instanceof Error ? error.message : 'No se pudo cargar la sala';
+      this.roomCapacity = 0;
+      this.playersInRoom = 0;
+      this.roomSlots = [];
+    } finally {
+      if (this.currentLobbyCode === lobbyCode) {
+        this.roomLoading = false;
+        this.cdr.detectChanges();
+      }
+    }
+  }
+
+  private toRoomSlots(lobby: Game): RoomSlot[] {
+    const occupiedSlots = lobby.players.map((playerId, index) => ({
+      slotId: index + 1,
+      name: playerId,
+      state: playerId === lobby.hostId ? 'anfitrion' : 'jugador',
+    }));
+
+    const freeSlots = Array.from(
+      { length: Math.max(lobby.maxPlayers - occupiedSlots.length, 0) },
+      (_, index) => ({
+        slotId: occupiedSlots.length + index + 1,
+        name: 'slot libre',
+        state: 'abierto',
+      })
+    );
+
+    return [...occupiedSlots, ...freeSlots];
+  }
+
+  private toMenuCollections(
+    collections: CardCollectionWithCards[]
+  ): MenuCardCollection[] {
+    return collections.map((collection) => ({
+      id: collection.id,
+      name: collection.name,
+      total: collection.totalCards > 0 ? collection.totalCards : collection.cards.length,
+      collected: collection.cards.length,
+      cards: collection.cards.map((card) => ({
+        id: card.idCard,
+        title: card.title,
+        imageUrl: DEFAULT_CARD_IMAGE,
+        locked: false,
+      })),
+    }));
   }
 }
