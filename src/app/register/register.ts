@@ -173,7 +173,7 @@ export class Register {
 
     console.log('Registro correcto', this.registerForm.value);
 
-    this.router.navigate(['/']);
+    this.router.navigate(['/login']);
   }
 
   goLogin() {
