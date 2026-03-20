@@ -2,6 +2,7 @@ import { Component, OnDestroy, inject } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Auth } from '../services/auth';
 
 const REDIRECT_DELAY_MS = 1500;
 
@@ -17,6 +18,12 @@ const REDIRECT_DELAY_MS = 1500;
       <form class="register-form"
             [formGroup]="registerForm"
             (ngSubmit)="onSubmit()">
+
+        <input
+          type="email"
+          placeholder="Email"
+          formControlName="email"
+        />
 
         <input
           type="text"
@@ -38,8 +45,8 @@ const REDIRECT_DELAY_MS = 1500;
 
         <button class="submit-button"
                 type="submit"
-                [disabled]="!registerForm.valid || isRedirecting">
-          {{ isRedirecting ? 'Redirigiendo...' : 'Registrarse' }}
+                [disabled]="!registerForm.valid || submitting || isRedirecting">
+          {{ isRedirecting ? 'Redirigiendo...' : submitting ? 'Registrando...' : 'Registrarse' }}
         </button>
 
       </form>
@@ -164,39 +171,67 @@ const REDIRECT_DELAY_MS = 1500;
   `
 })
 export class Register implements OnDestroy {
-
-  private router = inject(Router);
+  private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
   private redirectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   error: string | null = null;
   successMessage: string | null = null;
+  submitting = false;
   isRedirecting = false;
 
   registerForm = new FormGroup({
-    username: new FormControl('', Validators.required),
-    password: new FormControl('', Validators.required),
-    confirmPassword: new FormControl('', Validators.required),
+    email: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.email],
+    }),
+    username: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    password: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    confirmPassword: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
   });
 
-  onSubmit() {
+  async onSubmit(): Promise<void> {
+    if (this.registerForm.invalid || this.submitting || this.isRedirecting) {
+      return;
+    }
+
     this.error = null;
     this.successMessage = null;
 
-    const { password, confirmPassword } = this.registerForm.value;
+    const { email, username, password, confirmPassword } = this.registerForm.getRawValue();
 
     if (password !== confirmPassword) {
-      this.error = 'Las contraseñas no coinciden';
+      this.error = 'Las contrasenas no coinciden';
       this.isRedirecting = false;
       return;
     }
 
-    this.isRedirecting = true;
-    this.clearRedirectTimeout();
-    this.successMessage = 'Registro completado correctamente. Redirigiendo a iniciar sesion...';
+    this.submitting = true;
 
-    this.redirectTimeoutId = setTimeout(() => {
-      void this.router.navigate(['/login']);
-    }, REDIRECT_DELAY_MS);
+    try {
+      await this.auth.register(email, username, password);
+      this.isRedirecting = true;
+      this.clearRedirectTimeout();
+      this.successMessage = 'Registro completado correctamente. Redirigiendo a iniciar sesion...';
+
+      this.redirectTimeoutId = setTimeout(() => {
+        void this.router.navigate(['/login']);
+      }, REDIRECT_DELAY_MS);
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'No se pudo completar el registro';
+      this.isRedirecting = false;
+    } finally {
+      this.submitting = false;
+    }
   }
 
   goLogin() {

@@ -8,6 +8,7 @@ import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
 import { Dixit } from './dixit/dixit';
 import { Login } from './login/login';
+import { Profile } from './profile/profile';
 
 export const routes: Routes = [
     {
@@ -49,5 +50,10 @@ export const routes: Routes = [
         path: 'login',
         title: 'Login',
         component: Login,
+    },
+    {
+        path: 'profile',
+        title: 'Profile',
+        component: Profile,
     },
 ];

@@ -1,5 +1,11 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { AuthSession, LoginPayload, LoginResponse } from '../interfaces/auth';
+import {
+  AuthSession,
+  LoginPayload,
+  LoginResponse,
+  RegisterPayload,
+  RegisterResponse,
+} from '../interfaces/auth';
 import { ApiClient } from './api-client';
 
 const AUTH_STORAGE_KEY = 'ator.auth.session';
@@ -16,6 +22,20 @@ export class Auth {
   readonly token = computed(() => this.sessionState()?.token ?? null);
   readonly username = computed(() => this.sessionState()?.user.username ?? '');
   readonly email = computed(() => this.sessionState()?.user.email ?? '');
+
+  async register(email: string, username: string, password: string): Promise<RegisterResponse> {
+    const payload: RegisterPayload = {
+      email: email.trim(),
+      username: username.trim(),
+      password,
+    };
+
+    return this.apiClient.request<RegisterResponse>('/auth/register', {
+      method: 'POST',
+      body: payload,
+      useCache: false,
+    });
+  }
 
   async logIn(email: string, password: string): Promise<AuthSession> {
     const payload: LoginPayload = {
