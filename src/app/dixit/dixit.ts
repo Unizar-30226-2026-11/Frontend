@@ -1,6 +1,7 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
-import { Router, RouterModule } from '@angular/router';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CardPull, DeckCard } from '../services/card-pull';
+import { TrackBoardToken } from './components/track-board';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
 import {
@@ -9,46 +10,83 @@ import {
   DixitRevealedCard,
 } from './phases/points-phase';
 
-type DixitPhase = 'hand' | 'choice' | 'points' | 'next';
+type DixitPhase = 'hand' | 'choice' | 'points';
 
-interface RoundPlayer {
+interface PhaseStep {
+  id: DixitPhase;
+  title: string;
+  description: string;
+  transitionTitle: string;
+  transitionMessage: string;
+}
+
+interface PhaseTransitionConfig {
+  title: string;
+  message: string;
+  beforeActivate?: (() => void) | null;
+}
+
+interface RosterPlayer {
   id: string;
   name: string;
+  color: string;
+}
+
+interface RoundPlayer extends RosterPlayer {
   pointsBefore: number;
 }
+
+const PHASE_ORDER: readonly DixitPhase[] = ['hand', 'choice', 'points'];
+
+const PHASE_STEPS: readonly PhaseStep[] = [
+  {
+    id: 'hand',
+    title: 'Elegir carta',
+    description: 'Selecciona la carta que enviaras en esta ronda.',
+    transitionTitle: 'Preparando mano',
+    transitionMessage: 'Sincronizando el arranque de la ronda con el backend.',
+  },
+  {
+    id: 'choice',
+    title: 'Votacion',
+    description: 'Escoge una carta de la mesa y confirma tu voto.',
+    transitionTitle: 'Preparando votacion',
+    transitionMessage: 'Esperando la confirmacion del backend para mostrar la mesa final.',
+  },
+  {
+    id: 'points',
+    title: 'Puntuacion',
+    description: 'Revela las cartas y actualiza el marcador de la partida.',
+    transitionTitle: 'Resolviendo ronda',
+    transitionMessage: 'Calculando votos y puntos antes de publicar el resultado.',
+  },
+];
 
 @Component({
   selector: 'app-dixit',
   standalone: true,
-  imports: [RouterModule, DixitHandPhase, DixitChoicePhase, DixitPointsPhase],
+  imports: [DixitHandPhase, DixitChoicePhase, DixitPointsPhase],
   template: `
     <section class="dixit-board">
       <header class="dixit-header">
-        <h1>Mi mazo</h1>
+        <div class="header-copy">
+          <p class="eyebrow">Sala {{ id || 'demo' }}</p>
+          <h1>Dixit</h1>
+          <p class="phase-summary">{{ currentPhaseMeta.description }}</p>
+        </div>
 
         @if (!loading && !errorMessage && cards.length > 0) {
-          <div class="phase-switch">
-            <button
-              type="button"
-              [class.active]="phase === 'hand'"
-              (click)="setPhase('hand')"
-            >
-              Fase 1
-            </button>
-            <button
-              type="button"
-              [class.active]="phase === 'choice'"
-              (click)="setPhase('choice')"
-            >
-              Fase 2
-            </button>
-            <button
-              type="button"
-              [class.active]="phase === 'points'"
-              (click)="setPhase('points')"
-            >
-              Fase 3
-            </button>
+          <div class="phase-switch" aria-label="Progreso de la ronda">
+            @for (phaseStep of phaseSteps; track phaseStep.id) {
+              <div
+                class="phase-step"
+                [class.active]="phase === phaseStep.id"
+                [class.completed]="isPhaseCompleted(phaseStep.id)"
+              >
+                <span class="phase-index">{{ phaseOrderIndex(phaseStep.id) + 1 }}</span>
+                <span>{{ phaseStep.title }}</span>
+              </div>
+            }
           </div>
         }
       </header>
@@ -66,116 +104,342 @@ interface RoundPlayer {
       }
 
       @if (!loading && cards.length > 0) {
-        <div class="phase-content">
-          @if (phase === 'hand') {
-            <app-dixit-hand-phase
-              [cards]="cards"
-              [selectedCardCode]="selectedHandCardCode"
-              (cardSelected)="onHandCardSelected($event)"
-            />
-          } @else if (phase === 'choice') {
-            <app-dixit-choice-phase
-              class="choice-phase"
-              [cards]="choiceCards"
-              [selectedCardCode]="selectedChoiceCardCode"
-              (choiceConfirmed)="onChoiceConfirmed($event)"
-            />
-          } @else if (phase === 'points') {
-            <app-dixit-points-phase
-              [waitingVotes]="pointsWaitingVotes"
-              [votesReceived]="pointsVotesReceived"
-              [votesTotal]="pointsVotesTotal"
-              [revealedCards]="pointsRevealedCards"
-              [ranking]="pointsRanking"
-              [showRanking]="pointsShowRanking"
-              (skipWaitingRequested)="onPointsSkipWaitingRequested()"
-              (rankingRequested)="onPointsRankingRequested()"
-            />
-          } @else {
-            <!-- Fase 4 -->
+        <section class="phase-shell" [class.is-transitioning]="phaseTransitionActive">
+          @if (phaseTransitionActive) {
+            <div class="phase-overlay" aria-live="polite">
+              <span class="overlay-kicker">Sincronizando partida</span>
+              <strong>{{ phaseTransitionTitle }}</strong>
+              <p>{{ phaseTransitionMessage }}</p>
+            </div>
           }
-        </div>
+
+          <article class="phase-info-card">
+            <div>
+              <span class="round-pill">Ronda {{ roundNumber }}</span>
+              <h2>{{ currentPhaseMeta.title }}</h2>
+              <p>{{ currentPhaseMeta.description }}</p>
+            </div>
+
+            @if (phase === 'hand') {
+              <div class="info-actions">
+                <p>
+                  @if (selectedHandCardCode) {
+                    Carta elegida: {{ selectedHandCardCode }}
+                  } @else {
+                    Elige una carta de tu mano para dejar lista la ronda.
+                  }
+                </p>
+                <button
+                  type="button"
+                  class="phase-cta"
+                  [disabled]="!selectedHandCardCode || phaseTransitionActive"
+                  (click)="continueFromHandPhase()"
+                >
+                  Enviar carta
+                </button>
+              </div>
+            } @else if (phase === 'choice') {
+              <p class="phase-note">
+                Esta fase ya queda preparada para que el backend la cierre con un evento de
+                websocket en lugar del flujo local de demo.
+              </p>
+            } @else {
+              <p class="phase-note">
+                @if (pointsWaitingVotes) {
+                  Recogiendo votos del resto de jugadores.
+                } @else if (pointsShowRanking) {
+                  Clasificacion actualizada. Ya puedes preparar la siguiente ronda.
+                } @else {
+                  Revelando cartas y calculando la puntuacion.
+                }
+              </p>
+            }
+          </article>
+
+          <div class="phase-content">
+            @if (phase === 'hand') {
+              <app-dixit-hand-phase
+                [cards]="cards"
+                [selectedCardCode]="selectedHandCardCode"
+                (cardSelected)="onHandCardSelected($event)"
+              />
+            } @else if (phase === 'choice') {
+              <app-dixit-choice-phase
+                class="choice-phase"
+                [cards]="choiceCards"
+                [selectedCardCode]="selectedChoiceCardCode"
+                (choiceConfirmed)="onChoiceConfirmed($event)"
+              />
+            } @else {
+              <app-dixit-points-phase
+                [boardTokens]="boardTokens"
+                [waitingVotes]="pointsWaitingVotes"
+                [votesReceived]="pointsVotesReceived"
+                [votesTotal]="pointsVotesTotal"
+                [revealedCards]="pointsRevealedCards"
+                [ranking]="pointsRanking"
+                [showRanking]="pointsShowRanking"
+                (skipWaitingRequested)="onPointsSkipWaitingRequested()"
+                (rankingRequested)="onPointsRankingRequested()"
+                (nextRoundRequested)="prepareNextRound()"
+              />
+            }
+          </div>
+        </section>
       }
     </section>
   `,
   styles: `
     .dixit-board {
       min-height: 100svh;
-      padding-top: 20px;
+      padding: 20px 12px 28px;
       display: flex;
       flex-direction: column;
+      gap: 16px;
+      box-sizing: border-box;
     }
 
     .dixit-header {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
-      padding-right: 12px;
+      gap: 16px;
+    }
+
+    .header-copy {
+      max-width: 520px;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 0.72rem;
+      opacity: 0.78;
     }
 
     h1 {
-      margin-top: 0px;
-      margin-bottom: 16px;
+      margin: 0;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+    }
+
+    .phase-summary {
+      margin: 10px 0 0;
+      max-width: 54ch;
     }
 
     .phase-switch {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .phase-step {
+      min-width: 150px;
       display: inline-flex;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      padding: 4px;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
       border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: rgba(255, 255, 255, 0.82);
       backdrop-filter: blur(6px);
+      transition:
+        transform 180ms ease,
+        background 180ms ease,
+        border-color 180ms ease;
     }
 
-    .phase-switch button {
-      border: 0;
-      background: transparent;
-      color: #fff;
-      padding: 6px 12px;
+    .phase-step.active {
+      background: rgba(255, 243, 192, 0.22);
+      border-color: rgba(255, 220, 121, 0.55);
+      color: #fff5d1;
+      transform: translateY(-2px);
+    }
+
+    .phase-step.completed {
+      border-color: rgba(157, 228, 171, 0.45);
+    }
+
+    .phase-index {
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
-      cursor: pointer;
-      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.26);
+      font-weight: 700;
     }
 
-    .phase-switch button.active {
-      background: rgba(255, 255, 255, 0.9);
-      color: #1b2430;
+    .phase-shell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .phase-shell.is-transitioning .phase-info-card,
+    .phase-shell.is-transitioning .phase-content {
+      filter: blur(4px);
+      transform: scale(0.99);
+      pointer-events: none;
+    }
+
+    .phase-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border-radius: 24px;
+      background: rgba(8, 15, 28, 0.72);
+      backdrop-filter: blur(12px);
+      text-align: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .overlay-kicker {
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.72rem;
+      opacity: 0.8;
+    }
+
+    .phase-overlay strong {
+      font-size: clamp(1.5rem, 2vw, 2rem);
+    }
+
+    .phase-overlay p {
+      margin: 0;
+      max-width: 46ch;
+    }
+
+    .phase-info-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-radius: 24px;
+      padding: 18px 20px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 221, 153, 0.2), rgba(0, 0, 0, 0) 34%),
+        rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition:
+        filter 180ms ease,
+        transform 180ms ease;
+    }
+
+    .round-pill {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .info-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 420px;
+    }
+
+    .info-actions p,
+    .phase-note {
+      margin: 0;
+      max-width: 42ch;
+    }
+
+    .phase-cta {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #1d2430;
+      background: linear-gradient(135deg, #f5d26d, #fff0ba);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .phase-cta:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
     }
 
     .phase-content {
       flex: 1;
       display: flex;
       min-height: 0;
-      margin-bottom: 0;
+      transition:
+        filter 180ms ease,
+        transform 180ms ease;
     }
 
     .choice-phase {
-      width: auto;
+      width: 100%;
       height: auto;
       margin-bottom: 0;
     }
 
-    @media (max-width: 700px) {
-      .dixit-header {
-        align-items: flex-start;
+    @media (max-width: 960px) {
+      .dixit-header,
+      .phase-info-card {
         flex-direction: column;
-        padding-right: 0;
+      }
+
+      .phase-switch,
+      .info-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .dixit-board {
+        padding-inline: 0;
+      }
+
+      .phase-step {
+        min-width: 0;
+        width: 100%;
       }
     }
   `,
 })
 export class Dixit implements OnInit, OnDestroy {
+  readonly phaseSteps = PHASE_STEPS;
+  readonly phaseTransitionDurationMs = 650;
+
+  private readonly route = inject(ActivatedRoute);
+  private readonly cardPull = inject(CardPull);
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly maxPlayersPerMatch = 6;
 
-  private readonly playerRoster = [
-    { id: 'you', name: 'Tu' },
-    { id: 'ana', name: 'Ana' },
-    { id: 'bruno', name: 'Bruno' },
-    { id: 'carla', name: 'Carla' },
-    { id: 'diego', name: 'Diego' },
-    { id: 'elena', name: 'Elena' },
+  private readonly playerRoster: readonly RosterPlayer[] = [
+    { id: 'you', name: 'Tu', color: '#ff7725' },
+    { id: 'ana', name: 'Ana', color: '#27c93f' },
+    { id: 'bruno', name: 'Bruno', color: '#2b79ff' },
+    { id: 'carla', name: 'Carla', color: '#d645ff' },
+    { id: 'diego', name: 'Diego', color: '#ff3a3a' },
+    { id: 'elena', name: 'Elena', color: '#ffe34f' },
   ];
 
   private readonly pointsByPlayer = new Map<string, number>([
@@ -189,16 +453,22 @@ export class Dixit implements OnInit, OnDestroy {
 
   private votesIntervalId: ReturnType<typeof setInterval> | null = null;
   private revealTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private phaseTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private currentRoundPlayers: RoundPlayer[] = [];
 
-  id = 0;
+  id = '';
   phase: DixitPhase = 'hand';
+  roundNumber = 1;
   cards: DeckCard[] = [];
   choiceCards: DeckCard[] = [];
+  boardTokens: TrackBoardToken[] = this.buildBoardTokensFromScores();
   loading = true;
   errorMessage = '';
   selectedHandCardCode = '';
   selectedChoiceCardCode = '';
+  phaseTransitionActive = false;
+  phaseTransitionTitle = '';
+  phaseTransitionMessage = '';
 
   pointsWaitingVotes = true;
   pointsVotesReceived = 0;
@@ -207,26 +477,19 @@ export class Dixit implements OnInit, OnDestroy {
   pointsRanking: DixitRankingRow[] = [];
   pointsShowRanking = false;
 
-  constructor(
-    private router: Router,
-    private cardPull: CardPull,
-    private cdr: ChangeDetectorRef
-  ) {
-    const urlSegments = this.router.url.split('/');
-    this.id = Number(urlSegments[urlSegments.length - 1]);
-  }
-
   async ngOnInit(): Promise<void> {
+    this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? '';
+
     try {
-      console.log('[Dixit] Cargando mano...');
       this.cards = await this.cardPull.getCards(this.maxPlayersPerMatch);
       this.choiceCards = [...this.cards];
-      console.log('[Dixit] Mano cargada:', this.cards.length);
+      this.boardTokens = this.buildBoardTokensFromScores();
     } catch (error) {
       console.error('Error al cargar las cartas:', error);
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudieron cargar las cartas';
       this.cards = [];
+      this.choiceCards = [];
     } finally {
       this.loading = false;
       this.cdr.detectChanges();
@@ -235,20 +498,46 @@ export class Dixit implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.clearPointsTimers();
+    this.clearPhaseTransitionTimer();
   }
 
-  setPhase(phase: DixitPhase): void {
-    this.phase = phase;
+  get currentPhaseMeta(): PhaseStep {
+    return this.getPhaseMeta(this.phase);
+  }
+
+  phaseOrderIndex(phase: DixitPhase): number {
+    return PHASE_ORDER.indexOf(phase);
+  }
+
+  isPhaseCompleted(phase: DixitPhase): boolean {
+    return this.phaseOrderIndex(phase) < this.phaseOrderIndex(this.phase);
   }
 
   onHandCardSelected(card: DeckCard): void {
     this.selectedHandCardCode = card.code;
   }
 
+  continueFromHandPhase(): void {
+    if (!this.selectedHandCardCode || this.phaseTransitionActive) {
+      return;
+    }
+
+    this.applyPhaseUpdate('choice', {
+      title: 'Cartas enviadas',
+      message:
+        'La siguiente fase ya queda preparada para dispararse con la confirmacion real del backend.',
+    });
+  }
+
   onChoiceConfirmed(card: DeckCard): void {
     this.selectedChoiceCardCode = card.code;
-    this.startPointsPhase();
     console.log('[Dixit] Carta confirmada:', card.code);
+
+    this.applyPhaseUpdate('points', {
+      title: 'Votos en curso',
+      message:
+        'Cuando lleguen los eventos de la sala, este paso podra sustituir el flujo local de demo.',
+    });
   }
 
   onPointsRankingRequested(): void {
@@ -274,9 +563,77 @@ export class Dixit implements OnInit, OnDestroy {
     this.finishVotingAndBuildResults(this.currentRoundPlayers);
   }
 
-  private startPointsPhase(): void {
+  prepareNextRound(): void {
+    if (
+      this.phase !== 'points' ||
+      this.pointsWaitingVotes ||
+      !this.pointsShowRanking ||
+      this.phaseTransitionActive
+    ) {
+      return;
+    }
+
+    this.startPhaseTransition('hand', {
+      title: 'Preparando siguiente ronda',
+      message:
+        'Este reseteo local deja el punto exacto donde luego entraran los eventos y snapshots del backend.',
+      beforeActivate: () => {
+        this.resetForNextRound();
+      },
+    });
+  }
+
+  applyPhaseUpdate(
+    nextPhase: DixitPhase,
+    options: { immediate?: boolean; title?: string; message?: string } = {}
+  ): void {
+    // Punto unico para sustituir los timers locales por eventos o snapshots del backend.
+    const phaseMeta = this.getPhaseMeta(nextPhase);
+    const transitionConfig: PhaseTransitionConfig = {
+      title: options.title ?? phaseMeta.transitionTitle,
+      message: options.message ?? phaseMeta.transitionMessage,
+    };
+
+    if (options.immediate) {
+      this.activatePhase(nextPhase);
+      return;
+    }
+
+    this.startPhaseTransition(nextPhase, transitionConfig);
+  }
+
+  private startPhaseTransition(
+    nextPhase: DixitPhase,
+    config: PhaseTransitionConfig
+  ): void {
+    this.clearPhaseTransitionTimer();
+    this.phaseTransitionActive = true;
+    this.phaseTransitionTitle = config.title;
+    this.phaseTransitionMessage = config.message;
+
+    this.phaseTransitionTimeoutId = setTimeout(() => {
+      config.beforeActivate?.();
+      this.activatePhase(nextPhase);
+      this.phaseTransitionActive = false;
+      this.phaseTransitionTimeoutId = null;
+      this.cdr.detectChanges();
+    }, this.phaseTransitionDurationMs);
+  }
+
+  private activatePhase(nextPhase: DixitPhase): void {
+    if (nextPhase === 'choice') {
+      this.selectedChoiceCardCode = '';
+    }
+
+    if (nextPhase === 'points') {
+      this.initializePointsPhase();
+    }
+
+    this.phase = nextPhase;
+  }
+
+  private initializePointsPhase(): void {
     this.clearPointsTimers();
-    this.phase = 'points';
     this.pointsWaitingVotes = true;
     this.pointsShowRanking = false;
     this.pointsRevealedCards = [];
@@ -306,6 +663,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRanking = ranking;
     this.pointsWaitingVotes = false;
     this.pointsShowRanking = false;
+    this.boardTokens = this.buildBoardTokensFromScores();
 
     this.revealTimeoutId = setTimeout(() => {
       this.pointsShowRanking = true;
@@ -317,8 +675,7 @@ export class Dixit implements OnInit, OnDestroy {
     const totalPlayers = Math.min(this.choiceCards.length, this.playerRoster.length);
 
     return this.playerRoster.slice(0, totalPlayers).map((player) => ({
-      id: player.id,
-      name: player.name,
+      ...player,
       pointsBefore: this.pointsByPlayer.get(player.id) ?? 0,
     }));
   }
@@ -407,6 +764,44 @@ export class Dixit implements OnInit, OnDestroy {
     return candidate.code === ownCardCode ? null : candidate.code;
   }
 
+  private resetForNextRound(): void {
+    this.clearPointsTimers();
+    this.roundNumber += 1;
+    this.selectedHandCardCode = '';
+    this.selectedChoiceCardCode = '';
+    this.currentRoundPlayers = [];
+    this.pointsWaitingVotes = true;
+    this.pointsVotesReceived = 0;
+    this.pointsVotesTotal = 0;
+    this.pointsRevealedCards = [];
+    this.pointsRanking = [];
+    this.pointsShowRanking = false;
+    this.cards = this.rotateCards(this.cards);
+    this.choiceCards = [...this.cards];
+  }
+
+  private rotateCards(cards: DeckCard[]): DeckCard[] {
+    if (cards.length <= 1) {
+      return [...cards];
+    }
+
+    const [firstCard, ...rest] = cards;
+    return [...rest, firstCard];
+  }
+
+  private buildBoardTokensFromScores(): TrackBoardToken[] {
+    return this.playerRoster.map((player) => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      position: this.pointsByPlayer.get(player.id) ?? 0,
+    }));
+  }
+
+  private getPhaseMeta(phase: DixitPhase): PhaseStep {
+    return PHASE_STEPS.find((phaseStep) => phaseStep.id === phase) ?? PHASE_STEPS[0];
+  }
+
   private clearVoteInterval(): void {
     if (this.votesIntervalId) {
       clearInterval(this.votesIntervalId);
@@ -420,6 +815,13 @@ export class Dixit implements OnInit, OnDestroy {
     if (this.revealTimeoutId) {
       clearTimeout(this.revealTimeoutId);
       this.revealTimeoutId = null;
+    }
+  }
+
+  private clearPhaseTransitionTimer(): void {
+    if (this.phaseTransitionTimeoutId) {
+      clearTimeout(this.phaseTransitionTimeoutId);
+      this.phaseTransitionTimeoutId = null;
     }
   }
 }

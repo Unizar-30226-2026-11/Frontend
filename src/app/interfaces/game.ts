@@ -23,6 +23,30 @@ export interface LobbyDetailsResponse {
   lobby: LobbyDetailsApi;
 }
 
+export interface LobbyStartApi {
+  lobbyCode?: string;
+  status?: string;
+}
+
+export interface StartedGameApi {
+  id?: string;
+  route?: string;
+  engine?: LobbyEngine;
+}
+
+export interface LobbyStartResponse {
+  message?: string;
+  lobby?: LobbyStartApi;
+  game?: StartedGameApi;
+}
+
+export interface LobbyStartResult {
+  message: string;
+  lobbyCode: string;
+  status: string;
+  route: string;
+}
+
 export interface Game {
   id: string;
   title: string;

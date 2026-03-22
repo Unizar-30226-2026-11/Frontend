@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 
 import { MainMenu } from './main-menu';
@@ -8,6 +8,7 @@ import {
   CardCollectionWithCards,
   CollectionsPull,
 } from '../services/collections-pull';
+import { Auth } from '../services/auth';
 import { GamesPull } from '../services/games-pull';
 
 describe('MainMenu', () => {
@@ -15,20 +16,42 @@ describe('MainMenu', () => {
   let fixture: ComponentFixture<MainMenu>;
   let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
+  let routerSpy: jasmine.SpyObj<Router>;
+  let authStub: {
+    isLoggedIn: jasmine.Spy<() => boolean>;
+    session: jasmine.Spy<() => { user: { id: string } } | null>;
+  };
 
   beforeEach(async () => {
     collectionsPullSpy = jasmine.createSpyObj<CollectionsPull>('CollectionsPull', [
       'getCollectionsWithCards',
     ]);
     collectionsPullSpy.getCollectionsWithCards.and.resolveTo(createCollectionsFixture());
-    gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGameDetails']);
+    gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', [
+      'getGameDetails',
+      'startLobby',
+    ]);
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
+    gamesPullSpy.startLobby.and.resolveTo({
+      message: 'Partida iniciada',
+      lobbyCode: 'A1B2',
+      status: 'starting',
+      route: '/dixit/A1B2',
+    });
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
+    routerSpy.navigateByUrl.and.resolveTo(true);
+    authStub = {
+      isLoggedIn: jasmine.createSpy().and.returnValue(true),
+      session: jasmine.createSpy().and.returnValue({ user: { id: 'u_111' } }),
+    };
 
     await TestBed.configureTestingModule({
       imports: [MainMenu],
       providers: [
         { provide: CollectionsPull, useValue: collectionsPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: Auth, useValue: authStub },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -65,6 +88,25 @@ describe('MainMenu', () => {
       { slotId: 3, name: 'slot libre', state: 'abierto' },
       { slotId: 4, name: 'slot libre', state: 'abierto' },
     ]);
+  });
+
+  it('shows the host action when the authenticated player owns the lobby', () => {
+    expect(component.isHost).toBeTrue();
+    expect(component.primaryActionButtonText).toBe('Empezar partida');
+  });
+
+  it('shows the ready action for non-host players', () => {
+    authStub.session.and.returnValue({ user: { id: 'u_222' } });
+
+    expect(component.isHost).toBeFalse();
+    expect(component.primaryActionButtonText).toBe('Listo');
+  });
+
+  it('starts the lobby and navigates to Dixit when the host presses the main action', async () => {
+    await component.onPrimaryAction();
+
+    expect(gamesPullSpy.startLobby).toHaveBeenCalledOnceWith('A1B2');
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledOnceWith('/dixit/A1B2');
   });
 });
 

@@ -23,10 +23,11 @@ export interface DixitRankingRow {
   template: `
     <section class="points-phase">
       <app-dixit-track-board
-        [title]="'Tablero de puntuacion (demo)'"
-        [subtitle]="'Componente reutilizable con fichas encima de las casillas y animacion.'"
+        [title]="'Marcador de la mesa'"
+        [subtitle]="'Preparado para recibir posiciones y eventos reales del backend.'"
         [tokens]="boardTokens"
-        (tokensChanged)="onBoardTokensChanged($event)"
+        [showControls]="false"
+        [interactive]="false"
       />
 
       @if (waitingVotes) {
@@ -79,6 +80,11 @@ export interface DixitRankingRow {
               }
             </tbody>
           </table>
+          <div class="ranking-actions">
+            <button type="button" (click)="nextRoundRequested.emit()">
+              Preparar siguiente ronda
+            </button>
+          </div>
         </div>
       }
     </section>
@@ -156,6 +162,12 @@ export interface DixitRankingRow {
       opacity: 0.9;
     }
 
+    .ranking-actions {
+      margin-top: 16px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
     button {
       border: 0;
       border-radius: 999px;
@@ -182,15 +194,7 @@ export interface DixitRankingRow {
   `,
 })
 export class DixitPointsPhase {
-  boardTokens: TrackBoardToken[] = [
-    { id: 'you', name: 'Tu', color: '#ff7725', position: 0 },
-    { id: 'ana', name: 'Ana', color: '#27c93f', position: 4 },
-    { id: 'bruno', name: 'Bruno', color: '#2b79ff', position: 8 },
-    { id: 'carla', name: 'Carla', color: '#d645ff', position: 12 },
-    { id: 'diego', name: 'Diego', color: '#ff3a3a', position: 16 },
-    { id: 'elena', name: 'Elena', color: '#ffe34f', position: 20 },
-  ];
-
+  @Input() boardTokens: TrackBoardToken[] = [];
   @Input() waitingVotes = false;
   @Input() votesReceived = 0;
   @Input() votesTotal = 0;
@@ -200,8 +204,5 @@ export class DixitPointsPhase {
 
   @Output() readonly skipWaitingRequested = new EventEmitter<void>();
   @Output() readonly rankingRequested = new EventEmitter<void>();
-
-  onBoardTokensChanged(tokens: TrackBoardToken[]): void {
-    this.boardTokens = tokens;
-  }
+  @Output() readonly nextRoundRequested = new EventEmitter<void>();
 }

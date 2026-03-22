@@ -35,8 +35,10 @@ export class PlayerInfoPull {
   }
 
   savePlayerInfoToCache(playerInfo: PlayerInfo): void {
+    const token = this.requireToken();
+
     this.apiClient.setCache<UserProfileResponse>(
-      'GET:/users/profile',
+      this.apiClient.buildCacheKey('/users/profile', 'GET', token),
       {
         profile: {
           id_user: playerInfo.legacyUserId,
@@ -53,7 +55,7 @@ export class PlayerInfoPull {
     );
 
     this.apiClient.setCache<UserBalanceResponse>(
-      'GET:/users/balance',
+      this.apiClient.buildCacheKey('/users/balance', 'GET', token),
       {
         balance: {
           balance: playerInfo.balance,

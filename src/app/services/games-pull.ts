@@ -4,6 +4,8 @@ import {
   LobbyDetailsApi,
   LobbyDetailsResponse,
   LobbyListResponse,
+  LobbyStartResponse,
+  LobbyStartResult,
   LobbySummaryApi,
 } from '../interfaces/game';
 import { Auth } from './auth';
@@ -51,6 +53,32 @@ export class GamesPull {
       .then(({ lobby }) => this.toGame(lobby));
   }
 
+  startLobby(lobbyCode: string): Promise<LobbyStartResult> {
+    const token = this.requireToken();
+    const encodedLobbyCode = encodeURIComponent(lobbyCode);
+
+    // TODO: confirmar el contrato final del endpoint de arranque cuando backend lo cierre.
+    return this.apiClient
+      .request<LobbyStartResponse>(`/lobbies/${encodedLobbyCode}/start`, {
+        method: 'POST',
+        token,
+        useCache: false,
+      })
+      .then((response) => {
+        const resolvedLobbyCode = response.lobby?.lobbyCode?.trim() || lobbyCode;
+
+        this.clearCache();
+
+        return {
+          message:
+            response.message?.trim() || 'Partida iniciada. Preparando el tablero de juego.',
+          lobbyCode: resolvedLobbyCode,
+          status: response.lobby?.status?.trim() || 'starting',
+          route: this.resolveLobbyStartRoute(response, resolvedLobbyCode),
+        };
+      });
+  }
+
   clearCache(): void {
     this.apiClient.invalidateCache('/lobbies');
   }
@@ -82,5 +110,18 @@ export class GamesPull {
       throw new Error('Debes iniciar sesion para consultar las salas');
     }
     return token;
+  }
+
+  private resolveLobbyStartRoute(
+    response: LobbyStartResponse,
+    fallbackLobbyCode: string
+  ): string {
+    const rawRoute = response.game?.route?.trim();
+    if (rawRoute) {
+      return rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`;
+    }
+
+    const gameId = response.game?.id?.trim() || fallbackLobbyCode;
+    return `/dixit/${encodeURIComponent(gameId)}`;
   }
 }

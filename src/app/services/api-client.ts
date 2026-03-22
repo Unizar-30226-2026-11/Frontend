@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ApiErrorPayload, ApiRequestOptions } from '../interfaces/api';
+import { ApiErrorPayload, ApiMethod, ApiRequestOptions } from '../interfaces/api';
 
 interface CacheEntry<T> {
   data: T;
@@ -19,7 +19,7 @@ export class ApiClient {
   request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
     const method = options.method ?? 'GET';
     const useCache = method === 'GET' && options.useCache !== false;
-    const cacheKey = options.cacheKey ?? `${method}:${path}`;
+    const cacheKey = options.cacheKey ?? this.buildCacheKey(path, method, options.token);
     const ttlMs = options.ttlMs ?? this.defaultTtlMs;
 
     if (useCache && !options.forceRefresh) {
@@ -66,6 +66,11 @@ export class ApiClient {
       data,
       expiresAt: Date.now() + ttlMs,
     });
+  }
+
+  buildCacheKey(path: string, method: ApiMethod = 'GET', token: string | null = null): string {
+    const cacheScope = token?.trim() ? token : 'anonymous';
+    return `${method}:${path}:${cacheScope}`;
   }
 
   invalidateCache(match?: string): void {

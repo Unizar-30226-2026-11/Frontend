@@ -1,8 +1,9 @@
 import { ChangeDetectorRef, Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Game } from '../interfaces/game';
 import { CardCollectionWithCards, CollectionsPull } from '../services/collections-pull';
+import { Auth } from '../services/auth';
 import { GamesPull } from '../services/games-pull';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
@@ -118,7 +119,7 @@ interface RoomSlot {
             <p class="room-status">No hay jugadores en la sala.</p>
           } @else {
             @for (slot of roomSlots; track slot.slotId) {
-              <div class="room-slot">
+              <div class="room-slot" [class.ready]="slot.state === 'listo'">
                 <span class="slot-name">{{ slot.name }}</span>
                 <span class="slot-state">{{ slot.state }}</span>
               </div>
@@ -145,7 +146,24 @@ interface RoomSlot {
         </select>
       </label>
 
-      <button type="button" class="queue-btn">Buscar partida</button>
+      @if (primaryActionMessage) {
+        <p class="action-feedback success">{{ primaryActionMessage }}</p>
+      }
+
+      @if (primaryActionError) {
+        <p class="action-feedback error">{{ primaryActionError }}</p>
+      }
+
+      <button
+        type="button"
+        class="queue-btn"
+        [disabled]="isPrimaryActionDisabled"
+        (click)="onPrimaryAction()"
+      >
+        {{ primaryActionButtonText }}
+      </button>
+
+      <p class="action-hint">{{ primaryActionHint }}</p>
     </section>
   </section>
   `,
@@ -404,6 +422,10 @@ interface RoomSlot {
       font-size: 1rem;
     }
 
+    .room-slot.ready {
+      background: #d7ebbc;
+    }
+
     .slot-name {
       font-weight: 700;
     }
@@ -455,6 +477,35 @@ interface RoomSlot {
       line-height: 1.1;
       padding: 12px 18px;
       cursor: pointer;
+    }
+
+    .queue-btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .action-feedback,
+    .action-hint {
+      margin: 0;
+      text-align: center;
+    }
+
+    .action-feedback {
+      font-size: 0.96rem;
+    }
+
+    .action-feedback.success {
+      color: #d5efc0;
+    }
+
+    .action-feedback.error {
+      color: #ffd1d1;
+    }
+
+    .action-hint {
+      color: #dde8cf;
+      font-size: 0.92rem;
+      line-height: 1.35;
     }
 
     @media (max-width: 1250px) {
@@ -518,10 +569,13 @@ interface RoomSlot {
   `,
 })
 export class MainMenu implements OnInit {
+  readonly auth = inject(Auth);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly gamesPull = inject(GamesPull);
   private readonly destroyRef = inject(DestroyRef);
   private currentLobbyCode = '';
+  private currentLobby: Game | null = null;
 
   totalCards = 0;
   collectedCards = 0;
@@ -533,6 +587,10 @@ export class MainMenu implements OnInit {
   cardsError = '';
   roomLoading = true;
   roomError = '';
+  primaryActionLoading = false;
+  primaryActionError = '';
+  primaryActionMessage = '';
+  isReady = false;
   collections: MenuCardCollection[] = [];
 
   maps = ['Costa Sumergida', 'Bosque Inverso', 'Ciudad Onirica'];
@@ -551,6 +609,43 @@ export class MainMenu implements OnInit {
     private readonly collectionsPull: CollectionsPull,
     private readonly cdr: ChangeDetectorRef
   ) {}
+
+  get isHost(): boolean {
+    return !!this.currentLobby && this.currentPlayerId === this.currentLobby.hostId;
+  }
+
+  get primaryActionButtonText(): string {
+    if (this.primaryActionLoading) {
+      return this.isHost ? 'Iniciando partida...' : 'Actualizando...';
+    }
+
+    if (this.isHost) {
+      return this.currentLobby?.status === 'waiting' ? 'Empezar partida' : 'Partida en curso';
+    }
+
+    return this.isReady ? 'Cancelar listo' : 'Listo';
+  }
+
+  get primaryActionHint(): string {
+    if (this.isHost) {
+      return 'Al pulsar este boton se lanzara la llamada al backend para arrancar la partida.';
+    }
+
+    return this.isReady
+      ? 'Tu estado de listo queda reflejado localmente hasta conectar los eventos en tiempo real.'
+      : 'Marca tu estado de listo mientras se termina la integracion de presencia con el backend.';
+  }
+
+  get isPrimaryActionDisabled(): boolean {
+    return (
+      this.roomLoading ||
+      this.primaryActionLoading ||
+      !!this.roomError ||
+      !this.currentLobby ||
+      !this.auth.isLoggedIn() ||
+      this.currentLobby.status !== 'waiting'
+    );
+  }
 
   async ngOnInit(): Promise<void> {
     this.route.paramMap
@@ -577,6 +672,19 @@ export class MainMenu implements OnInit {
 
   setRating(rating: number): void {
     this.currentRating = rating;
+  }
+
+  async onPrimaryAction(): Promise<void> {
+    if (this.isPrimaryActionDisabled) {
+      return;
+    }
+
+    if (this.isHost) {
+      await this.startMatch();
+      return;
+    }
+
+    this.toggleReadyState();
   }
 
   private async loadCollections(): Promise<void> {
@@ -610,6 +718,7 @@ export class MainMenu implements OnInit {
   private async loadLobby(lobbyCode: string): Promise<void> {
     if (!lobbyCode) {
       this.currentLobbyCode = '';
+      this.currentLobby = null;
       this.roomError = 'No se encontro el codigo de la sala';
       this.roomLoading = false;
       this.roomCapacity = 0;
@@ -619,8 +728,11 @@ export class MainMenu implements OnInit {
     }
 
     this.currentLobbyCode = lobbyCode;
+    this.currentLobby = null;
     this.roomLoading = true;
     this.roomError = '';
+    this.isReady = false;
+    this.resetPrimaryActionFeedback();
     this.roomCapacity = 0;
     this.playersInRoom = 0;
     this.roomSlots = [];
@@ -630,6 +742,7 @@ export class MainMenu implements OnInit {
       if (this.currentLobbyCode !== lobbyCode) {
         return;
       }
+      this.currentLobby = lobby;
       this.roomCapacity = lobby.maxPlayers;
       this.playersInRoom = lobby.playerCount;
       this.roomSlots = this.toRoomSlots(lobby);
@@ -638,6 +751,7 @@ export class MainMenu implements OnInit {
         return;
       }
       console.error('[MainMenu] Error al cargar la sala:', error);
+      this.currentLobby = null;
       this.roomError = error instanceof Error ? error.message : 'No se pudo cargar la sala';
       this.roomCapacity = 0;
       this.playersInRoom = 0;
@@ -651,10 +765,16 @@ export class MainMenu implements OnInit {
   }
 
   private toRoomSlots(lobby: Game): RoomSlot[] {
+    const currentPlayerId = this.currentPlayerId;
     const occupiedSlots = lobby.players.map((playerId, index) => ({
       slotId: index + 1,
       name: playerId,
-      state: playerId === lobby.hostId ? 'anfitrion' : 'jugador',
+      state:
+        playerId === lobby.hostId
+          ? 'anfitrion'
+          : playerId === currentPlayerId && this.isReady
+            ? 'listo'
+            : 'jugador',
     }));
 
     const freeSlots = Array.from(
@@ -684,5 +804,58 @@ export class MainMenu implements OnInit {
         locked: false,
       })),
     }));
+  }
+
+  private get currentPlayerId(): string {
+    return this.auth.session()?.user.id ?? '';
+  }
+
+  private toggleReadyState(): void {
+    this.isReady = !this.isReady;
+    this.primaryActionError = '';
+    this.primaryActionMessage = this.isReady
+      ? 'Estado listo actualizado en local. Falta conectar el evento real con el backend.'
+      : 'Has vuelto al estado pendiente.';
+
+    if (this.currentLobby) {
+      this.roomSlots = this.toRoomSlots(this.currentLobby);
+    }
+  }
+
+  private async startMatch(): Promise<void> {
+    const lobbyCode = this.currentLobbyCode;
+    const currentLobby = this.currentLobby;
+
+    if (!lobbyCode || !currentLobby || !this.isHost) {
+      return;
+    }
+
+    this.primaryActionLoading = true;
+    this.resetPrimaryActionFeedback();
+
+    try {
+      const startResult = await this.gamesPull.startLobby(lobbyCode);
+      if (this.currentLobbyCode !== lobbyCode) {
+        return;
+      }
+      this.primaryActionMessage = startResult.message;
+      this.currentLobby = {
+        ...currentLobby,
+        status: startResult.status,
+      };
+      await this.router.navigateByUrl(startResult.route);
+    } catch (error) {
+      console.error('[MainMenu] Error al iniciar la partida:', error);
+      this.primaryActionError =
+        error instanceof Error ? error.message : 'No se pudo iniciar la partida';
+    } finally {
+      this.primaryActionLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private resetPrimaryActionFeedback(): void {
+    this.primaryActionError = '';
+    this.primaryActionMessage = '';
   }
 }
