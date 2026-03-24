@@ -69,6 +69,24 @@ export class Auth {
     this.apiClient.invalidateCache();
   }
 
+  updateSessionUser(username: string): void {
+    const currentSession = this.sessionState();
+    if (!currentSession) {
+      return;
+    }
+
+    const nextSession: AuthSession = {
+      ...currentSession,
+      user: {
+        ...currentSession.user,
+        username,
+      },
+    };
+
+    this.sessionState.set(nextSession);
+    this.persistSession(nextSession);
+  }
+
   private restoreSession(): AuthSession | null {
     try {
       const rawSession = localStorage.getItem(AUTH_STORAGE_KEY);

@@ -4,7 +4,7 @@ export interface ApiErrorPayload {
   currentBalance?: number;
 }
 
-export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiRequestOptions {
   method?: ApiMethod;

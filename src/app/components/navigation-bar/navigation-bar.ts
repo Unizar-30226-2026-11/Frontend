@@ -29,7 +29,7 @@ interface PendingFriendRequestViewModel {
   imports: [RouterLink],
   template: `
     <header class="store-navbar">
-      <a class="brand" routerLink="/menu" aria-label="Ir al menu principal">
+      <a class="brand" routerLink="/games" aria-label="Ir al menu principal">
         A Tale of Recognition
       </a>
 
