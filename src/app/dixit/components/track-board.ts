@@ -84,6 +84,10 @@ export interface TrackBoardToken {
             <img draggable="false" [src]="token.image" [alt]="'Ficha ' + token.name" />
           </button>
         }
+
+        <div class="board-overlay-slot">
+          <ng-content select="[board-overlay]"></ng-content>
+        </div>
       </div>
 
       @if (showControls) {
@@ -171,6 +175,18 @@ export interface TrackBoardToken {
         radial-gradient(circle at 82% 72%, rgba(71, 126, 210, 0.28) 0%, rgba(0, 0, 0, 0) 42%),
         linear-gradient(125deg, rgba(19, 80, 88, 0.9), rgba(14, 31, 62, 0.95));
       border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .board-overlay-slot {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(14px, 2vw, 28px);
+      box-sizing: border-box;
     }
 
     .track-cell {
