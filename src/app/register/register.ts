@@ -1,7 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, inject } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { Auth } from '../services/auth';
+
+const REDIRECT_DELAY_MS = 1500;
 
 @Component({
   selector: 'app-register',
@@ -15,6 +18,12 @@ import { Router } from '@angular/router';
       <form class="register-form"
             [formGroup]="registerForm"
             (ngSubmit)="onSubmit()">
+
+        <input
+          type="email"
+          placeholder="Email"
+          formControlName="email"
+        />
 
         <input
           type="text"
@@ -36,8 +45,8 @@ import { Router } from '@angular/router';
 
         <button class="submit-button"
                 type="submit"
-                [disabled]="!registerForm.valid">
-          Registrarse
+                [disabled]="!registerForm.valid || submitting || isRedirecting">
+          {{ isRedirecting ? 'Redirigiendo...' : submitting ? 'Registrando...' : 'Registrarse' }}
         </button>
 
       </form>
@@ -45,6 +54,7 @@ import { Router } from '@angular/router';
       <button class="login-button" (click)="goLogin()">Ya tengo una cuenta</button>
 
       <p *ngIf="error" class="error">{{ error }}</p>
+      <p *ngIf="successMessage" class="success">{{ successMessage }}</p>
 
     </div>
   `,
@@ -148,35 +158,94 @@ import { Router } from '@angular/router';
       color: red;
       margin-top: 15px;
     }
+
+    .success {
+      color: #d9ece8;
+      margin-top: 15px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(16, 33, 31, 0.78);
+      border: 1px solid rgba(217, 236, 232, 0.35);
+      text-align: center;
+    }
   `
 })
-export class Register {
-
-  private router = inject(Router);
+export class Register implements OnDestroy {
+  private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
+  private redirectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   error: string | null = null;
+  successMessage: string | null = null;
+  submitting = false;
+  isRedirecting = false;
 
   registerForm = new FormGroup({
-    username: new FormControl('', Validators.required),
-    password: new FormControl('', Validators.required),
-    confirmPassword: new FormControl('', Validators.required),
+    email: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.email],
+    }),
+    username: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    password: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
+    confirmPassword: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
   });
 
-  onSubmit() {
-
-    const { password, confirmPassword } = this.registerForm.value;
-
-    if (password !== confirmPassword) {
-      this.error = 'Las contraseñas no coinciden';
+  async onSubmit(): Promise<void> {
+    if (this.registerForm.invalid || this.submitting || this.isRedirecting) {
       return;
     }
 
-    console.log('Registro correcto', this.registerForm.value);
+    this.error = null;
+    this.successMessage = null;
 
-    this.router.navigate(['/']);
+    const { email, username, password, confirmPassword } = this.registerForm.getRawValue();
+
+    if (password !== confirmPassword) {
+      this.error = 'Las contrasenas no coinciden';
+      this.isRedirecting = false;
+      return;
+    }
+
+    this.submitting = true;
+
+    try {
+      await this.auth.register(email, username, password);
+      this.isRedirecting = true;
+      this.clearRedirectTimeout();
+      this.successMessage = 'Registro completado correctamente. Redirigiendo a iniciar sesion...';
+
+      this.redirectTimeoutId = setTimeout(() => {
+        void this.router.navigate(['/login']);
+      }, REDIRECT_DELAY_MS);
+    } catch (error: unknown) {
+      this.error = error instanceof Error ? error.message : 'No se pudo completar el registro';
+      this.isRedirecting = false;
+    } finally {
+      this.submitting = false;
+    }
   }
 
   goLogin() {
-    this.router.navigate(['/']);
+    void this.router.navigate(['/login']);
+  }
+
+  ngOnDestroy(): void {
+    this.clearRedirectTimeout();
+  }
+
+  private clearRedirectTimeout(): void {
+    if (this.redirectTimeoutId !== null) {
+      clearTimeout(this.redirectTimeoutId);
+      this.redirectTimeoutId = null;
+    }
   }
 }

@@ -1,0 +1,191 @@
+import { Injectable, inject } from '@angular/core';
+import { Auth } from './auth';
+import { ApiClient } from './api-client';
+
+interface CollectionsResponseDirect {
+  collections?: unknown;
+}
+
+interface CollectionCardsResponseDirect {
+  cards?: unknown;
+}
+
+interface CollectionRecordApi {
+  id?: unknown;
+  name?: unknown;
+  description?: unknown;
+  releaseDate?: unknown;
+  release_date?: unknown;
+  totalCards?: unknown;
+  total_cards?: unknown;
+}
+
+interface CardRecordApi {
+  id_card?: unknown;
+  id_collection?: unknown;
+  rarity?: unknown;
+  title?: unknown;
+}
+
+export interface CardCollection {
+  id: string;
+  name: string;
+  description: string;
+  releaseDate: string;
+  totalCards: number;
+}
+
+export interface CollectionCard {
+  idCard: string;
+  idCollection: string;
+  rarity: string;
+  title: string;
+}
+
+export interface CardCollectionWithCards extends CardCollection {
+  cards: CollectionCard[];
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class CollectionsPull {
+  private readonly apiClient = inject(ApiClient);
+  private readonly auth = inject(Auth);
+
+  async getCollectionsWithCards(
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<CardCollectionWithCards[]> {
+    const collections = await this.getCollections(options);
+
+    return Promise.all(
+      collections.map(async (collection) => ({
+        ...collection,
+        cards: await this.getCollectionCards(collection.id, options),
+      }))
+    );
+  }
+
+  async getCollections(
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<CardCollection[]> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<CollectionsResponseDirect>('/collections', {
+      token,
+      ttlMs: 60_000,
+      forceRefresh: options.forceRefresh,
+    });
+
+    const rawCollections = this.extractCollections(response);
+    return rawCollections.map((collection) => this.normalizeCollection(collection));
+  }
+
+  async getCollectionCards(
+    collectionId: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<CollectionCard[]> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<CollectionCardsResponseDirect>(
+      `/collections/${collectionId}/cards`,
+      {
+        token,
+        ttlMs: 60_000,
+        forceRefresh: options.forceRefresh,
+      }
+    );
+
+    const rawCards = this.extractCards(response);
+    return rawCards.map((card) => this.normalizeCard(card));
+  }
+
+  private extractCollections(response: CollectionsResponseDirect): CollectionRecordApi[] {
+    const candidate = response.collections;
+
+    if (Array.isArray(candidate)) {
+      return candidate as CollectionRecordApi[];
+    }
+
+    if (
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      Array.isArray((candidate as { collections?: unknown }).collections)
+    ) {
+      return (candidate as { collections: CollectionRecordApi[] }).collections;
+    }
+
+    throw new Error('Formato de respuesta invalido para las colecciones');
+  }
+
+  private extractCards(response: CollectionCardsResponseDirect): CardRecordApi[] {
+    const candidate = response.cards;
+
+    if (Array.isArray(candidate)) {
+      return candidate as CardRecordApi[];
+    }
+
+    if (
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      Array.isArray((candidate as { cards?: unknown }).cards)
+    ) {
+      return (candidate as { cards: CardRecordApi[] }).cards;
+    }
+
+    throw new Error('Formato de respuesta invalido para las cartas de la coleccion');
+  }
+
+  private normalizeCollection(collection: CollectionRecordApi): CardCollection {
+    if (typeof collection.id !== 'string' || typeof collection.name !== 'string') {
+      throw new Error('Formato de coleccion invalido');
+    }
+
+    const releaseDate =
+      typeof collection.releaseDate === 'string'
+        ? collection.releaseDate
+        : typeof collection.release_date === 'string'
+          ? collection.release_date
+          : '';
+    const totalCards =
+      typeof collection.totalCards === 'number'
+        ? collection.totalCards
+        : typeof collection.total_cards === 'number'
+          ? collection.total_cards
+          : 0;
+
+    return {
+      id: collection.id,
+      name: collection.name,
+      description:
+        typeof collection.description === 'string' ? collection.description : '',
+      releaseDate,
+      totalCards,
+    };
+  }
+
+  private normalizeCard(card: CardRecordApi): CollectionCard {
+    if (
+      typeof card.id_card !== 'string' ||
+      typeof card.id_collection !== 'string' ||
+      typeof card.rarity !== 'string' ||
+      typeof card.title !== 'string'
+    ) {
+      throw new Error('Formato de carta invalido');
+    }
+
+    return {
+      idCard: card.id_card,
+      idCollection: card.id_collection,
+      rarity: card.rarity,
+      title: card.title,
+    };
+  }
+
+  private requireToken(): string {
+    const token = this.auth.token();
+    if (!token) {
+      throw new Error('Debes iniciar sesion para consultar las colecciones');
+    }
+
+    return token;
+  }
+}

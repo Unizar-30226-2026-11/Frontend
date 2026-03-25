@@ -7,7 +7,11 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   template: `
     <article class="decks-card">
       <div class="deck-img">
-        <img [src]="deckImageSrc" alt="Mazo de cartas">
+        <img [src]="deckImageSrc" [alt]="deckName || 'Item de tienda'" />
+        <div class="deck-copy">
+          <h3>{{ deckName }}</h3>
+          <p>{{ deckType }}</p>
+        </div>
       </div>
       <div class="deck-footer" [class.deck-footer-owned]="deckOwned">
         <button
@@ -26,10 +30,10 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
             Comprar
           }
         </button>
-        <!-- En el prototipo no enseñamos el 'Price tag' si ya lo tenemos comprado. -->
         @if (!deckOwned) {
           <div class="deck-price">
-            {{ deckPrice }}<span>$</span>
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ deckPrice }}</span>
           </div>
         }
       </div>
@@ -38,7 +42,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   styles: [`
     :host {
       --deck-button-width: 168px;
-      --deck-price-width: 86px;
+      --deck-price-width: 112px;
       --deck-controls-gap: 14px;
       display: block;
       width: min(calc(var(--deck-button-width) + var(--deck-price-width) + var(--deck-controls-gap)), 100%);
@@ -52,6 +56,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     }
 
     .deck-img {
+      position: relative;
       background: linear-gradient(145deg, rgba(5, 52, 104, 0.95), rgba(8, 28, 67, 0.9));
       border-radius: 3px;
       overflow: hidden;
@@ -65,6 +70,33 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       height: 100%;
       object-fit: cover;
       filter: saturate(1.06) contrast(1.03);
+    }
+
+    .deck-copy {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 18px 16px 14px;
+      background: linear-gradient(180deg, rgba(7, 15, 33, 0) 0%, rgba(7, 15, 33, 0.94) 100%);
+      color: #f4f6fb;
+    }
+
+    .deck-copy h3,
+    .deck-copy p {
+      margin: 0;
+    }
+
+    .deck-copy h3 {
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    .deck-copy p {
+      margin-top: 4px;
+      font-size: 0.85rem;
+      opacity: 0.82;
+      text-transform: capitalize;
     }
 
     .deck-footer {
@@ -118,19 +150,32 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       display: flex;
       justify-content: center;
       align-items: center;
+      gap: 8px;
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
     }
 
-    .deck-price span {
-      font-size: 0.82em;
-      margin-left: 2px;
-      opacity: 0.95;
+    .coin-icon {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: radial-gradient(circle at 32% 32%, #fff1a6 0%, #f4c95d 42%, #c98b19 100%);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.24);
+    }
+
+    .coin-icon::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 1px solid rgba(132, 83, 9, 0.4);
     }
 
     @media (max-width: 640px) {
       :host {
         --deck-button-width: 146px;
-        --deck-price-width: 74px;
+        --deck-price-width: 96px;
         --deck-controls-gap: 10px;
       }
 
@@ -153,6 +198,8 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 export class DecksCard {
   @Input({ required: true }) deckImageSrc = '';
   @Input({ required: true }) deckPrice = 0;
+  @Input() deckName = '';
+  @Input() deckType = '';
   @Input() deckOwned = false;
   @Input() canBuy = true;
   @Input() buying = false;
@@ -163,6 +210,7 @@ export class DecksCard {
     if (this.deckOwned || this.buying || !this.canBuy) {
       return;
     }
+
     this.buy.emit();
   }
 }

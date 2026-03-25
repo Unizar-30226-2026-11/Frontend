@@ -1,26 +1,19 @@
 import { Component, inject } from '@angular/core';
-// import { LoginForm } from './components/login-form/login-form.js';
-import { Auth } from '../services/auth.js';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { RouterLink } from '@angular/router';
+import { Auth } from '../services/auth';
+import { PlayerStore } from '../services/player-store';
+
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [/*LoginForm ,*/ RouterLink],
+  imports: [RouterLink],
   template: `
     <h1>A Tale of Recognition</h1>
-    <!-- @if (!auth.isLoggedIn()) {
-      <div class="login-form-wrapper">
-        <app-login-form [logIn]="handleLogin.bind(this)" (usernameOut)="username = $event"></app-login-form>
-      </div>
-    } -->
-    
+
     <button class="top-button" routerLink="/register">Registrarse</button>
 
     <button routerLink="/login">Iniciar Sesión</button>
-
-
-
-
   `,
   styles: `
     h1 {
@@ -57,9 +50,7 @@ import { Router, RouterLink } from '@angular/router';
 
     button:hover {
       background-color: #0a9e8c;
-      cursor: pointer;
     }
-
 
     .login-form-wrapper {
       display: flex;
@@ -70,15 +61,7 @@ import { Router, RouterLink } from '@angular/router';
   `,
 })
 export class Home {
-  auth = inject(Auth);
-  private router = inject(Router);
-  username='';
-
-  handleLogin(username: string, password: string): void {
-    const isLoggedIn = this.auth.LogIn(username, password);
-    if (isLoggedIn) {
-      this.username = username;
-      this.router.navigateByUrl('/menu');
-    }
-  }
+  readonly auth = inject(Auth);
+  private readonly router = inject(Router);
+  private readonly playerStore = inject(PlayerStore);
 }

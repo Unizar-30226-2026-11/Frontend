@@ -1,13 +1,18 @@
-import { Injectable } from '@angular/core';
-
-export interface BuyDeckPayload {
-  username: string;
-  deckId: string;
-  price: number;
-}
+import { Injectable, inject } from '@angular/core';
+import { UserInventoryResponse } from '../interfaces/player-info';
+import {
+  BuyItemResponse,
+  ShopItemApi,
+  ShopItemsResponse,
+  StoreCatalogResponse,
+  StoreItem,
+} from '../interfaces/store-item';
+import { Auth } from './auth';
+import { ApiClient } from './api-client';
 
 export interface BuyDeckResponse {
-  deckId: string;
+  itemId: string;
+  message: string;
   remainingCoins?: number;
 }
 
@@ -15,47 +20,99 @@ export interface BuyDeckResponse {
   providedIn: 'root',
 })
 export class DecksPull {
-  private readonly purchaseEndpoint = '/api/store/decks/purchase';
+  private readonly apiClient = inject(ApiClient);
+  private readonly auth = inject(Auth);
+  private readonly defaultImage = '/assets/Tablero.png';
 
-  async buyDeck(payload: BuyDeckPayload): Promise<BuyDeckResponse> {
-    const response = await fetch(this.purchaseEndpoint, {
+  getStoreCatalog(options: { forceRefresh?: boolean } = {}): Promise<StoreCatalogResponse> {
+    const token = this.requireToken();
+
+    return Promise.all([
+      this.apiClient.request<ShopItemsResponse>('/shop/items', {
+        token,
+        ttlMs: 60_000,
+        forceRefresh: options.forceRefresh,
+      }),
+      this.apiClient.request<UserInventoryResponse>('/users/inventory', {
+        token,
+        ttlMs: 20_000,
+        forceRefresh: options.forceRefresh,
+      }),
+    ]).then(([shopResponse, inventoryResponse]) => ({
+      items: this.toStoreItems(shopResponse.items, inventoryResponse),
+      inventory: inventoryResponse,
+    }));
+  }
+
+  async buyDeck(itemId: string): Promise<BuyDeckResponse> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<BuyItemResponse>('/shop/buy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      token,
+      body: { itemId },
+      useCache: false,
     });
 
-    let body: unknown = null;
-    try {
-      body = await response.json();
-    } catch {
-      body = null;
-    }
-
-    if (!response.ok) {
-      const backendMessage =
-        typeof body === 'object' &&
-        body !== null &&
-        'message' in body &&
-        typeof (body as { message?: unknown }).message === 'string'
-          ? (body as { message: string }).message
-          : null;
-
-      throw new Error(backendMessage ?? 'No se pudo completar la compra del mazo');
-    }
-
-    const remainingCoins =
-      typeof body === 'object' &&
-      body !== null &&
-      'remainingCoins' in body &&
-      typeof (body as { remainingCoins?: unknown }).remainingCoins === 'number'
-        ? (body as { remainingCoins: number }).remainingCoins
-        : undefined;
+    this.apiClient.invalidateCache('/users/inventory');
+    this.apiClient.invalidateCache('/users/balance');
+    this.apiClient.invalidateCache('/collections');
 
     return {
-      deckId: payload.deckId,
-      remainingCoins,
+      itemId,
+      message: response.message,
+      remainingCoins: response.updatedBalance.coins,
     };
+  }
+
+  private toStoreItems(items: ShopItemApi[], inventory: UserInventoryResponse): StoreItem[] {
+    const ownedIds = this.extractOwnedIds(inventory);
+
+    return items.map((item) => ({
+      id: item.id,
+      type: item.type,
+      name: item.name,
+      price: item.price,
+      image: this.resolveItemImage(item),
+      owned: ownedIds.has(item.id),
+    }));
+  }
+
+  private extractOwnedIds(inventory: UserInventoryResponse): Set<string> {
+    const rawInventory = inventory.inventory.inventory;
+    const ownedIds = new Set<string>();
+
+    for (const entry of rawInventory) {
+      if (typeof entry === 'string') {
+        ownedIds.add(entry);
+        continue;
+      }
+
+      if (typeof entry.itemId === 'string') {
+        ownedIds.add(entry.itemId);
+        continue;
+      }
+
+      if (typeof entry.id === 'string') {
+        ownedIds.add(entry.id);
+      }
+    }
+
+    return ownedIds;
+  }
+
+  private resolveItemImage(item: ShopItemApi): string {
+    if (item.type === 'cosmetic') {
+      return '/assets/Tablero.png';
+    }
+
+    return this.defaultImage;
+  }
+
+  private requireToken(): string {
+    const token = this.auth.token();
+    if (!token) {
+      throw new Error('Debes iniciar sesion para consultar la tienda');
+    }
+    return token;
   }
 }

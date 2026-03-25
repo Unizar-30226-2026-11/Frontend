@@ -15,8 +15,8 @@ import { RouterModule } from '@angular/router';
       <div class="game-description">
         <p>{{ gameDescription }}</p>
       </div>
-      <div>  
-        <a class="details-link" [routerLink]="['/games', this.gameId]">Ver mas</a>
+      <div>
+        <a class="details-link" [routerLink]="['/games', gameId]">Ver mas</a>
       </div>
     </div>
   `,
@@ -116,9 +116,8 @@ import { RouterModule } from '@angular/router';
   `,
 })
 export class GameCard {
-  @Input() gameTitle: string = '';
-  @Input() gameImage: string = '';
-  @Input() gameDescription: string = '';
-  @Input() gameId: number = 0;
-  constructor() {}
+  @Input() gameTitle = '';
+  @Input() gameImage = '';
+  @Input() gameDescription = '';
+  @Input() gameId = '';
 }

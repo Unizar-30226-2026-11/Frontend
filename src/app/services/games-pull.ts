@@ -1,70 +1,127 @@
-import { Injectable } from '@angular/core';
-import { Game } from '../interfaces/game';
-
-interface PlaceholderPost {
-  id: number;
-  title: string;
-  body: string;
-}
+import { Injectable, inject } from '@angular/core';
+import {
+  Game,
+  LobbyDetailsApi,
+  LobbyDetailsResponse,
+  LobbyListResponse,
+  LobbyStartResponse,
+  LobbyStartResult,
+  LobbySummaryApi,
+} from '../interfaces/game';
+import { Auth } from './auth';
+import { ApiClient } from './api-client';
 
 @Injectable({
   providedIn: 'root',
 })
 export class GamesPull {
-  private readonly gamesEndpoint = 'https://jsonplaceholder.typicode.com/posts';
-  private readonly cache = new Map<string, Game[]>();
+  private readonly apiClient = inject(ApiClient);
+  private readonly auth = inject(Auth);
+  private readonly lobbyImage = '/assets/Tablero.png';
 
   getGames(
     page: number,
     pageSize: number,
-    options: { forceRefresh?: boolean } = {}
+    options: { forceRefresh?: boolean; search?: string } = {}
   ): Promise<Game[]> {
-    const cacheKey = `games:list:${page}:${pageSize}`;
-    const cachedGames = this.cache.get(cacheKey);
-    if (cachedGames && !options.forceRefresh) {
-      return Promise.resolve(cachedGames);
-    }
+    const token = this.requireToken();
+    const search = options.search?.trim();
+    const path = search ? `/lobbies?search=${encodeURIComponent(search)}` : '/lobbies';
 
-    return this.fetchGames(page, pageSize).then((games) => {
-      this.cache.set(cacheKey, games);
-      return games;
-    });
+    return this.apiClient
+      .request<LobbyListResponse>(path, {
+        token,
+        ttlMs: 30_000,
+        forceRefresh: options.forceRefresh,
+      })
+      .then(({ lobbies }) =>
+        lobbies
+          .map((lobby) => this.toGame(lobby))
+          .slice((page - 1) * pageSize, page * pageSize)
+      );
+  }
+
+  getGameDetails(lobbyCode: string, options: { forceRefresh?: boolean } = {}): Promise<Game> {
+    const token = this.requireToken();
+
+    return this.apiClient
+      .request<LobbyDetailsResponse>(`/lobbies/${encodeURIComponent(lobbyCode)}`, {
+        token,
+        ttlMs: 30_000,
+        forceRefresh: options.forceRefresh,
+      })
+      .then(({ lobby }) => this.toGame(lobby));
+  }
+
+  startLobby(lobbyCode: string): Promise<LobbyStartResult> {
+    const token = this.requireToken();
+    const encodedLobbyCode = encodeURIComponent(lobbyCode);
+
+    // TODO: confirmar el contrato final del endpoint de arranque cuando backend lo cierre.
+    return this.apiClient
+      .request<LobbyStartResponse>(`/lobbies/${encodedLobbyCode}/start`, {
+        method: 'POST',
+        token,
+        useCache: false,
+      })
+      .then((response) => {
+        const resolvedLobbyCode = response.lobby?.lobbyCode?.trim() || lobbyCode;
+
+        this.clearCache();
+
+        return {
+          message:
+            response.message?.trim() || 'Partida iniciada. Preparando el tablero de juego.',
+          lobbyCode: resolvedLobbyCode,
+          status: response.lobby?.status?.trim() || 'starting',
+          route: this.resolveLobbyStartRoute(response, resolvedLobbyCode),
+        };
+      });
   }
 
   clearCache(): void {
-    this.cache.clear();
+    this.apiClient.invalidateCache('/lobbies');
   }
 
-  private async fetchGames(page: number, pageSize: number): Promise<Game[]> {
-    const response = await fetch(this.gamesEndpoint);
-    if (!response.ok) {
-      throw new Error('No se pudo cargar la lista de juegos');
-    }
+  private toGame(lobby: LobbySummaryApi | LobbyDetailsApi): Game {
+    const playerCount = lobby.players.length;
+    const isPrivate = 'isPrivate' in lobby ? lobby.isPrivate : false;
+    const statusLabel = lobby.status === 'waiting' ? 'Esperando jugadores' : lobby.status;
+    const visibilityLabel = isPrivate ? 'Privada' : 'Publica';
 
-    const body: unknown = await response.json();
-    if (!Array.isArray(body)) {
-      throw new Error('Formato de respuesta invalido para la lista de juegos');
-    }
-
-    const validPosts = body.filter((value): value is PlaceholderPost => this.isPlaceholderPost(value));
-    return validPosts.slice((page - 1) * pageSize, page * pageSize).map((item) => ({
-      id: item.id,
-      title: item.title,
-      body: item.body,
-      image: `https://picsum.photos/200/300?random=${item.id}`,
-    }));
+    return {
+      id: lobby.lobbyCode,
+      title: lobby.name,
+      description: `${lobby.engine} - ${playerCount}/${lobby.maxPlayers} jugadores - ${statusLabel} - ${visibilityLabel}`,
+      image: this.lobbyImage,
+      hostId: lobby.hostId,
+      players: lobby.players,
+      playerCount,
+      maxPlayers: lobby.maxPlayers,
+      engine: lobby.engine,
+      status: lobby.status,
+      isPrivate,
+    };
   }
 
-  private isPlaceholderPost(value: unknown): value is PlaceholderPost {
-    if (typeof value !== 'object' || value === null) {
-      return false;
+  private requireToken(): string {
+    const token = this.auth.token();
+    if (!token) {
+      throw new Error('Debes iniciar sesion para consultar las salas');
+    }
+    return token;
+  }
+
+  private resolveLobbyStartRoute(
+    response: LobbyStartResponse,
+    fallbackLobbyCode: string
+  ): string {
+    const rawRoute = response.game?.route?.trim();
+    if (rawRoute) {
+      return rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`;
     }
 
-    const candidate = value as Partial<PlaceholderPost>;
-    return (
-      typeof candidate.id === 'number' &&
-      typeof candidate.title === 'string' &&
-      typeof candidate.body === 'string'
-    );
+    const gameId = response.game?.id?.trim() || fallbackLobbyCode;
+    return `/dixit/${encodeURIComponent(gameId)}`;
   }
 }

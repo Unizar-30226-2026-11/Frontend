@@ -1,34 +1,130 @@
-import { Injectable, inject } from '@angular/core';
-import { PlayerStore } from './player-store';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import {
+  AuthSession,
+  LoginPayload,
+  LoginResponse,
+  RegisterPayload,
+  RegisterResponse,
+} from '../interfaces/auth';
+import { ApiClient } from './api-client';
+
+const AUTH_STORAGE_KEY = 'ator.auth.session';
 
 @Injectable({
   providedIn: 'root',
 })
 export class Auth {
-  private readonly playerStore = inject(PlayerStore);
-  isLoggedInUser = false;
-  username = '';
+  private readonly apiClient = inject(ApiClient);
+  private readonly sessionState = signal<AuthSession | null>(this.restoreSession());
 
-  constructor() {
-    // Checking for existing authentication tokens or session data can be done here
+  readonly session = computed(() => this.sessionState());
+  readonly isLoggedIn = computed(() => this.sessionState() !== null);
+  readonly token = computed(() => this.sessionState()?.token ?? null);
+  readonly username = computed(() => this.sessionState()?.user.username ?? '');
+  readonly email = computed(() => this.sessionState()?.user.email ?? '');
+
+  async register(email: string, username: string, password: string): Promise<RegisterResponse> {
+    const payload: RegisterPayload = {
+      email: email.trim(),
+      username: username.trim(),
+      password,
+    };
+
+    return this.apiClient.request<RegisterResponse>('/auth/register', {
+      method: 'POST',
+      body: payload,
+      useCache: false,
+    });
   }
 
-  LogIn(username: string, password: string): boolean {
-    // Implement your authentication logic here
-    this.isLoggedInUser = username === 'admin' && password === 'password';
-    this.username = this.isLoggedInUser ? username : '';
+  async logIn(email: string, password: string): Promise<AuthSession> {
+    const payload: LoginPayload = {
+      email: email.trim(),
+      password,
+    };
 
-    if (this.isLoggedInUser) {
-      void this.playerStore.loadPlayer(this.username);
-    } else {
-      this.playerStore.clearPlayer();
+    const response = await this.apiClient.request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: payload,
+      useCache: false,
+    });
+
+    const session: AuthSession = {
+      token: response.token,
+      user: {
+        id: response.user.id,
+        username: response.user.username,
+        email: payload.email,
+      },
+    };
+
+    this.sessionState.set(session);
+    this.persistSession(session);
+    return session;
+  }
+
+  logOut(): void {
+    this.sessionState.set(null);
+    this.clearPersistedSession();
+    this.apiClient.invalidateCache();
+  }
+
+  updateSessionUser(username: string): void {
+    const currentSession = this.sessionState();
+    if (!currentSession) {
+      return;
     }
 
-    return this.isLoggedInUser;
+    const nextSession: AuthSession = {
+      ...currentSession,
+      user: {
+        ...currentSession.user,
+        username,
+      },
+    };
+
+    this.sessionState.set(nextSession);
+    this.persistSession(nextSession);
   }
 
-  isLoggedIn(): boolean {
-    // Implement your logic to check if the user is logged in
-    return this.isLoggedInUser;
+  private restoreSession(): AuthSession | null {
+    try {
+      const rawSession = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!rawSession) {
+        return null;
+      }
+
+      const parsed = JSON.parse(rawSession) as Partial<AuthSession>;
+      if (
+        typeof parsed.token !== 'string' ||
+        typeof parsed.user !== 'object' ||
+        parsed.user === null ||
+        typeof parsed.user.id !== 'string' ||
+        typeof parsed.user.username !== 'string'
+      ) {
+        this.clearPersistedSession();
+        return null;
+      }
+
+      return {
+        token: parsed.token,
+        user: {
+          id: parsed.user.id,
+          username: parsed.user.username,
+          email: typeof parsed.user.email === 'string' ? parsed.user.email : undefined,
+        },
+      };
+    } catch {
+      this.clearPersistedSession();
+      return null;
+    }
+  }
+
+  private persistSession(session: AuthSession): void {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  }
+
+  private clearPersistedSession(): void {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
   }
 }

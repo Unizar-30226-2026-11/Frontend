@@ -1,24 +1,24 @@
 import { Component, inject } from '@angular/core';
-import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { LoginForm } from "./components/login-form/login-form";
+import { Auth } from '../services/auth';
+import { LoginForm } from './components/login-form/login-form';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, CommonModule, LoginForm],
+  imports: [CommonModule, LoginForm],
   template: `
     <div class="login-screen">
-
       <h1 class="title">A Tale Of Recognition</h1>
 
-      <app-login-form [formGroup]="loginForm" (submit)="onSubmit()"></app-login-form>
+      <app-login-form
+        [logIn]="logIn"
+        [submitting]="submitting"
+        [errorMessage]="error"
+      ></app-login-form>
 
-      <button class="login-button" (click)="goLogin()">Ya tengo una cuenta</button>
-
-      <p *ngIf="error" class="error">{{ error }}</p>
-
+      <button class="login-button" (click)="goHome()">Volver al inicio</button>
     </div>
   `,
   styles: `
@@ -116,40 +116,35 @@ import { LoginForm } from "./components/login-form/login-form";
       letter-spacing: 0.2px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
     }
-
-    .error {
-      color: red;
-      margin-top: 15px;
-    }
   `
 })
 export class Login {
-
-  private router = inject(Router);
+  private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
 
   error: string | null = null;
+  submitting = false;
 
-  loginForm = new FormGroup({
-    username: new FormControl('', Validators.required),
-    password: new FormControl('', Validators.required),
-    confirmPassword: new FormControl('', Validators.required),
-  });
-
-  onSubmit() {
-
-    const { password, confirmPassword } = this.loginForm.value;
-
-    if (password !== confirmPassword) {
-      this.error = 'Las contraseñas no coinciden';
+  readonly logIn = async (email: string, password: string): Promise<void> => {
+    if (this.submitting) {
       return;
     }
 
-    console.log('Registro correcto', this.loginForm.value);
+    this.submitting = true;
+    this.error = null;
 
-    this.router.navigate(['/menu']);
-  }
+    try {
+      await this.auth.logIn(email, password);
+      await this.router.navigate(['/games']);
+    } catch (error: unknown) {
+      this.error =
+        error instanceof Error ? error.message : 'No se pudo iniciar sesion';
+    } finally {
+      this.submitting = false;
+    }
+  };
 
-  goLogin() {
-    this.router.navigate(['/menu']);
+  goHome(): void {
+    void this.router.navigate(['/']);
   }
 }

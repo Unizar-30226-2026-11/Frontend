@@ -3,13 +3,7 @@ import { Auth } from '../services/auth';
 import { PlayerStore } from '../services/player-store';
 import { DecksCard } from './components/decks-card/decks-card';
 import { DecksPull } from '../services/decks-pull';
-
-interface StoreDeck {
-  id: string;
-  image: string;
-  price: number;
-  owned: boolean;
-}
+import { StoreItem } from '../interfaces/store-item';
 
 @Component({
   selector: 'app-store',
@@ -20,9 +14,9 @@ interface StoreDeck {
       <h1>Tienda</h1>
 
       @if (!auth.isLoggedIn()) {
-        <p class="store-info">Inicia sesión para ver tu perfil de jugador.</p>
+        <p class="store-info">Inicia sesion para ver tu perfil de jugador.</p>
       } @else if (playerStore.loading()) {
-        <p class="store-info">Cargando información del jugador...</p>
+        <p class="store-info">Cargando informacion del jugador...</p>
       } @else if (playerStore.error()) {
         <p class="store-error">{{ playerStore.error() }}</p>
         <button type="button" (click)="reloadPlayer()">Reintentar</button>
@@ -30,28 +24,47 @@ interface StoreDeck {
         <article class="player-panel">
           <h2>{{ player.username }}</h2>
           <p>ID: {{ player.id }}</p>
-          <p>Monedas: {{ player.coins }}</p>
-          <p>Nivel: {{ player.level }}</p>
+          <div class="balance-chip" aria-label="Balance actual">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ player.balance }}</span>
+          </div>
+          <p>Nivel: {{ player.experienceLevel }}</p>
+          <p>Estado: {{ formatPlayerStatus(player.state) }}</p>
           <button type="button" (click)="reloadPlayer()">Actualizar datos</button>
         </article>
       }
 
-      @if (purchaseError(); as purchaseErrorMessage) {
-        <p class="store-error">{{ purchaseErrorMessage }}</p>
-      }
-
-      <section class="decks-grid">
-        @for (deck of decks(); track deck.id) {
-          <app-decks-card
-            [deckImageSrc]="deck.image"
-            [deckPrice]="deck.price"
-            [deckOwned]="deck.owned"
-            [canBuy]="canBuy(deck)"
-            [buying]="purchasingDeckId() === deck.id"
-            (buy)="buyDeck(deck.id)"
-          />
+      @if (auth.isLoggedIn()) {
+        @if (purchaseMessage(); as purchaseMessageText) {
+          <p class="store-success" aria-live="polite">{{ purchaseMessageText }}</p>
         }
-      </section>
+
+        @if (purchaseError(); as purchaseErrorMessage) {
+          <p class="store-error">{{ purchaseErrorMessage }}</p>
+        }
+
+        @if (catalogLoading()) {
+          <p class="store-info">Cargando articulos de la tienda...</p>
+        } @else if (catalogError()) {
+          <p class="store-error">{{ catalogError() }}</p>
+          <button type="button" (click)="reloadCatalog()">Reintentar tienda</button>
+        } @else {
+          <section class="decks-grid">
+            @for (deck of decks(); track deck.id) {
+              <app-decks-card
+                [deckImageSrc]="deck.image"
+                [deckPrice]="deck.price"
+                [deckName]="deck.name"
+                [deckType]="deck.type"
+                [deckOwned]="deck.owned"
+                [canBuy]="canBuy(deck)"
+                [buying]="purchasingDeckId() === deck.id"
+                (buy)="buyDeck(deck.id)"
+              />
+            }
+          </section>
+        }
+      }
     </section>
   `,
   styles: `
@@ -70,8 +83,14 @@ interface StoreDeck {
     }
 
     .store-error {
-      color: #ff9b9b;
+      color: #7d1111;
       margin-bottom: 12px;
+    }
+
+    .store-success {
+      color: #0f5c2c;
+      margin-bottom: 12px;
+      font-weight: 600;
     }
 
     .player-panel {
@@ -80,11 +99,43 @@ interface StoreDeck {
       border-radius: 12px;
       padding: 16px;
       background: rgba(19, 22, 31, 0.65);
+      color: #f4f6fb;
     }
 
     .player-panel h2 {
       margin-top: 0;
       margin-bottom: 12px;
+    }
+
+    .balance-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin: 4px 0 14px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(240, 196, 78, 0.18);
+      border: 1px solid rgba(240, 196, 78, 0.36);
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .coin-icon {
+      position: relative;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: radial-gradient(circle at 32% 32%, #fff1a6 0%, #f4c95d 42%, #c98b19 100%);
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.24);
+    }
+
+    .coin-icon::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 1px solid rgba(132, 83, 9, 0.4);
     }
 
     .store-view > button,
@@ -102,7 +153,7 @@ interface StoreDeck {
       padding-left: 30px;
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(268px, 268px));
-      gap: 150px;
+      gap: 48px;
       justify-content: start;
       align-items: start;
     }
@@ -116,134 +167,91 @@ interface StoreDeck {
         gap: 24px;
         grid-template-columns: 1fr;
         justify-items: center;
+        padding-left: 0;
       }
     }
   `,
 })
 export class Store {
-  auth = inject(Auth);
-  playerStore = inject(PlayerStore);
+  readonly auth = inject(Auth);
+  readonly playerStore = inject(PlayerStore);
+
   private readonly decksPull = inject(DecksPull);
 
-  purchaseError = signal<string | null>(null);
-  purchasingDeckId = signal<string | null>(null);
-  decks = signal<StoreDeck[]>([
-    // Imágenes de test random a la espera de tener una API para integrar / probar.
-    {
-      id: 'mystic-forest',
-      image:
-        'https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=800&q=80',
-      price: 5,
-      owned: true,
-    },
-    {
-      id: 'retro-space',
-      image:
-        'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-      price: 6,
-      owned: false,
-    },
-    {
-      id: 'clockwork',
-      image:
-        'https://images.unsplash.com/photo-1501139083538-0139583c060f?auto=format&fit=crop&w=800&q=80',
-      price: 9,
-      owned: false,
-    },
-    {
-      id: 'mystic-forest',
-      image:
-        'https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=800&q=80',
-      price: 5,
-      owned: true,
-    },
-    {
-      id: 'retro-space',
-      image:
-        'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-      price: 6,
-      owned: false,
-    },
-    {
-      id: 'clockwork',
-      image:
-        'https://images.unsplash.com/photo-1501139083538-0139583c060f?auto=format&fit=crop&w=800&q=80',
-      price: 9,
-      owned: false,
-    },
-    {
-      id: 'mystic-forest',
-      image:
-        'https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=800&q=80',
-      price: 5,
-      owned: true,
-    },
-    {
-      id: 'retro-space',
-      image:
-        'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-      price: 6,
-      owned: false,
-    },
-    {
-      id: 'clockwork',
-      image:
-        'https://images.unsplash.com/photo-1501139083538-0139583c060f?auto=format&fit=crop&w=800&q=80',
-      price: 9,
-      owned: false,
-    },
-    {
-      id: 'mystic-forest',
-      image:
-        'https://images.unsplash.com/photo-1518709268805-4e9042af2176?auto=format&fit=crop&w=800&q=80',
-      price: 5,
-      owned: true,
-    },
-    {
-      id: 'retro-space',
-      image:
-        'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=800&q=80',
-      price: 6,
-      owned: false,
-    },
-    {
-      id: 'clockwork',
-      image:
-        'https://images.unsplash.com/photo-1501139083538-0139583c060f?auto=format&fit=crop&w=800&q=80',
-      price: 9,
-      owned: false,
-    },
-  ]);
+  readonly purchaseError = signal<string | null>(null);
+  readonly purchaseMessage = signal<string | null>(null);
+  readonly purchasingDeckId = signal<string | null>(null);
+  readonly catalogLoading = signal(false);
+  readonly catalogError = signal<string | null>(null);
+  readonly decks = signal<StoreItem[]>([]);
 
   constructor() {
     this.ensurePlayerLoaded();
+    this.ensureCatalogLoaded();
+  }
+
+  formatPlayerStatus(status: string): string {
+    switch (status.trim().toUpperCase()) {
+      case 'AWAY':
+        return 'Ausente';
+      case 'BUSY':
+        return 'Ocupado';
+      case 'INVISIBLE':
+        return 'Invisible';
+      case 'ONLINE':
+      default:
+        return 'Online';
+    }
   }
 
   private ensurePlayerLoaded(): void {
     if (!this.auth.isLoggedIn() || this.playerStore.loading() || this.playerStore.player()) {
       return;
     }
-    void this.playerStore.loadPlayer(this.auth.username);
+
+    void this.playerStore.loadPlayer();
+  }
+
+  private ensureCatalogLoaded(): void {
+    if (!this.auth.isLoggedIn() || this.catalogLoading() || this.decks().length > 0) {
+      return;
+    }
+
+    void this.loadCatalog();
   }
 
   reloadPlayer(): void {
-    if (!this.auth.isLoggedIn() || !this.auth.username) {
+    if (!this.auth.isLoggedIn()) {
       return;
     }
+
     this.purchaseError.set(null);
-    void this.playerStore.loadPlayer(this.auth.username, { forceRefresh: true });
+    this.purchaseMessage.set(null);
+    void this.playerStore.loadPlayer({ forceRefresh: true });
   }
 
-  canBuy(deck: StoreDeck): boolean {
+  reloadCatalog(): void {
+    if (!this.auth.isLoggedIn()) {
+      return;
+    }
+
+    this.purchaseError.set(null);
+    this.purchaseMessage.set(null);
+    void this.loadCatalog({ forceRefresh: true });
+  }
+
+  canBuy(deck: StoreItem): boolean {
     if (deck.owned) {
       return true;
     }
+
     return this.playerStore.canAfford(deck.price);
   }
 
   async buyDeck(deckId: string): Promise<void> {
-    if (!this.auth.isLoggedIn() || !this.auth.username) {
-      this.purchaseError.set('Debes iniciar sesion para comprar mazos');
+    if (!this.auth.isLoggedIn()) {
+      this.purchaseMessage.set(null);
+      this.purchaseError.set('Debes iniciar sesion para comprar articulos');
       return;
     }
 
@@ -257,33 +265,50 @@ export class Store {
     }
 
     if (!this.playerStore.canAfford(deck.price)) {
-      this.purchaseError.set('No tienes monedas suficientes para este mazo');
+      this.purchaseMessage.set(null);
+      this.purchaseError.set('No tienes monedas suficientes para este articulo');
       return;
     }
 
     this.purchaseError.set(null);
+    this.purchaseMessage.set(null);
     this.purchasingDeckId.set(deck.id);
 
     try {
-      const purchaseResult = await this.decksPull.buyDeck({
-        username: this.auth.username,
-        deckId: deck.id,
-        price: deck.price,
-      });
-
+      const purchaseResult = await this.decksPull.buyDeck(deck.id);
       this.markDeckAsOwned(deck.id);
+      this.purchaseMessage.set(purchaseResult.message);
+
       if (typeof purchaseResult.remainingCoins === 'number') {
-        this.playerStore.updateCoins(purchaseResult.remainingCoins);
+        this.playerStore.updateBalance(purchaseResult.remainingCoins);
       } else {
         this.playerStore.spendCoins(deck.price);
       }
     } catch (error: unknown) {
+      this.purchaseMessage.set(null);
       this.purchaseError.set(
-        error instanceof Error ? error.message : 'No se pudo completar la compra del mazo'
+        error instanceof Error ? error.message : 'No se pudo completar la compra'
       );
     } finally {
       this.purchasingDeckId.set(null);
     }
+  }
+
+  private loadCatalog(options: { forceRefresh?: boolean } = {}): Promise<void> {
+    this.catalogLoading.set(true);
+    this.catalogError.set(null);
+
+    return this.decksPull
+      .getStoreCatalog(options)
+      .then((catalog) => {
+        this.decks.set(catalog.items);
+      })
+      .catch((error: unknown) => {
+        this.catalogError.set(error instanceof Error ? error.message : 'No se pudo cargar la tienda');
+      })
+      .finally(() => {
+        this.catalogLoading.set(false);
+      });
   }
 
   private markDeckAsOwned(deckId: string): void {
