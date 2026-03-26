@@ -1,21 +1,21 @@
 import { Component, OnDestroy, inject } from '@angular/core';
-import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { Auth } from '../services/auth';
+import { RegisterForm } from './components/register-form/register-form';
 
 const REDIRECT_DELAY_MS = 1500;
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, CommonModule],
+  imports: [CommonModule, RegisterForm],
   template: `
     <div class="register-screen">
 
       <h1 class="title">A Tale Of Recognition</h1>
 
-      <form class="register-form"
+      <!-- <form class="register-form"
             [formGroup]="registerForm"
             (ngSubmit)="onSubmit()">
 
@@ -49,11 +49,16 @@ const REDIRECT_DELAY_MS = 1500;
           {{ isRedirecting ? 'Redirigiendo...' : submitting ? 'Registrando...' : 'Registrarse' }}
         </button>
 
-      </form>
+      </form> -->
+
+      <app-register-form
+        [register]="registerUser"
+        [submitting]="submitting || isRedirecting"
+        [errorMessage]="error"
+      />
 
       <button class="login-button" (click)="goLogin()">Ya tengo una cuenta</button>
 
-      <p *ngIf="error" class="error">{{ error }}</p>
       <p *ngIf="successMessage" class="success">{{ successMessage }}</p>
 
     </div>
@@ -75,14 +80,16 @@ const REDIRECT_DELAY_MS = 1500;
     }
 
     .title {
-      font-size: clamp(56px, 8vw, 100px);
-      color: #f2d78c;
-      text-shadow: 2px 2px 6px black;
+      color: black;
+      font-size: 100px;
+      font-style: normal;
+      font-synthesis: none;
       font-family: "FuenteDilana", sans-serif;
       margin: 0;
-      margin-top: -110px;
+      -webkit-text-stroke: 2px #e8d9a8;
+      margin-top: 0px;
       text-align: center;
-      margin-bottom: 110px;
+      margin-bottom: 30px;
     }
 
     .register-form {
@@ -168,6 +175,48 @@ const REDIRECT_DELAY_MS = 1500;
       border: 1px solid rgba(217, 236, 232, 0.35);
       text-align: center;
     }
+
+    @media (max-width: 760px) {
+      .register-screen {
+        justify-content: flex-start;
+        gap: 16px;
+        padding: 20px 14px 96px;
+      }
+
+      .title {
+        font-size: clamp(48px, 13vw, 84px);
+        margin-bottom: 16px;
+      }
+
+      .login-button {
+        right: 14px;
+        bottom: 18px;
+        padding: 10px 18px;
+        font-size: 15px;
+      }
+
+      .success {
+        width: min(100%, 640px);
+        box-sizing: border-box;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .register-screen {
+        padding: 16px 12px 88px;
+      }
+
+      .title {
+        margin-bottom: 10px;
+      }
+
+      .login-button {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        text-align: center;
+      }
+    }
   `
 })
 export class Register implements OnDestroy {
@@ -180,41 +229,68 @@ export class Register implements OnDestroy {
   submitting = false;
   isRedirecting = false;
 
-  registerForm = new FormGroup({
-    email: new FormControl('', {
-      nonNullable: true,
-      validators: [Validators.required, Validators.email],
-    }),
-    username: new FormControl('', {
-      nonNullable: true,
-      validators: [Validators.required],
-    }),
-    password: new FormControl('', {
-      nonNullable: true,
-      validators: [Validators.required],
-    }),
-    confirmPassword: new FormControl('', {
-      nonNullable: true,
-      validators: [Validators.required],
-    }),
-  });
+  // Lógica anterior mantenida como referencia tras mover el formulario al componente hijo.
+  // registerForm = new FormGroup({
+  //   email: new FormControl('', {
+  //     nonNullable: true,
+  //     validators: [Validators.required, Validators.email],
+  //   }),
+  //   username: new FormControl('', {
+  //     nonNullable: true,
+  //     validators: [Validators.required],
+  //   }),
+  //   password: new FormControl('', {
+  //     nonNullable: true,
+  //     validators: [Validators.required],
+  //   }),
+  //   confirmPassword: new FormControl('', {
+  //     nonNullable: true,
+  //     validators: [Validators.required],
+  //   }),
+  // });
+  //
+  // async onSubmit(): Promise<void> {
+  //   if (this.registerForm.invalid || this.submitting || this.isRedirecting) {
+  //     return;
+  //   }
+  //
+  //   this.error = null;
+  //   this.successMessage = null;
+  //
+  //   const { email, username, password, confirmPassword } = this.registerForm.getRawValue();
+  //
+  //   if (password !== confirmPassword) {
+  //     this.error = 'Las contrasenas no coinciden';
+  //     this.isRedirecting = false;
+  //     return;
+  //   }
+  //
+  //   this.submitting = true;
+  //
+  //   try {
+  //     await this.auth.register(email, username, password);
+  //     this.isRedirecting = true;
+  //     this.clearRedirectTimeout();
+  //     this.successMessage = 'Registro completado correctamente. Redirigiendo a iniciar sesion...';
+  //
+  //     this.redirectTimeoutId = setTimeout(() => {
+  //       void this.router.navigate(['/login']);
+  //     }, REDIRECT_DELAY_MS);
+  //   } catch (error: unknown) {
+  //     this.error = error instanceof Error ? error.message : 'No se pudo completar el registro';
+  //     this.isRedirecting = false;
+  //   } finally {
+  //     this.submitting = false;
+  //   }
+  // }
 
-  async onSubmit(): Promise<void> {
-    if (this.registerForm.invalid || this.submitting || this.isRedirecting) {
+  readonly registerUser = async (email: string, username: string, password: string): Promise<void> => {
+    if (this.submitting || this.isRedirecting) {
       return;
     }
 
     this.error = null;
     this.successMessage = null;
-
-    const { email, username, password, confirmPassword } = this.registerForm.getRawValue();
-
-    if (password !== confirmPassword) {
-      this.error = 'Las contrasenas no coinciden';
-      this.isRedirecting = false;
-      return;
-    }
-
     this.submitting = true;
 
     try {
@@ -232,7 +308,7 @@ export class Register implements OnDestroy {
     } finally {
       this.submitting = false;
     }
-  }
+  };
 
   goLogin() {
     void this.router.navigate(['/login']);

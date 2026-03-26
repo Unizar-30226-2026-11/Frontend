@@ -38,14 +38,16 @@ import { LoginForm } from './components/login-form/login-form';
     }
 
     .title {
-      font-size: clamp(56px, 8vw, 100px);
-      color: #f2d78c;
-      text-shadow: 2px 2px 6px black;
+      color: black;
+      font-size: 100px;
+      font-style: normal;
+      font-synthesis: none;
       font-family: "FuenteDilana", sans-serif;
       margin: 0;
-      margin-top: -110px;
+      -webkit-text-stroke: 2px #e8d9a8;
+      margin-top: 0px;
       text-align: center;
-      margin-bottom: 110px;
+      margin-bottom: 30px;
     }
 
     .login-form {

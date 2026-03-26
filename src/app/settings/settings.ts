@@ -12,7 +12,7 @@ import { Options } from './components/options/options';
   styles: `
     app-options {
       display: block;
-      padding-top: 60px;
+      padding-top: 0px;
     }
   `,
 })

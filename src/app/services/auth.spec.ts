@@ -1,16 +1,72 @@
 import { TestBed } from '@angular/core/testing';
 
 import { Auth } from './auth';
+import { ApiClient } from './api-client';
 
 describe('Auth', () => {
-  let service: Auth;
+  let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(Auth);
+    localStorage.clear();
+    apiClientSpy = jasmine.createSpyObj<ApiClient>('ApiClient', ['request', 'invalidateCache']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ApiClient, useValue: apiClientSpy },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
   });
 
   it('should be created', () => {
+    const service = TestBed.inject(Auth);
     expect(service).toBeTruthy();
+  });
+
+  it('persists the session after login', async () => {
+    const service = TestBed.inject(Auth);
+
+    apiClientSpy.request.and.resolveTo({
+      message: 'Login completado',
+      token: 'token-123',
+      user: {
+        id: 'user-1',
+        username: 'tester',
+      },
+    });
+
+    await service.logIn('tester@example.com', 'secret');
+
+    expect(service.isLoggedIn()).toBeTrue();
+    expect(service.token()).toBe('token-123');
+    expect(JSON.parse(localStorage.getItem('ator.auth.session') ?? '{}')).toEqual({
+      token: 'token-123',
+      user: {
+        id: 'user-1',
+        username: 'tester',
+        email: 'tester@example.com',
+      },
+    });
+  });
+
+  it('restores a persisted session from localStorage', () => {
+    localStorage.setItem('ator.auth.session', JSON.stringify({
+      token: 'persisted-token',
+      user: {
+        id: 'user-2',
+        username: 'persisted-user',
+        email: 'persisted@example.com',
+      },
+    }));
+
+    const restoredService = TestBed.inject(Auth);
+
+    expect(restoredService.isLoggedIn()).toBeTrue();
+    expect(restoredService.token()).toBe('persisted-token');
+    expect(restoredService.username()).toBe('persisted-user');
+    expect(restoredService.email()).toBe('persisted@example.com');
   });
 });

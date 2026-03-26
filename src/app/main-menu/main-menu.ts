@@ -170,10 +170,9 @@ interface RoomSlot {
   styles: `
     :host {
       display: block;
-      height: calc(100dvh - 72px);
-      padding: 16px 20px 18px;
+      min-height: calc(100dvh - 72px);
+      padding: 16px 20px 28px;
       box-sizing: border-box;
-      overflow: hidden;
       --main-panel-height: calc(100dvh - 120px);
     }
 
@@ -182,7 +181,7 @@ interface RoomSlot {
       grid-template-columns: minmax(280px, 360px) minmax(300px, 430px) minmax(260px, 1fr);
       gap: 20px;
       align-items: start;
-      height: 100%;
+      min-height: var(--main-panel-height);
     }
 
     .panel {
@@ -510,14 +509,12 @@ interface RoomSlot {
 
     @media (max-width: 1250px) {
       :host {
-        height: auto;
         min-height: calc(100dvh - 72px);
-        overflow: visible;
       }
 
       .menu-layout {
         grid-template-columns: 1fr 1fr;
-        height: auto;
+        min-height: auto;
       }
 
       .right-column {
@@ -535,11 +532,12 @@ interface RoomSlot {
 
     @media (max-width: 860px) {
       :host {
-        padding: 14px 14px 18px;
+        padding: 14px 14px 22px;
       }
 
       .menu-layout {
         grid-template-columns: 1fr;
+        min-height: auto;
       }
 
       .right-column {
@@ -781,7 +779,7 @@ export class MainMenu implements OnInit {
       { length: Math.max(lobby.maxPlayers - occupiedSlots.length, 0) },
       (_, index) => ({
         slotId: occupiedSlots.length + index + 1,
-        name: 'slot libre',
+        name: '',
         state: 'abierto',
       })
     );
