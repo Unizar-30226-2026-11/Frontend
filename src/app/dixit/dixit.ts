@@ -30,6 +30,21 @@ interface PlayerPanelRow extends RosterPlayer {
   isCurrentPlayer: boolean;
 }
 
+interface WildcardReward {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  points: number;
+}
+
+interface BoardEffectPopup {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+}
+
 const PHASE_STEPS: readonly PhaseStep[] = [
   {
     id: 'hand',
@@ -53,6 +68,25 @@ const ROUND_CLUES = [
   'El eco de un bosque dormido.',
   'Nadie vio venir la tormenta.',
   'La ultima luz antes del silencio.',
+] as const;
+
+const WILDCARD_CELL_POSITIONS = [3, 8, 11, 15, 19, 23, 27, 31, 35, 39, 41, 42] as const;
+const EVENT_BACK_CELL_POSITIONS = [6, 14, 22, 30, 38] as const;
+const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
+
+const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
+  {
+    name: 'Suma 1 punto',
+    description: 'Al usarlo durante la fase de mano avanzas 1 casilla.',
+    icon: '+1',
+    points: 1,
+  },
+  {
+    name: 'Suma 2 puntos',
+    description: 'Al usarlo durante la fase de mano avanzas 2 casillas.',
+    icon: '+2',
+    points: 2,
+  },
 ] as const;
 
 @Component({
@@ -106,6 +140,9 @@ const ROUND_CLUES = [
               [title]="'Mesa de juego'"
               [subtitle]="boardSubtitle"
               [tokens]="boardTokens"
+              [wildcardCells]="wildcardCellPositions"
+              [eventBackCells]="eventBackCellPositions"
+              [eventForwardCells]="eventForwardCellPositions"
               [showControls]="false"
               [interactive]="false"
             >
@@ -247,40 +284,74 @@ const ROUND_CLUES = [
             </app-dixit-track-board>
 
             @if (phase === 'hand') {
-              <section class="hand-ribbon">
-                <div class="hand-header">
-                  <div>
-                    <p class="overlay-label">Tu mano</p>
-                    <h3>Arrastra o pulsa una carta</h3>
+              <div class="hand-support-grid">
+                <section class="hand-ribbon">
+                  <div class="hand-header">
+                    <div>
+                      <p class="overlay-label">Tu mano</p>
+                      <h3>Arrastra o pulsa una carta</h3>
+                    </div>
+
+                    @if (selectedHandCard) {
+                      <button type="button" class="secondary-action" (click)="clearHandSelection()">
+                        Quitar seleccion
+                      </button>
+                    }
                   </div>
 
-                  @if (selectedHandCard) {
-                    <button type="button" class="secondary-action" (click)="clearHandSelection()">
-                      Quitar seleccion
-                    </button>
-                  }
-                </div>
+                  <div class="hand-cards">
+                    @for (card of cards; track card.code) {
+                      <button
+                        type="button"
+                        class="hand-card"
+                        [class.selected]="card.code === selectedHandCardCode"
+                        draggable="true"
+                        (dragstart)="onHandCardDragStart(card, $event)"
+                        (dragend)="onHandCardDragEnd()"
+                        (click)="onHandCardSelected(card)"
+                      >
+                        <img
+                          draggable="false"
+                          [src]="card.image"
+                          [alt]="card.value + ' de ' + card.suit"
+                        />
+                      </button>
+                    }
+                  </div>
+                </section>
 
-                <div class="hand-cards">
-                  @for (card of cards; track card.code) {
-                    <button
-                      type="button"
-                      class="hand-card"
-                      [class.selected]="card.code === selectedHandCardCode"
-                      draggable="true"
-                      (dragstart)="onHandCardDragStart(card, $event)"
-                      (dragend)="onHandCardDragEnd()"
-                      (click)="onHandCardSelected(card)"
-                    >
-                      <img
-                        draggable="false"
-                        [src]="card.image"
-                        [alt]="card.value + ' de ' + card.suit"
-                      />
-                    </button>
+                <section class="wildcards-ribbon">
+                  <div class="hand-header">
+                    <div>
+                      <p class="overlay-label">Comodines</p>
+                      <h3>Tu reserva</h3>
+                    </div>
+                  </div>
+
+                  @if (wildcards.length === 0) {
+                    <p class="wildcards-empty">
+                      Cae en una casilla especial del tablero para conseguir tu primer comodin.
+                    </p>
+                  } @else {
+                    <div class="wildcards-list">
+                      @for (wildcard of wildcards; track wildcard.id) {
+                        <button
+                          type="button"
+                          class="wildcard-card"
+                          [disabled]="phase !== 'hand'"
+                          (click)="useWildcard(wildcard.id)"
+                        >
+                          <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
+                          <div class="wildcard-copy">
+                            <strong>{{ wildcard.name }}</strong>
+                            <p>{{ wildcard.description }}</p>
+                          </div>
+                        </button>
+                      }
+                    </div>
                   }
-                </div>
-              </section>
+                </section>
+              </div>
             }
           </div>
 
@@ -394,6 +465,31 @@ const ROUND_CLUES = [
         </div>
       }
     </section>
+
+    @if (activeEffectPopup; as popup) {
+      <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="effect-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Casilla especial</p>
+          <h2 id="effect-popup-title">{{ popup.title }}</h2>
+          <div class="wildcard-popup-card">
+            <span class="wildcard-icon large" aria-hidden="true">{{ popup.icon }}</span>
+            <div class="wildcard-copy">
+              <strong>{{ popup.title }}</strong>
+              <p>{{ popup.description }}</p>
+            </div>
+          </div>
+          <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
+            Continuar
+          </button>
+        </article>
+      </div>
+    }
   `,
   styles: `
     :host {
@@ -765,6 +861,7 @@ const ROUND_CLUES = [
     }
 
     .hand-ribbon,
+    .wildcards-ribbon,
     .sidebar-card {
       border-radius: 24px;
       background: rgba(8, 20, 29, 0.58);
@@ -773,10 +870,26 @@ const ROUND_CLUES = [
       box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
     }
 
+    .hand-support-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 320px);
+      gap: 18px;
+      align-items: start;
+    }
+
     .hand-ribbon {
       padding: 18px;
       display: grid;
       gap: 18px;
+    }
+
+    .wildcards-ribbon {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+      aspect-ratio: 1;
+      align-content: start;
+      box-sizing: border-box;
     }
 
     .hand-header {
@@ -791,6 +904,83 @@ const ROUND_CLUES = [
       gap: 14px;
       overflow-x: auto;
       padding-bottom: 6px;
+    }
+
+    .wildcards-empty {
+      margin: 0;
+      text-align: center;
+      line-height: 1.55;
+      color: rgba(244, 239, 228, 0.78);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+      border-radius: 18px;
+      padding: 28px 18px;
+      box-sizing: border-box;
+    }
+
+    .wildcards-list {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      overflow: auto;
+    }
+
+    .wildcard-card,
+    .wildcard-popup-card {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(145deg, rgba(120, 69, 190, 0.28), rgba(58, 29, 112, 0.42));
+      border: 1px solid rgba(208, 182, 255, 0.26);
+    }
+
+    .wildcard-card {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+    }
+
+    .wildcard-card:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(16, 7, 32, 0.22);
+    }
+
+    .wildcard-card:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .wildcard-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(145deg, #fbe7ff, #dcb3ff);
+      color: #41195f;
+      font-family: "FuenteDilana", sans-serif;
+      font-size: 1.2rem;
+    }
+
+    .wildcard-icon.large {
+      width: 56px;
+      height: 56px;
+      font-size: 1.45rem;
+      border-radius: 18px;
+    }
+
+    .wildcard-copy strong {
+      display: block;
+      color: #fff4d8;
+      margin-bottom: 4px;
+    }
+
+    .wildcard-copy p {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.84);
     }
 
     .hand-card {
@@ -896,6 +1086,27 @@ const ROUND_CLUES = [
       color: #ffe7a5;
     }
 
+    .wildcard-popup-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(6, 10, 18, 0.58);
+      backdrop-filter: blur(8px);
+    }
+
+    .wildcard-popup {
+      width: min(92vw, 30rem);
+      display: grid;
+      gap: 16px;
+      padding: 24px;
+      border-radius: 28px;
+      background: linear-gradient(160deg, rgba(25, 18, 56, 0.96), rgba(44, 28, 92, 0.94));
+      border: 1px solid rgba(214, 184, 255, 0.3);
+    }
+
     @media (max-width: 1160px) {
       .table-layout {
         grid-template-columns: 1fr;
@@ -918,6 +1129,10 @@ const ROUND_CLUES = [
       .hand-overlay {
         grid-template-columns: 1fr;
       }
+
+      .hand-support-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     @media (max-width: 700px) {
@@ -938,12 +1153,14 @@ const ROUND_CLUES = [
 })
 export class Dixit implements OnInit {
   readonly phaseSteps = PHASE_STEPS;
+  readonly wildcardCellPositions: number[] = [...WILDCARD_CELL_POSITIONS];
+  readonly eventBackCellPositions: number[] = [...EVENT_BACK_CELL_POSITIONS];
+  readonly eventForwardCellPositions: number[] = [...EVENT_FORWARD_CELL_POSITIONS];
 
   private readonly route = inject(ActivatedRoute);
   private readonly cardPull = inject(CardPull);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly maxPlayersPerMatch = 6;
-
   private readonly playerRoster: readonly RosterPlayer[] = [
     { id: 'you', name: 'hackeeper', color: '#ff7725' },
     { id: 'ana', name: 'Azzal-e', color: '#27c93f' },
@@ -982,6 +1199,9 @@ export class Dixit implements OnInit {
   pointsVotesTotal = 0;
   pointsRevealedCards: DixitRevealedCard[] = [];
   pointsRanking: DixitRankingRow[] = [];
+  wildcards: WildcardReward[] = [];
+  activeEffectPopup: BoardEffectPopup | null = null;
+  private readonly effectPopupQueue: BoardEffectPopup[] = [];
 
   async ngOnInit(): Promise<void> {
     this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? '';
@@ -1202,6 +1422,30 @@ export class Dixit implements OnInit {
     this.choiceCards = [...this.cards];
   }
 
+  closeEffectPopup(): void {
+    this.activeEffectPopup = this.effectPopupQueue.shift() ?? null;
+  }
+
+  useWildcard(wildcardId: string): void {
+    if (this.phase !== 'hand') {
+      return;
+    }
+
+    const wildcard = this.wildcards.find((entry) => entry.id === wildcardId);
+    if (!wildcard) {
+      return;
+    }
+
+    const currentPoints = this.pointsByPlayer.get('you') ?? 0;
+    const updatedPoints = currentPoints + wildcard.points;
+
+    this.pointsByPlayer.set('you', updatedPoints);
+    this.wildcards = this.wildcards.filter((entry) => entry.id !== wildcardId);
+    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(currentPoints, updatedPoints);
+    this.pointsByPlayer.set('you', resolvedPoints);
+    this.boardTokens = this.buildBoardTokensFromScores();
+  }
+
   private initializePointsPhase(): void {
     this.pointsStage = 'waiting';
     this.pointsRevealedCards = [];
@@ -1274,6 +1518,8 @@ export class Dixit implements OnInit {
       this.pointsByPlayer.set(row.playerId, row.totalPoints);
     }
 
+    this.applyCurrentPlayerSpecialCells(ranking);
+
     return { revealedCards, ranking };
   }
 
@@ -1321,5 +1567,101 @@ export class Dixit implements OnInit {
       color: player.color,
       position: this.pointsByPlayer.get(player.id) ?? 0,
     }));
+  }
+
+  private applyCurrentPlayerSpecialCells(ranking: DixitRankingRow[]): void {
+    const currentPlayerPreviousPoints = this.boardTokens.find((token) => token.id === 'you')?.position ?? 0;
+    const currentPlayerRow = ranking.find((row) => row.playerId === 'you');
+
+    if (!currentPlayerRow) {
+      return;
+    }
+
+    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(
+      currentPlayerPreviousPoints,
+      currentPlayerRow.totalPoints
+    );
+
+    if (resolvedPoints === currentPlayerRow.totalPoints) {
+      return;
+    }
+
+    this.pointsByPlayer.set('you', resolvedPoints);
+    currentPlayerRow.pointsEarned = resolvedPoints - currentPlayerRow.pointsBefore;
+    currentPlayerRow.totalPoints = resolvedPoints;
+    ranking.sort((left, right) => right.totalPoints - left.totalPoints);
+    this.boardTokens = this.buildBoardTokensFromScores();
+  }
+
+  private grantWildcardReward(): void {
+    const template =
+      WILDCARD_REWARDS[(this.wildcards.length + this.roundNumber - 1) % WILDCARD_REWARDS.length];
+    const reward: WildcardReward = {
+      id: `wildcard-${this.roundNumber}-${this.wildcards.length + 1}`,
+      ...template,
+    };
+
+    this.wildcards = [...this.wildcards, reward];
+    this.enqueueEffectPopup({
+      id: reward.id,
+      title: 'Te ha tocado un comodin',
+      description: reward.description,
+      icon: reward.icon,
+    });
+  }
+
+  private resolveCurrentPlayerSpecialCells(previousPoints: number, nextPoints: number): number {
+    if (nextPoints === previousPoints) {
+      return nextPoints;
+    }
+
+    let resolvedPoints = nextPoints;
+    const visitedPositions = new Set<number>();
+    let safety = 0;
+
+    while (safety < 8 && !visitedPositions.has(resolvedPoints)) {
+      visitedPositions.add(resolvedPoints);
+      safety += 1;
+
+      if (this.wildcardCellPositions.includes(resolvedPoints)) {
+        this.grantWildcardReward();
+        break;
+      }
+
+      if (this.eventBackCellPositions.includes(resolvedPoints)) {
+        resolvedPoints = Math.max(0, resolvedPoints - 1);
+        this.enqueueEffectPopup({
+          id: `event-back-${this.roundNumber}-${safety}`,
+          title: 'Casilla de evento',
+          description: 'Has caido en una casilla de evento y retrocedes 1 casilla.',
+          icon: '-1',
+        });
+        continue;
+      }
+
+      if (this.eventForwardCellPositions.includes(resolvedPoints)) {
+        resolvedPoints += 1;
+        this.enqueueEffectPopup({
+          id: `event-forward-${this.roundNumber}-${safety}`,
+          title: 'Casilla de evento',
+          description: 'Has caido en una casilla de evento y avanzas 1 casilla extra.',
+          icon: '+1',
+        });
+        continue;
+      }
+
+      break;
+    }
+
+    return resolvedPoints;
+  }
+
+  private enqueueEffectPopup(popup: BoardEffectPopup): void {
+    if (this.activeEffectPopup === null) {
+      this.activeEffectPopup = popup;
+      return;
+    }
+
+    this.effectPopupQueue.push(popup);
   }
 }

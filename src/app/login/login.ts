@@ -10,13 +10,15 @@ import { LoginForm } from './components/login-form/login-form';
   imports: [CommonModule, LoginForm],
   template: `
     <div class="login-screen">
-      <h1 class="title">A Tale Of Recognition</h1>
+      <div class="login-content">
+        <h1 class="title">A Tale Of Recognition</h1>
 
-      <app-login-form
-        [logIn]="logIn"
-        [submitting]="submitting"
-        [errorMessage]="error"
-      ></app-login-form>
+        <app-login-form
+          [logIn]="logIn"
+          [submitting]="submitting"
+          [errorMessage]="error"
+        ></app-login-form>
+      </div>
 
       <button class="login-button" (click)="goHome()">Volver al inicio</button>
     </div>
@@ -31,21 +33,30 @@ import { LoginForm } from './components/login-form/login-form';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      padding: 24px 16px;
+      gap: clamp(1rem, 2.5vh, 1.5rem);
+      padding: var(--page-padding-y) var(--page-padding-x);
       box-sizing: border-box;
       position: relative;
     }
 
+    .login-content {
+      width: min(94vw, 36rem);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(1rem, 2.5vh, 1.75rem);
+    }
+
     .title {
-      font-size: clamp(56px, 8vw, 100px);
+      font-size: var(--title-size-page);
       color: #f2d78c;
       text-shadow: 2px 2px 6px black;
       font-family: "FuenteDilana", sans-serif;
       margin: 0;
-      margin-top: -110px;
       text-align: center;
-      margin-bottom: 110px;
+      line-height: 0.95;
+      max-width: 100%;
     }
 
     .login-form {
@@ -103,18 +114,35 @@ import { LoginForm } from './components/login-form/login-form';
 
     .login-button {
       position: absolute;
-      bottom: 30px;
-      right: 40px;
-      padding: 12px 28px;
-      border-radius: 12px;
+      bottom: clamp(1rem, 3vh, 1.9rem);
+      right: clamp(1rem, 3vw, 2.5rem);
+      padding: var(--button-padding-y) var(--button-padding-x);
+      border-radius: var(--button-radius);
       border: 2px solid #355652;
       background: #d9ece8;
       color: #10211f;
       cursor: pointer;
       font-weight: 700;
-      font-size: 17px;
+      font-size: clamp(0.95rem, 1.4vw, 1.05rem);
       letter-spacing: 0.2px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    }
+
+    @media (max-width: 640px) {
+      .login-screen {
+        justify-content: center;
+        padding-bottom: max(5.5rem, 12vh);
+      }
+
+      .title {
+        margin-bottom: 0;
+      }
+
+      .login-button {
+        position: static;
+        width: var(--panel-width);
+        max-width: 100%;
+      }
     }
   `
 })

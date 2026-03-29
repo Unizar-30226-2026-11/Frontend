@@ -10,6 +10,7 @@
   --thumb: #f4f4f4;
   --btn-primary: #b8d8cf;
   --btn-secondary: #d8cfd4;
+  --btn-danger: #e4c1c1;
 
   width: 100%;
   padding: 1.5rem 1rem 2rem;
@@ -215,6 +216,11 @@
   flex: 0.85;
 }
 
+.btn-cerrar-sesion {
+  background: var(--btn-danger);
+  flex: 0.85;
+}
+
 @media (max-width: 640px) {
   .configuracion-container {
     width: 100%;
@@ -228,8 +234,8 @@
   }
 
   .btn-secundario,
-  .btn-primario {
+  .btn-primario,
+  .btn-cerrar-sesion {
     flex: 1;
   }
 }
-

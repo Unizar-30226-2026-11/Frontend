@@ -8,13 +8,22 @@ import {
   SimpleChanges,
 } from '@angular/core';
 
-type TrackCellTone = 'normal' | 'gold' | 'pink' | 'blue' | 'goal';
+type TrackCellTone =
+  | 'normal'
+  | 'gold'
+  | 'pink'
+  | 'blue'
+  | 'goal'
+  | 'wildcard'
+  | 'event-back'
+  | 'event-forward';
 
 interface TrackCell {
   index: number;
   x: number;
   y: number;
   tone: TrackCellTone;
+  badge?: string;
 }
 
 interface TrackPoint {
@@ -61,10 +70,16 @@ export interface TrackBoardToken {
             [class.gold]="cell.tone === 'gold'"
             [class.pink]="cell.tone === 'pink'"
             [class.blue]="cell.tone === 'blue'"
+            [class.wildcard]="cell.tone === 'wildcard'"
+            [class.event-back]="cell.tone === 'event-back'"
+            [class.event-forward]="cell.tone === 'event-forward'"
             [style.left.%]="cell.x"
             [style.top.%]="cell.y"
           >
-            {{ cell.index + 1 }}
+            <span class="cell-number">{{ cell.index + 1 }}</span>
+            @if (cell.badge) {
+              <span class="cell-badge" aria-hidden="true">{{ cell.badge }}</span>
+            }
           </div>
         }
 
@@ -229,6 +244,22 @@ export interface TrackBoardToken {
         box-shadow 180ms ease;
     }
 
+    .cell-number,
+    .cell-badge {
+      position: relative;
+      z-index: 2;
+    }
+
+    .cell-badge {
+      position: absolute;
+      inset: auto auto 3px 50%;
+      transform: translateX(-50%);
+      font-size: clamp(13px, 1vw, 16px);
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    }
+
     .track-cell::before {
       content: '';
       position: absolute;
@@ -270,6 +301,130 @@ export interface TrackBoardToken {
       --cell-base-2: #97a6da;
       --cell-border: rgba(58, 70, 126, 0.56);
       --cell-inset: rgba(228, 236, 255, 0.62);
+    }
+
+    .track-cell.wildcard {
+      --cell-base: #ffe58f;
+      --cell-base-2: #f4a6ff;
+      --cell-border: rgba(126, 45, 133, 0.78);
+      --cell-inset: rgba(255, 252, 236, 0.82);
+      color: #51136a;
+      border-width: 2px;
+      border-radius: 16px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      box-shadow:
+        0 0 0 2px rgba(255, 232, 166, 0.45),
+        0 0 22px rgba(224, 117, 255, 0.48),
+        0 10px 18px rgba(62, 19, 97, 0.28),
+        inset 0 1px 0 var(--cell-inset),
+        inset 0 -3px 8px rgba(43, 18, 61, 0.16);
+      animation: wildcard-pulse 1.8s ease-in-out infinite;
+    }
+
+    .track-cell.wildcard .cell-number,
+    .track-cell.wildcard .cell-badge {
+      transform: rotate(-45deg);
+    }
+
+    .track-cell.wildcard::before {
+      inset: 5px;
+      border-width: 2px;
+      border-color: rgba(95, 22, 112, 0.34);
+    }
+
+    .track-cell.wildcard::after {
+      content: '';
+      position: absolute;
+      inset: 9px;
+      border-radius: 10px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0) 70%);
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    @keyframes wildcard-pulse {
+      0%,
+      100% {
+        box-shadow:
+          0 0 0 2px rgba(255, 232, 166, 0.45),
+          0 0 18px rgba(224, 117, 255, 0.38),
+          0 10px 18px rgba(62, 19, 97, 0.28),
+          inset 0 1px 0 var(--cell-inset),
+          inset 0 -3px 8px rgba(43, 18, 61, 0.16);
+      }
+
+      50% {
+        box-shadow:
+          0 0 0 3px rgba(255, 232, 166, 0.62),
+          0 0 28px rgba(224, 117, 255, 0.62),
+          0 12px 24px rgba(62, 19, 97, 0.34),
+          inset 0 1px 0 var(--cell-inset),
+          inset 0 -3px 8px rgba(43, 18, 61, 0.16);
+      }
+    }
+
+    .track-cell.event-back {
+      --cell-base: #ffe4cf;
+      --cell-base-2: #f0a06d;
+      --cell-border: rgba(150, 74, 33, 0.78);
+      --cell-inset: rgba(255, 247, 238, 0.82);
+      color: #662712;
+      border-width: 2px;
+      border-radius: 18px 10px 18px 10px;
+      box-shadow:
+        0 0 0 2px rgba(255, 224, 205, 0.34),
+        0 12px 20px rgba(91, 34, 13, 0.24),
+        inset 0 1px 0 var(--cell-inset),
+        inset 0 -3px 10px rgba(99, 35, 21, 0.14);
+    }
+
+    .track-cell.event-forward {
+      --cell-base: #dbf4de;
+      --cell-base-2: #86cea0;
+      --cell-border: rgba(35, 107, 61, 0.78);
+      --cell-inset: rgba(244, 255, 247, 0.84);
+      color: #184c2b;
+      border-width: 2px;
+      border-radius: 10px 18px 10px 18px;
+      box-shadow:
+        0 0 0 2px rgba(220, 247, 227, 0.34),
+        0 12px 20px rgba(18, 79, 39, 0.2),
+        inset 0 1px 0 var(--cell-inset),
+        inset 0 -3px 10px rgba(23, 79, 40, 0.14);
+    }
+
+    .track-cell.event-back::before,
+    .track-cell.event-forward::before {
+      inset: 3px;
+      border-width: 2px;
+      border-style: dashed;
+    }
+
+    .track-cell.event-back::after,
+    .track-cell.event-forward::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      transform: translate(-50%, -38%);
+      pointer-events: none;
+      opacity: 0.28;
+    }
+
+    .track-cell.event-back::after {
+      background:
+        linear-gradient(135deg, transparent 46%, rgba(102, 39, 18, 0.95) 47% 53%, transparent 54%),
+        linear-gradient(225deg, transparent 46%, rgba(102, 39, 18, 0.95) 47% 53%, transparent 54%);
+      clip-path: polygon(0 50%, 55% 0, 55% 28%, 100% 28%, 100% 72%, 55% 72%, 55% 100%);
+    }
+
+    .track-cell.event-forward::after {
+      background:
+        linear-gradient(135deg, transparent 46%, rgba(24, 76, 43, 0.95) 47% 53%, transparent 54%),
+        linear-gradient(225deg, transparent 46%, rgba(24, 76, 43, 0.95) 47% 53%, transparent 54%);
+      clip-path: polygon(45% 0, 100% 50%, 45% 100%, 45% 72%, 0 72%, 0 28%, 45% 28%);
     }
 
     .token-piece {
@@ -389,6 +544,9 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
   @Input() showControls = true;
   @Input() interactive = true;
   @Input() cellPath: TrackPoint[] | null = null;
+  @Input() wildcardCells: number[] = [];
+  @Input() eventBackCells: number[] = [];
+  @Input() eventForwardCells: number[] = [];
 
   @Output() readonly tokensChanged = new EventEmitter<TrackBoardToken[]>();
 
@@ -564,6 +722,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       x: 5 + (point.col / maxCol) * 90,
       y: 8 + (point.row / maxRow) * 84,
       tone: this.resolveCellTone(index),
+      badge: this.resolveCellBadge(index),
     }));
   }
 
@@ -597,6 +756,15 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     if (index === 0) {
       return 'goal';
     }
+    if (this.wildcardCells.includes(index)) {
+      return 'wildcard';
+    }
+    if (this.eventBackCells.includes(index)) {
+      return 'event-back';
+    }
+    if (this.eventForwardCells.includes(index)) {
+      return 'event-forward';
+    }
     if (index % 10 === 3) {
       return 'pink';
     }
@@ -607,5 +775,19 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       return 'blue';
     }
     return 'normal';
+  }
+
+  private resolveCellBadge(index: number): string | undefined {
+    if (this.wildcardCells.includes(index)) {
+      return '*';
+    }
+    if (this.eventBackCells.includes(index)) {
+      return '<<';
+    }
+    if (this.eventForwardCells.includes(index)) {
+      return '>>';
+    }
+
+    return undefined;
   }
 }

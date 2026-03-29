@@ -1,7 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { SettingsPreferencesStore } from '../../../services/settings-preferences-store';
+import { Auth } from '../../../services/auth';
 
 @Component({
   selector: 'app-options',
@@ -67,6 +69,9 @@ import { SettingsPreferencesStore } from '../../../services/settings-preferences
         <button type="button" class="btn-config btn-primario" (click)="guardarCambios()">
           Guardar cambios
         </button>
+        <button type="button" class="btn-config btn-cerrar-sesion" (click)="cerrarSesion()">
+          Cerrar sesión
+        </button>
       </div>
     </section>
   `,
@@ -74,6 +79,8 @@ import { SettingsPreferencesStore } from '../../../services/settings-preferences
 })
 export class Options {
   private readonly settingsStore = inject(SettingsPreferencesStore);
+  private readonly auth = inject(Auth);
+  private readonly router = inject(Router);
 
   saveMessage = signal<string | null>(null);
 
@@ -98,5 +105,10 @@ export class Options {
       showOnlineStatus: this.estadoOnlineActivo,
     });
     this.saveMessage.set('Configuracion guardada localmente');
+  }
+
+  cerrarSesion(): void {
+    this.auth.logOut();
+    void this.router.navigate(['/login']);
   }
 }

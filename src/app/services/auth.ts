@@ -30,11 +30,15 @@ export class Auth {
       password,
     };
 
-    return this.apiClient.request<RegisterResponse>('/auth/register', {
-      method: 'POST',
-      body: payload,
-      useCache: false,
-    });
+    try {
+      return await this.apiClient.request<RegisterResponse>('/auth/register', {
+        method: 'POST',
+        body: payload,
+        useCache: false,
+      });
+    } catch (error: unknown) {
+      throw this.resolveRegisterError(error);
+    }
   }
 
   async logIn(email: string, password: string): Promise<AuthSession> {
@@ -108,5 +112,27 @@ export class Auth {
 
   private clearPersistedSession(): void {
     localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
+  private resolveRegisterError(error: unknown): Error {
+    if (!(error instanceof Error)) {
+      return new Error('No se pudo completar el registro');
+    }
+
+    const normalizedMessage = error.message.trim().toLowerCase();
+    const isDuplicatedUser =
+      normalizedMessage.includes('already used') ||
+      normalizedMessage.includes('already exists') ||
+      normalizedMessage.includes('duplicate') ||
+      normalizedMessage.includes('ya existe') ||
+      normalizedMessage.includes('ya esta en uso') ||
+      normalizedMessage.includes('ya estan en uso') ||
+      normalizedMessage.includes('email/username already used');
+
+    if (isDuplicatedUser) {
+      return new Error('El usuario ya existe');
+    }
+
+    return error;
   }
 }
