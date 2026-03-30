@@ -19,6 +19,10 @@ export class App {
       return false;
     }
 
+    if (currentPath.startsWith('/dixit/')) {
+      return false;
+    }
+
     return !this.hiddenNavbarRoutes.has(currentPath);
   }
 }

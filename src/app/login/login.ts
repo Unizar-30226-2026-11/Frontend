@@ -49,17 +49,19 @@ import { LoginForm } from './components/login-form/login-form';
     }
 
     .title {
-      font-size: var(--title-size-page);
-      color: #f2d78c;
-      text-shadow: 2px 2px 6px black;
-      font-family: "FuenteDilana", sans-serif;
       margin: 0;
+      font-style: normal;
+      font-synthesis: none;
+      font-size: var(--title-size-hero);
+      font-family: "FuenteDilana", sans-serif;
+      color: black;
+      -webkit-text-stroke: clamp(1px, 0.18vw, 2px) #e8d9a8;
       text-align: center;
       line-height: 0.95;
-      max-width: 100%;
     }
 
     .login-form {
+      margin-top:5px;
       display: flex;
       flex-direction: column;
       gap: 22px;

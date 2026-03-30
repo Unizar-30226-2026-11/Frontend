@@ -3,9 +3,10 @@
     display: block;
     width: 100%;
     min-height: 100dvh;
+    background-color: #08232d;
     background-image: url('/background.jpg');
     background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
+    background-position: center top;
+    background-repeat: repeat-y;
+    background-attachment: scroll;
 }

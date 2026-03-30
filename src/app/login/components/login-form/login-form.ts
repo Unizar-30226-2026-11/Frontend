@@ -164,7 +164,7 @@ import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } 
 
     .img-box img {
       width: 100%;
-      height: 100%;
+      height: 120%;
       object-fit: cover;
       display: block;
       border-radius: clamp(0.75rem, 1vw, 1rem);

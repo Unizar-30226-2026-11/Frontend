@@ -84,6 +84,29 @@ describe('Dixit', () => {
     expect(component.pointsRanking.length).toBeGreaterThan(0);
   }));
 
+  it('advances automatically from reveal to ranking after 3 seconds', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardSelected(component.cards[0]);
+    component.simulateChoicePhaseOpened();
+    component.onChoiceCardSelected(component.choiceCards[1]);
+    component.submitVoteSelection();
+    component.simulatePointsPhaseOpened();
+    component.simulateAllVotesReceived();
+
+    const positionsBeforeReveal = component.boardTokens.map((token) => token.position);
+
+    component.simulateResultsReveal();
+
+    expect(component.pointsStage).toBe('reveal');
+
+    tick(3000);
+
+    expect(component.pointsStage).toBe('ranking');
+    expect(component.boardTokens.map((token) => token.position)).not.toEqual(positionsBeforeReveal);
+  }));
+
   it('prepares the next round from the ranking state', fakeAsync(() => {
     fixture.detectChanges();
     tick();

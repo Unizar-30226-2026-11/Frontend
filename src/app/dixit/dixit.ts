@@ -1,5 +1,5 @@
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CardPull } from '../services/card-pull';
 import type { DeckCard } from '../services/card-pull';
 import { DixitTrackBoard } from './components/track-board';
@@ -43,6 +43,10 @@ interface BoardEffectPopup {
   title: string;
   description: string;
   icon: string;
+}
+
+interface SpecialCellResolutionOptions {
+  allowWildcardReward?: boolean;
 }
 
 const PHASE_STEPS: readonly PhaseStep[] = [
@@ -95,31 +99,22 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
   imports: [DixitTrackBoard],
   template: `
     <section class="dixit-table">
-      <header class="dixit-header">
-        <div class="header-copy">
+      <nav class="dixit-topbar" aria-label="Barra de partida">
+        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
+
+        <div class="phase-banner">
           <p class="eyebrow">Sala {{ id || 'demo' }}</p>
-          <h1>Dixit</h1>
-          <p class="phase-summary">{{ currentPhaseMeta.description }}</p>
+          <div class="phase-current">
+            <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
+            <p>{{ currentPhaseInstruction }}</p>
+          </div>
         </div>
 
-        <div class="phase-switch" aria-label="Fases de la ronda">
-          @for (phaseStep of phaseSteps; track phaseStep.id) {
-            <div
-              class="phase-step"
-              [class.active]="phase === phaseStep.id"
-              [class.completed]="isPhaseCompleted(phaseStep.id)"
-            >
-              <span class="phase-index">
-                <span>{{ phaseOrderIndex(phaseStep.id) + 1 }}</span>
-              </span>
-              <div>
-                <strong>{{ phaseStep.title }}</strong>
-                <span>{{ phaseStep.description }}</span>
-              </div>
-            </div>
-          }
+        <div class="topbar-actions">
+          <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
+          <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
         </div>
-      </header>
+      </nav>
 
       @if (loading) {
         <article class="status-card">
@@ -134,69 +129,204 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
           <p>No se recibieron cartas para la demo.</p>
         </article>
       } @else {
-        <div class="table-layout">
-          <div class="table-main">
-            <app-dixit-track-board
-              [title]="'Mesa de juego'"
-              [subtitle]="boardSubtitle"
-              [tokens]="boardTokens"
-              [wildcardCells]="wildcardCellPositions"
-              [eventBackCells]="eventBackCellPositions"
-              [eventForwardCells]="eventForwardCellPositions"
-              [showControls]="false"
-              [interactive]="false"
+        <div class="table-main">
+          @if (phase === 'choice') {
+            <section class="phase-stage-screen choice-stage-screen">
+              <div class="phase-stage-header">
+                <div class="phase-stage-copy">
+                  <p class="overlay-label">Votacion</p>
+                  <h2>{{ currentClue }}</h2>
+                  <p>
+                    @if (selectedChoiceCard) {
+                      Has elegido {{ selectedChoiceCard.code }}. Puedes cambiarla antes de confirmar.
+                    } @else {
+                      Elige una carta para votar y confirma tu decision.
+                    }
+                  </p>
+                </div>
+
+                @if (voteSubmitted) {
+                  <span class="status-pill">Voto confirmado</span>
+                }
+              </div>
+
+              <div class="choice-stage-grid">
+                @for (card of choiceCards; track card.code) {
+                  <button
+                    type="button"
+                    class="vote-card stage-vote-card"
+                    [class.selected]="card.code === selectedChoiceCardCode"
+                    [class.locked]="voteSubmitted"
+                    (click)="onChoiceCardSelected(card)"
+                  >
+                    <img
+                      draggable="false"
+                      [src]="card.image"
+                      [alt]="card.value + ' de ' + card.suit"
+                    />
+                  </button>
+                }
+              </div>
+
+              <div class="phase-stage-footer">
+                <p>
+                  @if (selectedChoiceCard) {
+                    Tu voto actual es {{ selectedChoiceCard.code }}.
+                  } @else {
+                    Selecciona una de las cartas para continuar.
+                  }
+                </p>
+
+                <button
+                  type="button"
+                  class="sidebar-action"
+                  [disabled]="!selectedChoiceCardCode || voteSubmitted"
+                  (click)="submitVoteSelection()"
+                >
+                  Confirmar voto
+                </button>
+              </div>
+            </section>
+          } @else if (phase === 'points' && pointsStage !== 'ranking') {
+            <section
+              class="phase-stage-screen points-stage-screen"
+              [class.reveal-stage]="pointsStage === 'reveal'"
+              (click)="pointsStage === 'reveal' && simulateRankingShown()"
             >
+              <div class="phase-stage-header">
+                <div class="phase-stage-copy">
+                  <p class="overlay-label">Puntuacion</p>
+                  <h2>{{ currentClue }}</h2>
+                  @if (pointsStage === 'waiting') {
+                    <p>Esperando votos antes de resolver la ronda.</p>
+                  } @else if (pointsStage === 'reveal') {
+                    <p>Revisa cartas, dueños y votos. Haz clic o espera 3 segundos.</p>
+                  }
+                </div>
+
+                @if (pointsStage === 'reveal') {
+                  <button
+                    type="button"
+                    class="secondary-action"
+                    (click)="$event.stopPropagation(); simulateRankingShown()"
+                  >
+                    Mostrar puntos ahora
+                  </button>
+                }
+              </div>
+
+              @if (pointsStage === 'waiting') {
+                <div class="points-stage-waiting">
+                  <p>{{ pointsVotesReceived }} / {{ pointsVotesTotal }} jugadores han votado.</p>
+                  <progress [value]="pointsVotesReceived" [max]="pointsVotesTotal || 1"></progress>
+                </div>
+              } @else if (pointsStage === 'reveal') {
+                <div class="reveal-grid stage-reveal-grid">
+                  @for (result of pointsRevealedCards; track result.card.code) {
+                    <article class="reveal-card stage-reveal-card">
+                      <img
+                        draggable="false"
+                        [src]="result.card.image"
+                        [alt]="result.card.value + ' de ' + result.card.suit"
+                      />
+                      <p class="owner-label">Carta de {{ result.ownerName }}</p>
+                      <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
+                    </article>
+                  }
+                </div>
+              }
+            </section>
+          }
+
+          <app-dixit-track-board
+            [title]="''"
+            [subtitle]="''"
+            [tokens]="boardTokens"
+            [wildcardCells]="wildcardCellPositions"
+            [eventBackCells]="eventBackCellPositions"
+            [eventForwardCells]="eventForwardCellPositions"
+            [showControls]="false"
+            [interactive]="false"
+          >
+            @if (phase === 'hand') {
               <div board-overlay class="board-overlay-content">
                 <section class="board-overlay-shell" [attr.data-phase]="phase">
-                  @if (phase === 'hand') {
-                    <div class="story-card hand-overlay">
-                      <div class="clue-copy">
-                        <span class="overlay-label">Pista actual</span>
-                        <h2>{{ currentClue }}</h2>
-                        <p>
-                          El tablero queda siempre visible y la seleccion de carta ocurre dentro
-                          de la mesa.
-                        </p>
-                      </div>
-
-                      <div
-                        class="drop-zone"
-                        [class.has-card]="!!selectedHandCard"
-                        [class.is-dragover]="isDropZoneActive"
-                        (dragover)="onDropZoneDragOver($event)"
-                        (dragleave)="onDropZoneDragLeave()"
-                        (drop)="onDropZoneDrop($event)"
-                      >
-                        @if (selectedHandCard; as selectedCard) {
-                          <img
-                            draggable="false"
-                            [src]="selectedCard.image"
-                            [alt]="selectedCard.value + ' de ' + selectedCard.suit"
-                          />
-                          <p>Seleccionada: {{ selectedCard.code }}</p>
-                        } @else {
-                          <p>Arrastrar una carta aqui para seleccionarla</p>
-                        }
-                      </div>
+                  <div class="story-card hand-overlay">
+                    <div class="clue-copy">
+                      <span class="overlay-label">Pista actual</span>
+                      <h2>{{ currentClue }}</h2>
+                      <p>Arrastra una carta al hueco central.</p>
                     </div>
-                  } @else if (phase === 'choice') {
-                    <div class="story-card vote-overlay">
-                      <div class="vote-copy">
-                        <span class="overlay-label">Pista de la ronda</span>
-                        <h2>{{ currentClue }}</h2>
-                        <p>
-                          Simula el momento en el que el backend ya ha enviado la mesa final para
-                          votar. El tablero sigue debajo y la capa superior tiene opacidad.
+
+                    <div
+                      class="drop-zone"
+                      [class.has-card]="!!selectedHandCard"
+                      [class.is-dragover]="isDropZoneActive"
+                      (dragover)="onDropZoneDragOver($event)"
+                      (dragleave)="onDropZoneDragLeave()"
+                      (drop)="onDropZoneDrop($event)"
+                    >
+                      @if (selectedHandCard; as selectedCard) {
+                        <img
+                          draggable="false"
+                          [src]="selectedCard.image"
+                          [alt]="selectedCard.value + ' de ' + selectedCard.suit"
+                        />
+                        <p>Seleccionada: {{ selectedCard.code }}</p>
+                      } @else {
+                        <p>Suelta aqui tu carta</p>
+                      }
+                    </div>
+                  </div>
+                </section>
+              </div>
+            }
+          </app-dixit-track-board>
+
+          @if (phase === 'hand') {
+            <section class="table-support">
+              <div class="chat-reserved" aria-hidden="true"></div>
+
+              <div class="cards-column">
+                <section class="cards-panel hand-cards-panel">
+                  <div class="section-header">
+                    <div class="section-header-copy">
+                      <p class="overlay-label">Tu mano</p>
+                      <h3>Cartas disponibles</h3>
+                    </div>
+
+                    <div class="section-header-side">
+                      <div class="section-header-copy aligned-right">
+                        <p class="overlay-label">Comodines</p>
+                        <p class="strip-text section-header-note">
+                          @if (wildcards.length === 0) {
+                            Sin comodines todavia.
+                          } @else {
+                            Usa uno antes de cerrar tu jugada.
+                          }
                         </p>
                       </div>
 
-                      <div class="vote-grid">
-                        @for (card of choiceCards; track card.code) {
+                      @if (selectedHandCard) {
+                        <button type="button" class="secondary-action" (click)="clearHandSelection()">
+                          Quitar
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="hand-layout">
+                    <div class="hand-main">
+                      <div class="hand-cards">
+                        @for (card of cards; track card.code) {
                           <button
                             type="button"
-                            class="vote-card"
-                            [class.selected]="card.code === selectedChoiceCardCode"
-                            (click)="onChoiceCardSelected(card)"
+                            class="hand-card"
+                            [class.selected]="card.code === selectedHandCardCode"
+                            draggable="true"
+                            (dragstart)="onHandCardDragStart(card, $event)"
+                            (dragend)="onHandCardDragEnd()"
+                            (click)="onHandCardSelected(card)"
                           >
                             <img
                               draggable="false"
@@ -206,263 +336,138 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
                           </button>
                         }
                       </div>
-
-                      <div class="vote-status">
-                        @if (selectedChoiceCard) {
-                          <p>Tu seleccion actual: {{ selectedChoiceCard.code }}</p>
-                        } @else {
-                          <p>Selecciona una carta para dejar listo tu voto.</p>
-                        }
-
-                        @if (voteSubmitted) {
-                          <span class="status-pill">Voto local confirmado</span>
-                        }
-                      </div>
                     </div>
-                  } @else {
-                    <div class="story-card points-overlay">
-                      <div class="points-copy">
-                        <span class="overlay-label">Resolucion de ronda</span>
-                        <h2>{{ currentClue }}</h2>
-                      </div>
 
-                      @if (pointsStage === 'waiting') {
-                        <div class="points-panel">
-                          <h3>Esperando votos</h3>
-                          <p>{{ pointsVotesReceived }} / {{ pointsVotesTotal }} jugadores han votado</p>
-                          <progress [value]="pointsVotesReceived" [max]="pointsVotesTotal || 1"></progress>
-                          <p class="panel-footnote">
-                            Usa los botones de simulacion para imitar los mensajes de websocket.
-                          </p>
+                    <aside class="wildcards-strip">
+                      @if (wildcards.length > 0) {
+                        <div class="wildcards-list">
+                          @for (wildcard of wildcards; track wildcard.id) {
+                            <button
+                              type="button"
+                              class="wildcard-card"
+                              [disabled]="phase !== 'hand'"
+                              (click)="useWildcard(wildcard.id)"
+                            >
+                              <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
+                              <div class="wildcard-copy">
+                                <strong>{{ wildcard.name }}</strong>
+                                <p>{{ wildcard.description }}</p>
+                              </div>
+                            </button>
+                          }
                         </div>
-                      } @else if (pointsStage === 'reveal') {
-                        <div class="points-panel">
-                          <h3>Cartas reveladas</h3>
-                          <div class="reveal-grid">
-                            @for (result of pointsRevealedCards; track result.card.code) {
-                              <article class="reveal-card">
-                                <img
-                                  draggable="false"
-                                  [src]="result.card.image"
-                                  [alt]="result.card.value + ' de ' + result.card.suit"
-                                />
-                                <p class="owner">{{ result.ownerName }}</p>
-                                <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
-                              </article>
-                            }
-                          </div>
-                        </div>
-                      } @else {
-                        <div class="points-panel ranking-panel">
-                          <h3>Clasificacion</h3>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>Jugador</th>
-                                <th>Antes</th>
-                                <th>Ganados</th>
-                                <th>Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              @for (row of pointsRanking; track row.playerId) {
-                                <tr>
-                                  <td>{{ row.playerName }}</td>
-                                  <td>{{ row.pointsBefore }}</td>
-                                  <td>+{{ row.pointsEarned }}</td>
-                                  <td>{{ row.totalPoints }}</td>
-                                </tr>
-                              }
-                            </tbody>
-                          </table>
-                        </div>
+                      }
+                    </aside>
+                  </div>
+                </section>
+              </div>
+
+              <aside class="players-panel">
+                <p class="overlay-label">Jugadores</p>
+                <h3>Mesa actual</h3>
+
+                <div class="players-list">
+                  @for (player of playerRows; track player.id) {
+                    <div class="player-row" [class.self]="player.isCurrentPlayer">
+                      <span class="player-dot" [style.background]="player.color"></span>
+                      <span class="player-name">{{ player.name }}</span>
+                      @if (player.isCurrentPlayer) {
+                        <span class="player-tag">Tu</span>
                       }
                     </div>
                   }
-                </section>
-              </div>
-            </app-dixit-track-board>
+                </div>
+              </aside>
+            </section>
+          }
+        </div>
+
+        @if (isSimulationDrawerOpen) {
+          <button
+            type="button"
+            class="sim-drawer-backdrop"
+            aria-label="Cerrar panel de simulacion"
+            (click)="closeSimulationDrawer()"
+          ></button>
+        }
+
+        <button
+          type="button"
+          class="sim-drawer-toggle"
+          [class.open]="isSimulationDrawerOpen"
+          (click)="toggleSimulationDrawer()"
+        >
+          {{ isSimulationDrawerOpen ? 'Cerrar' : 'Simular' }}
+        </button>
+
+        <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
+          <article class="sim-card">
+            <p class="overlay-label">Eventos simulados</p>
+            <h3>Websocket</h3>
+
+            <button type="button" class="secondary-action sim-bonus-action" (click)="simulateWildcardReward()">
+              Simular: ganar comodin
+            </button>
 
             @if (phase === 'hand') {
-              <div class="hand-support-grid">
-                <section class="hand-ribbon">
-                  <div class="hand-header">
-                    <div>
-                      <p class="overlay-label">Tu mano</p>
-                      <h3>Arrastra o pulsa una carta</h3>
-                    </div>
-
-                    @if (selectedHandCard) {
-                      <button type="button" class="secondary-action" (click)="clearHandSelection()">
-                        Quitar seleccion
-                      </button>
-                    }
-                  </div>
-
-                  <div class="hand-cards">
-                    @for (card of cards; track card.code) {
-                      <button
-                        type="button"
-                        class="hand-card"
-                        [class.selected]="card.code === selectedHandCardCode"
-                        draggable="true"
-                        (dragstart)="onHandCardDragStart(card, $event)"
-                        (dragend)="onHandCardDragEnd()"
-                        (click)="onHandCardSelected(card)"
-                      >
-                        <img
-                          draggable="false"
-                          [src]="card.image"
-                          [alt]="card.value + ' de ' + card.suit"
-                        />
-                      </button>
-                    }
-                  </div>
-                </section>
-
-                <section class="wildcards-ribbon">
-                  <div class="hand-header">
-                    <div>
-                      <p class="overlay-label">Comodines</p>
-                      <h3>Tu reserva</h3>
-                    </div>
-                  </div>
-
-                  @if (wildcards.length === 0) {
-                    <p class="wildcards-empty">
-                      Cae en una casilla especial del tablero para conseguir tu primer comodin.
-                    </p>
-                  } @else {
-                    <div class="wildcards-list">
-                      @for (wildcard of wildcards; track wildcard.id) {
-                        <button
-                          type="button"
-                          class="wildcard-card"
-                          [disabled]="phase !== 'hand'"
-                          (click)="useWildcard(wildcard.id)"
-                        >
-                          <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
-                          <div class="wildcard-copy">
-                            <strong>{{ wildcard.name }}</strong>
-                            <p>{{ wildcard.description }}</p>
-                          </div>
-                        </button>
-                      }
-                    </div>
-                  }
-                </section>
-              </div>
+              <p>Abre la votacion cuando ya tengas carta.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="!selectedHandCardCode"
+                (click)="simulateChoicePhaseOpened()"
+              >
+                Abrir votacion
+              </button>
+            } @else if (phase === 'choice') {
+              <p>Cierra la votacion y abre la resolucion.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="!voteSubmitted"
+                (click)="simulatePointsPhaseOpened()"
+              >
+                Abrir puntuacion
+              </button>
+            } @else if (pointsStage === 'waiting') {
+              <p>Controla manualmente la llegada de votos.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesReceived >= pointsVotesTotal"
+                (click)="simulateVoteReceived()"
+              >
+                Voto recibido
+              </button>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesTotal === 0 || pointsVotesReceived >= pointsVotesTotal"
+                (click)="simulateAllVotesReceived()"
+              >
+                Todos votaron
+              </button>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesReceived < pointsVotesTotal"
+                (click)="simulateResultsReveal()"
+              >
+                Revelar cartas
+              </button>
+            } @else if (pointsStage === 'reveal') {
+              <p>Las cartas ya se ven. Puedes forzar ya el movimiento del tablero.</p>
+              <button type="button" class="sidebar-action" (click)="simulateRankingShown()">
+                Mostrar puntos
+              </button>
+            } @else {
+              <p>Inicia una ronda nueva desde aqui.</p>
+              <button type="button" class="sidebar-action" (click)="prepareNextRound()">
+                Siguiente ronda
+              </button>
             }
-          </div>
-
-          <aside class="table-sidebar">
-            <article class="sidebar-card">
-              <p class="overlay-label">Eventos simulados</p>
-              <h3>Websocket</h3>
-
-              @if (phase === 'hand') {
-                <p>
-                  Selecciona una carta y luego simula el evento con el que el servidor abriria la
-                  fase de votacion.
-                </p>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="!selectedHandCardCode"
-                  (click)="simulateChoicePhaseOpened()"
-                >
-                  Simular WS: abrir votacion
-                </button>
-              } @else if (phase === 'choice') {
-                <p>
-                  Primero confirmas tu voto localmente. Despues simulas el evento del servidor que
-                  cierra la votacion y abre la resolucion.
-                </p>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="!selectedChoiceCardCode || voteSubmitted"
-                  (click)="submitVoteSelection()"
-                >
-                  Confirmar voto local
-                </button>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="!voteSubmitted"
-                  (click)="simulatePointsPhaseOpened()"
-                >
-                  Simular WS: abrir puntuacion
-                </button>
-              } @else if (pointsStage === 'waiting') {
-                <p>
-                  En esta demo los votos ya no avanzan solos: los controlas con estos botones para
-                  replicar mensajes entrantes.
-                </p>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="pointsVotesReceived >= pointsVotesTotal"
-                  (click)="simulateVoteReceived()"
-                >
-                  Simular WS: voto recibido
-                </button>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="pointsVotesTotal === 0 || pointsVotesReceived >= pointsVotesTotal"
-                  (click)="simulateAllVotesReceived()"
-                >
-                  Simular WS: todos votaron
-                </button>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  [disabled]="pointsVotesReceived < pointsVotesTotal"
-                  (click)="simulateResultsReveal()"
-                >
-                  Simular WS: revelar cartas
-                </button>
-              } @else if (pointsStage === 'reveal') {
-                <p>La mesa ya conoce el resultado de la ronda. Solo falta publicar el ranking.</p>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  (click)="simulateRankingShown()"
-                >
-                  Simular WS: mostrar ranking
-                </button>
-              } @else {
-                <p>
-                  Con el ranking visible ya puedes emular el snapshot de una ronda nueva para
-                  volver al arrastre inicial.
-                </p>
-                <button
-                  type="button"
-                  class="sidebar-action"
-                  (click)="prepareNextRound()"
-                >
-                  Simular WS: siguiente ronda
-                </button>
-              }
-            </article>
-
-            <article class="sidebar-card">
-              <p class="overlay-label">Jugadores</p>
-              <h3>Mesa actual</h3>
-
-              <div class="players-list">
-                @for (player of playerRows; track player.id) {
-                  <div class="player-row" [class.self]="player.isCurrentPlayer">
-                    <span class="player-dot" [style.background]="player.color"></span>
-                    <span class="player-name">{{ player.name }}</span>
-                    <span class="player-score">{{ player.points }}</span>
-                  </div>
-                }
-              </div>
-            </article>
-          </aside>
-        </div>
+          </article>
+        </aside>
       }
     </section>
 
@@ -491,673 +496,15 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
       </div>
     }
   `,
-  styles: `
-    :host {
-      display: block;
-      min-height: 100svh;
-      color: #f4efe4;
-      background:
-        radial-gradient(circle at top left, rgba(248, 216, 137, 0.12), transparent 22%),
-        radial-gradient(circle at bottom right, rgba(69, 125, 209, 0.18), transparent 28%),
-        linear-gradient(140deg, #08232d 0%, #0b3542 48%, #12305f 100%);
-    }
-
-    .dixit-table {
-      min-height: 100svh;
-      padding: 24px 20px 32px;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-    }
-
-    .dixit-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 18px;
-    }
-
-    .header-copy {
-      max-width: 560px;
-    }
-
-    .eyebrow,
-    .overlay-label {
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.18em;
-      font-size: 0.72rem;
-      color: rgba(250, 233, 191, 0.84);
-    }
-
-    h1,
-    h2,
-    h3 {
-      margin: 0;
-      color: #fff6d7;
-    }
-
-    .phase-summary {
-      margin: 10px 0 0;
-      color: rgba(244, 239, 228, 0.84);
-      max-width: 56ch;
-      line-height: 1.55;
-    }
-
-    .phase-switch {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(180px, 1fr));
-      gap: 10px;
-      width: min(720px, 100%);
-    }
-
-    .phase-step {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      align-items: flex-start;
-      padding: 14px 16px;
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      color: rgba(244, 239, 228, 0.7);
-      backdrop-filter: blur(8px);
-    }
-
-    .phase-step strong,
-    .phase-step span {
-      display: block;
-    }
-
-    .phase-step strong {
-      margin-bottom: 4px;
-      color: inherit;
-    }
-
-    .phase-step.active {
-      background: rgba(255, 238, 194, 0.18);
-      border-color: rgba(255, 214, 117, 0.48);
-      color: #fff7df;
-    }
-
-    .phase-step.completed {
-      border-color: rgba(144, 227, 184, 0.42);
-      color: rgba(228, 255, 240, 0.8);
-    }
-
-    .phase-index {
-      width: 34px;
-      height: 34px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(7, 15, 22, 0.44);
-      font-weight: 700;
-      line-height: 1;
-      text-align: center;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    .phase-index > span {
-      display: block;
-      transform: translateY(8px);
-    }
-
-    .status-card {
-      padding: 22px;
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-    }
-
-    .status-card.error {
-      color: #ffd6d6;
-      border-color: rgba(255, 136, 136, 0.32);
-    }
-
-    .table-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1.9fr) minmax(280px, 360px);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .table-main {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      min-width: 0;
-    }
-
-    .board-overlay-content {
-      pointer-events: auto;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-    }
-
-    .board-overlay-shell {
-      width: min(840px, 100%);
-      display: flex;
-      justify-content: center;
-    }
-
-    .story-card {
-      width: 100%;
-      border-radius: 28px;
-      box-sizing: border-box;
-      display: grid;
-      gap: 18px;
-    }
-
-    .hand-overlay {
-      grid-template-columns: minmax(0, 1.35fr) minmax(220px, 280px);
-      align-items: stretch;
-      padding: 26px 28px;
-      background: rgba(247, 245, 239, 0.9);
-      color: #1e2631;
-      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
-    }
-
-    .hand-overlay h2,
-    .vote-overlay h2,
-    .points-overlay h2,
-    .hand-ribbon h3,
-    .sidebar-card h3,
-    .points-panel h3 {
-      font-family: "FuenteDilana", sans-serif;
-      font-size: clamp(1.55rem, 2.6vw, 2.35rem);
-      line-height: 1.05;
-    }
-
-    .hand-overlay h2,
-    .vote-overlay h2,
-    .points-overlay h2,
-    .points-panel h3 {
-      color: #1d2430;
-    }
-
-    .hand-overlay .overlay-label,
-    .vote-overlay .overlay-label,
-    .points-overlay .overlay-label {
-      color: rgba(72, 82, 94, 0.78);
-    }
-
-    .clue-copy,
-    .vote-copy,
-    .points-copy {
-      display: grid;
-      gap: 12px;
-    }
-
-    .clue-copy p,
-    .vote-copy p,
-    .sidebar-card p,
-    .panel-footnote {
-      margin: 0;
-      line-height: 1.52;
-    }
-
-    .drop-zone {
-      min-height: 210px;
-      border-radius: 20px;
-      border: 2px dashed rgba(73, 83, 97, 0.3);
-      background: rgba(32, 39, 48, 0.14);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 16px;
-      text-align: center;
-      transition:
-        border-color 160ms ease,
-        background 160ms ease,
-        transform 160ms ease;
-    }
-
-    .drop-zone.is-dragover {
-      border-color: rgba(23, 112, 238, 0.7);
-      background: rgba(23, 112, 238, 0.14);
-      transform: scale(1.02);
-    }
-
-    .drop-zone.has-card {
-      background: rgba(20, 118, 86, 0.12);
-      border-style: solid;
-      border-color: rgba(20, 118, 86, 0.45);
-    }
-
-    .drop-zone img {
-      width: min(140px, 100%);
-      border-radius: 16px;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
-    }
-
-    .vote-overlay,
-    .points-overlay {
-      padding: 24px;
-      background: rgba(248, 246, 240, 0.74);
-      border: 1px solid rgba(255, 255, 255, 0.56);
-      backdrop-filter: blur(10px);
-      color: #1d2430;
-      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
-    }
-
-    .vote-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 14px;
-    }
-
-    .vote-card {
-      appearance: none;
-      background: transparent;
-      border: 0;
-      padding: 0;
-      border-radius: 18px;
-      cursor: pointer;
-      transition:
-        transform 160ms ease,
-        box-shadow 160ms ease;
-    }
-
-    .vote-card:hover {
-      transform: translateY(-3px);
-    }
-
-    .vote-card.selected {
-      box-shadow: 0 0 0 4px rgba(255, 196, 63, 0.88);
-    }
-
-    .vote-card img,
-    .reveal-card img,
-    .hand-card img {
-      width: 100%;
-      display: block;
-      border-radius: 18px;
-    }
-
-    .vote-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .vote-status p {
-      margin: 0;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(18, 121, 82, 0.14);
-      color: #126f4d;
-      font-weight: 700;
-    }
-
-    .points-panel {
-      background: rgba(255, 255, 255, 0.56);
-      border-radius: 20px;
-      padding: 18px;
-      display: grid;
-      gap: 14px;
-    }
-
-    progress {
-      width: 100%;
-      height: 14px;
-    }
-
-    .reveal-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-      gap: 12px;
-    }
-
-    .reveal-card {
-      background: rgba(17, 24, 39, 0.07);
-      border-radius: 18px;
-      padding: 10px;
-      text-align: center;
-    }
-
-    .owner,
-    .votes {
-      margin: 0;
-    }
-
-    .owner {
-      font-weight: 700;
-      margin-top: 8px;
-    }
-
-    .votes {
-      margin-top: 4px;
-      color: rgba(29, 36, 48, 0.74);
-    }
-
-    .ranking-panel table {
-      width: 100%;
-      border-collapse: collapse;
-      color: #1d2430;
-    }
-
-    .ranking-panel th,
-    .ranking-panel td {
-      padding: 10px 8px;
-      text-align: left;
-      border-bottom: 1px solid rgba(29, 36, 48, 0.12);
-    }
-
-    .ranking-panel tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .hand-ribbon,
-    .wildcards-ribbon,
-    .sidebar-card {
-      border-radius: 24px;
-      background: rgba(8, 20, 29, 0.58);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
-    }
-
-    .hand-support-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 320px);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .hand-ribbon {
-      padding: 18px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .wildcards-ribbon {
-      padding: 18px;
-      display: grid;
-      gap: 16px;
-      aspect-ratio: 1;
-      align-content: start;
-      box-sizing: border-box;
-    }
-
-    .hand-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .hand-cards {
-      display: flex;
-      gap: 14px;
-      overflow-x: auto;
-      padding-bottom: 6px;
-    }
-
-    .wildcards-empty {
-      margin: 0;
-      text-align: center;
-      line-height: 1.55;
-      color: rgba(244, 239, 228, 0.78);
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px dashed rgba(255, 255, 255, 0.16);
-      border-radius: 18px;
-      padding: 28px 18px;
-      box-sizing: border-box;
-    }
-
-    .wildcards-list {
-      display: grid;
-      gap: 12px;
-      align-content: start;
-      overflow: auto;
-    }
-
-    .wildcard-card,
-    .wildcard-popup-card {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      border-radius: 18px;
-      padding: 14px;
-      background: linear-gradient(145deg, rgba(120, 69, 190, 0.28), rgba(58, 29, 112, 0.42));
-      border: 1px solid rgba(208, 182, 255, 0.26);
-    }
-
-    .wildcard-card {
-      width: 100%;
-      text-align: left;
-      cursor: pointer;
-      transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
-    }
-
-    .wildcard-card:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 20px rgba(16, 7, 32, 0.22);
-    }
-
-    .wildcard-card:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .wildcard-icon {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: linear-gradient(145deg, #fbe7ff, #dcb3ff);
-      color: #41195f;
-      font-family: "FuenteDilana", sans-serif;
-      font-size: 1.2rem;
-    }
-
-    .wildcard-icon.large {
-      width: 56px;
-      height: 56px;
-      font-size: 1.45rem;
-      border-radius: 18px;
-    }
-
-    .wildcard-copy strong {
-      display: block;
-      color: #fff4d8;
-      margin-bottom: 4px;
-    }
-
-    .wildcard-copy p {
-      margin: 0;
-      color: rgba(244, 239, 228, 0.84);
-    }
-
-    .hand-card {
-      width: clamp(120px, 16vw, 168px);
-      flex: 0 0 auto;
-      appearance: none;
-      background: transparent;
-      border: 0;
-      padding: 0;
-      border-radius: 20px;
-      cursor: grab;
-      transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        opacity 160ms ease;
-    }
-
-    .hand-card:hover {
-      transform: translateY(-4px);
-    }
-
-    .hand-card.selected {
-      box-shadow: 0 0 0 4px rgba(96, 180, 255, 0.88);
-    }
-
-    .hand-card:active {
-      cursor: grabbing;
-    }
-
-    .table-sidebar {
-      display: grid;
-      gap: 18px;
-      align-content: start;
-    }
-
-    .sidebar-card {
-      padding: 18px;
-      display: grid;
-      gap: 14px;
-    }
-
-    .sidebar-action,
-    .secondary-action {
-      border: 0;
-      border-radius: 999px;
-      padding: 11px 16px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform 120ms ease, opacity 120ms ease;
-    }
-
-    .sidebar-action {
-      background: linear-gradient(135deg, #f5d272, #ffefbc);
-      color: #18212d;
-    }
-
-    .secondary-action {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff4d2;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-    }
-
-    .sidebar-action:disabled,
-    .secondary-action:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .players-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .player-row {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .player-row.self {
-      border: 1px solid rgba(255, 214, 117, 0.3);
-      background: rgba(255, 214, 117, 0.12);
-    }
-
-    .player-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 999px;
-      display: inline-block;
-    }
-
-    .player-name {
-      font-weight: 600;
-    }
-
-    .player-score {
-      font-weight: 700;
-      color: #ffe7a5;
-    }
-
-    .wildcard-popup-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 40;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      background: rgba(6, 10, 18, 0.58);
-      backdrop-filter: blur(8px);
-    }
-
-    .wildcard-popup {
-      width: min(92vw, 30rem);
-      display: grid;
-      gap: 16px;
-      padding: 24px;
-      border-radius: 28px;
-      background: linear-gradient(160deg, rgba(25, 18, 56, 0.96), rgba(44, 28, 92, 0.94));
-      border: 1px solid rgba(214, 184, 255, 0.3);
-    }
-
-    @media (max-width: 1160px) {
-      .table-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .phase-switch {
-        width: 100%;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .dixit-header {
-        flex-direction: column;
-      }
-
-      .phase-switch {
-        grid-template-columns: 1fr;
-      }
-
-      .hand-overlay {
-        grid-template-columns: 1fr;
-      }
-
-      .hand-support-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 700px) {
-      .dixit-table {
-        padding: 16px 12px 24px;
-      }
-
-      .vote-grid,
-      .reveal-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .hand-card {
-        width: 130px;
-      }
-    }
-  `,
+  styleUrl: './dixit.css',
 })
-export class Dixit implements OnInit {
-  readonly phaseSteps = PHASE_STEPS;
+export class Dixit implements OnInit, OnDestroy {
   readonly wildcardCellPositions: number[] = [...WILDCARD_CELL_POSITIONS];
   readonly eventBackCellPositions: number[] = [...EVENT_BACK_CELL_POSITIONS];
   readonly eventForwardCellPositions: number[] = [...EVENT_FORWARD_CELL_POSITIONS];
 
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly cardPull = inject(CardPull);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly maxPlayersPerMatch = 6;
@@ -1201,7 +548,10 @@ export class Dixit implements OnInit {
   pointsRanking: DixitRankingRow[] = [];
   wildcards: WildcardReward[] = [];
   activeEffectPopup: BoardEffectPopup | null = null;
+  isSimulationDrawerOpen = false;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
+  private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingBoardTokens: TrackBoardToken[] | null = null;
 
   async ngOnInit(): Promise<void> {
     this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? '';
@@ -1222,6 +572,10 @@ export class Dixit implements OnInit {
     }
   }
 
+  ngOnDestroy(): void {
+    this.clearRevealRankingTimer();
+  }
+
   get currentPhaseMeta(): PhaseStep {
     return PHASE_STEPS.find((phaseStep) => phaseStep.id === this.phase) ?? PHASE_STEPS[0];
   }
@@ -1234,16 +588,24 @@ export class Dixit implements OnInit {
     return this.choiceCards.find((card) => card.code === this.selectedChoiceCardCode);
   }
 
-  get boardSubtitle(): string {
-    switch (this.phase) {
-      case 'choice':
-        return 'La mesa sigue visible mientras se superpone la votacion.';
-      case 'points':
-        return 'Usa la columna lateral para simular votos, revelado y ranking.';
-      case 'hand':
-      default:
-        return 'Selecciona tu carta arrastrandola al area central del tablero.';
+  get currentPhaseInstruction(): string {
+    if (this.phase === 'hand') {
+      return 'Elige una carta y colocala en la mesa.';
     }
+
+    if (this.phase === 'choice') {
+      return 'Vota arriba y confirma tu decision.';
+    }
+
+    if (this.pointsStage === 'waiting') {
+      return 'Esperando votos para resolver la ronda.';
+    }
+
+    if (this.pointsStage === 'reveal') {
+      return 'Revisa cartas, votos y dueños.';
+    }
+
+    return 'Tablero actualizado. Prepara la siguiente ronda.';
   }
 
   get playerRows(): PlayerPanelRow[] {
@@ -1252,14 +614,6 @@ export class Dixit implements OnInit {
       points: this.pointsByPlayer.get(player.id) ?? 0,
       isCurrentPlayer: player.id === 'you',
     }));
-  }
-
-  phaseOrderIndex(phase: DixitPhase): number {
-    return PHASE_STEPS.findIndex((phaseStep) => phaseStep.id === phase);
-  }
-
-  isPhaseCompleted(phase: DixitPhase): boolean {
-    return this.phaseOrderIndex(phase) < this.phaseOrderIndex(this.phase);
   }
 
   onHandCardSelected(card: DeckCard): void {
@@ -1315,6 +669,30 @@ export class Dixit implements OnInit {
 
   clearHandSelection(): void {
     this.selectedHandCardCode = '';
+  }
+
+  goHome(): void {
+    void this.router.navigate(['/']);
+  }
+
+  goToProfile(): void {
+    void this.router.navigate(['/profile']);
+  }
+
+  goToSettings(): void {
+    void this.router.navigate(['/settings']);
+  }
+
+  toggleSimulationDrawer(): void {
+    this.isSimulationDrawerOpen = !this.isSimulationDrawerOpen;
+  }
+
+  closeSimulationDrawer(): void {
+    this.isSimulationDrawerOpen = false;
+  }
+
+  simulateWildcardReward(): void {
+    this.grantWildcardReward();
   }
 
   simulateChoicePhaseOpened(): void {
@@ -1387,8 +765,8 @@ export class Dixit implements OnInit {
     const { revealedCards, ranking } = this.buildRevealAndRanking(this.currentRoundPlayers);
     this.pointsRevealedCards = revealedCards;
     this.pointsRanking = ranking;
-    this.boardTokens = this.buildBoardTokensFromScores();
     this.pointsStage = 'reveal';
+    this.scheduleRevealRanking();
   }
 
   simulateRankingShown(): void {
@@ -1396,7 +774,8 @@ export class Dixit implements OnInit {
       return;
     }
 
-    this.pointsStage = 'ranking';
+    this.clearRevealRankingTimer();
+    this.applyRevealRankingToBoard();
   }
 
   prepareNextRound(): void {
@@ -1404,6 +783,7 @@ export class Dixit implements OnInit {
       return;
     }
 
+    this.clearRevealRankingTimer();
     this.roundNumber += 1;
     this.phase = 'hand';
     this.pointsStage = 'waiting';
@@ -1417,6 +797,7 @@ export class Dixit implements OnInit {
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
     this.currentRoundPlayers = [];
+    this.pendingBoardTokens = null;
     this.currentClue = ROUND_CLUES[(this.roundNumber - 1) % ROUND_CLUES.length];
     this.cards = this.rotateCards(this.cards);
     this.choiceCards = [...this.cards];
@@ -1424,6 +805,11 @@ export class Dixit implements OnInit {
 
   closeEffectPopup(): void {
     this.activeEffectPopup = this.effectPopupQueue.shift() ?? null;
+
+    if (this.activeEffectPopup === null && this.pendingBoardTokens !== null) {
+      this.boardTokens = this.pendingBoardTokens;
+      this.pendingBoardTokens = null;
+    }
   }
 
   useWildcard(wildcardId: string): void {
@@ -1441,15 +827,19 @@ export class Dixit implements OnInit {
 
     this.pointsByPlayer.set('you', updatedPoints);
     this.wildcards = this.wildcards.filter((entry) => entry.id !== wildcardId);
-    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(currentPoints, updatedPoints);
+    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(currentPoints, updatedPoints, {
+      allowWildcardReward: false,
+    });
     this.pointsByPlayer.set('you', resolvedPoints);
     this.boardTokens = this.buildBoardTokensFromScores();
   }
 
   private initializePointsPhase(): void {
+    this.clearRevealRankingTimer();
     this.pointsStage = 'waiting';
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
+    this.pendingBoardTokens = null;
     this.currentRoundPlayers = this.getRoundPlayers();
     this.pointsVotesTotal = this.currentRoundPlayers.length;
     this.pointsVotesReceived = this.voteSubmitted && this.pointsVotesTotal > 0 ? 1 : 0;
@@ -1514,13 +904,49 @@ export class Dixit implements OnInit {
       })
       .sort((left, right) => right.totalPoints - left.totalPoints);
 
-    for (const row of ranking) {
+    return { revealedCards, ranking };
+  }
+
+  private scheduleRevealRanking(): void {
+    this.clearRevealRankingTimer();
+    this.revealRankingTimer = setTimeout(() => {
+      this.applyRevealRankingToBoard();
+      this.cdr.detectChanges();
+    }, 3000);
+  }
+
+  private clearRevealRankingTimer(): void {
+    if (this.revealRankingTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.revealRankingTimer);
+    this.revealRankingTimer = null;
+  }
+
+  private applyRevealRankingToBoard(): void {
+    if (this.phase !== 'points' || this.pointsStage !== 'reveal') {
+      return;
+    }
+
+    const resolvedRanking = this.pointsRanking.map((row) => ({ ...row }));
+    for (const row of resolvedRanking) {
       this.pointsByPlayer.set(row.playerId, row.totalPoints);
     }
 
-    this.applyCurrentPlayerSpecialCells(ranking);
+    this.applyCurrentPlayerSpecialCells(resolvedRanking);
+    this.pointsRanking = resolvedRanking;
+    const nextBoardTokens = this.buildBoardTokensFromScores();
+    this.pointsStage = 'ranking';
 
-    return { revealedCards, ranking };
+    if (this.activeEffectPopup !== null || this.effectPopupQueue.length > 0) {
+      this.pendingBoardTokens = nextBoardTokens;
+    } else {
+      this.boardTokens = nextBoardTokens;
+      this.pendingBoardTokens = null;
+    }
+
+    this.revealRankingTimer = null;
   }
 
   private resolveVoteCardCode(
@@ -1590,7 +1016,6 @@ export class Dixit implements OnInit {
     currentPlayerRow.pointsEarned = resolvedPoints - currentPlayerRow.pointsBefore;
     currentPlayerRow.totalPoints = resolvedPoints;
     ranking.sort((left, right) => right.totalPoints - left.totalPoints);
-    this.boardTokens = this.buildBoardTokensFromScores();
   }
 
   private grantWildcardReward(): void {
@@ -1610,11 +1035,16 @@ export class Dixit implements OnInit {
     });
   }
 
-  private resolveCurrentPlayerSpecialCells(previousPoints: number, nextPoints: number): number {
+  private resolveCurrentPlayerSpecialCells(
+    previousPoints: number,
+    nextPoints: number,
+    options: SpecialCellResolutionOptions = {}
+  ): number {
     if (nextPoints === previousPoints) {
       return nextPoints;
     }
 
+    const { allowWildcardReward = true } = options;
     let resolvedPoints = nextPoints;
     const visitedPositions = new Set<number>();
     let safety = 0;
@@ -1623,7 +1053,7 @@ export class Dixit implements OnInit {
       visitedPositions.add(resolvedPoints);
       safety += 1;
 
-      if (this.wildcardCellPositions.includes(resolvedPoints)) {
+      if (allowWildcardReward && this.wildcardCellPositions.includes(resolvedPoints)) {
         this.grantWildcardReward();
         break;
       }
