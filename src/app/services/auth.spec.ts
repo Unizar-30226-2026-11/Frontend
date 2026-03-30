@@ -1,24 +1,23 @@
 import { TestBed } from '@angular/core/testing';
-
 import { Auth } from './auth';
 import { ApiClient } from './api-client';
 
 describe('Auth', () => {
+  let service: Auth;
   let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   beforeEach(() => {
-    localStorage.clear();
     apiClientSpy = jasmine.createSpyObj<ApiClient>('ApiClient', ['request', 'invalidateCache']);
+    localStorage.clear();
 
     TestBed.configureTestingModule({
       providers: [
+        Auth,
         { provide: ApiClient, useValue: apiClientSpy },
       ],
     });
-  });
 
-  afterEach(() => {
-    localStorage.clear();
+    service = TestBed.inject(Auth);
   });
 
   it('should be created', () => {

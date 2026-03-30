@@ -10,13 +10,15 @@ import { LoginForm } from './components/login-form/login-form';
   imports: [CommonModule, LoginForm],
   template: `
     <div class="login-screen">
-      <h1 class="title">A Tale Of Recognition</h1>
+      <div class="login-content">
+        <h1 class="title">A Tale Of Recognition</h1>
 
-      <app-login-form
-        [logIn]="logIn"
-        [submitting]="submitting"
-        [errorMessage]="error"
-      ></app-login-form>
+        <app-login-form
+          [logIn]="logIn"
+          [submitting]="submitting"
+          [errorMessage]="error"
+        ></app-login-form>
+      </div>
 
       <button class="login-button" (click)="goHome()">Volver al inicio</button>
     </div>
@@ -31,26 +33,35 @@ import { LoginForm } from './components/login-form/login-form';
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      padding: 24px 16px;
+      gap: clamp(1rem, 2.5vh, 1.5rem);
+      padding: var(--page-padding-y) var(--page-padding-x);
       box-sizing: border-box;
       position: relative;
     }
 
+    .login-content {
+      width: min(94vw, 36rem);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(1rem, 2.5vh, 1.75rem);
+    }
+
     .title {
-      color: black;
-      font-size: 100px;
+      margin: 0;
       font-style: normal;
       font-synthesis: none;
+      font-size: var(--title-size-hero);
       font-family: "FuenteDilana", sans-serif;
-      margin: 0;
-      -webkit-text-stroke: 2px #e8d9a8;
-      margin-top: 0px;
+      color: black;
+      -webkit-text-stroke: clamp(1px, 0.18vw, 2px) #e8d9a8;
       text-align: center;
-      margin-bottom: 30px;
+      line-height: 0.95;
     }
 
     .login-form {
+      margin-top:5px;
       display: flex;
       flex-direction: column;
       gap: 22px;
@@ -105,18 +116,35 @@ import { LoginForm } from './components/login-form/login-form';
 
     .login-button {
       position: absolute;
-      bottom: 30px;
-      right: 40px;
-      padding: 12px 28px;
-      border-radius: 12px;
+      bottom: clamp(1rem, 3vh, 1.9rem);
+      right: clamp(1rem, 3vw, 2.5rem);
+      padding: var(--button-padding-y) var(--button-padding-x);
+      border-radius: var(--button-radius);
       border: 2px solid #355652;
       background: #d9ece8;
       color: #10211f;
       cursor: pointer;
       font-weight: 700;
-      font-size: 17px;
+      font-size: clamp(0.95rem, 1.4vw, 1.05rem);
       letter-spacing: 0.2px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+    }
+
+    @media (max-width: 640px) {
+      .login-screen {
+        justify-content: center;
+        padding-bottom: max(5.5rem, 12vh);
+      }
+
+      .title {
+        margin-bottom: 0;
+      }
+
+      .login-button {
+        position: static;
+        width: var(--panel-width);
+        max-width: 100%;
+      }
     }
   `
 })

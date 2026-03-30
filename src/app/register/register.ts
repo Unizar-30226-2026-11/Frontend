@@ -57,8 +57,12 @@ const REDIRECT_DELAY_MS = 1500;
         [errorMessage]="error"
       />
 
-      <button class="login-button" (click)="goLogin()">Ya tengo una cuenta</button>
+      <button class="login-button" type="button" (click)="goLogin()">Ya tengo una cuenta</button>
 
+      <div *ngIf="error" class="error" role="alert" aria-live="polite">
+        <span class="error-icon" aria-hidden="true">!</span>
+        <p>{{ error }}</p>
+      </div>
       <p *ngIf="successMessage" class="success">{{ successMessage }}</p>
 
     </div>
@@ -73,8 +77,8 @@ const REDIRECT_DELAY_MS = 1500;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      padding: 24px 16px;
+      gap: clamp(1rem, 2.5vh, 1.5rem);
+      padding: var(--page-padding-y) var(--page-padding-x);
       box-sizing: border-box;
       position: relative;
     }
@@ -95,19 +99,21 @@ const REDIRECT_DELAY_MS = 1500;
     .register-form {
       display: flex;
       flex-direction: column;
-      gap: 22px;
-      width: 420px;
+      gap: clamp(0.85rem, 2vh, 1.35rem);
+      width: var(--panel-width);
+      max-width: 100%;
       align-items: center;
     }
 
     input {
       width: 100%;
-      padding: 14px;
-      border-radius: 10px;
+      box-sizing: border-box;
+      padding: var(--field-padding-y) var(--field-padding-x);
+      border-radius: var(--field-radius);
       border: none;
       background: #e6d28f;
       text-align: center;
-      font-size: 16px;
+      font-size: clamp(1rem, 1.2vw, 1.05rem);
       box-shadow: inset 0 3px 6px rgba(0,0,0,0.25);
     }
 
@@ -122,15 +128,15 @@ const REDIRECT_DELAY_MS = 1500;
     }
 
     .submit-button {
-      margin-top: 10px;
-      padding: 12px 28px;
-      border-radius: 12px;
+      margin-top: 0.5rem;
+      padding: var(--button-padding-y) var(--button-padding-x);
+      border-radius: var(--button-radius);
       border: 2px solid #355652;
       background: #d9ece8;
       color: #10211f;
       cursor: pointer;
       font-weight: 700;
-      font-size: 18px;
+      font-size: clamp(1rem, 1.4vw, 1.15rem);
       letter-spacing: 0.2px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
       transition: 0.2s;
@@ -147,33 +153,88 @@ const REDIRECT_DELAY_MS = 1500;
 
     .login-button {
       position: absolute;
-      bottom: 30px;
-      right: 40px;
-      padding: 12px 28px;
-      border-radius: 12px;
+      bottom: clamp(1rem, 3vh, 1.9rem);
+      right: clamp(1rem, 3vw, 2.5rem);
+      padding: var(--button-padding-y) var(--button-padding-x);
+      border-radius: var(--button-radius);
       border: 2px solid #355652;
       background: #d9ece8;
       color: #10211f;
       cursor: pointer;
       font-weight: 700;
-      font-size: 17px;
+      font-size: clamp(0.95rem, 1.4vw, 1.05rem);
       letter-spacing: 0.2px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
     }
 
     .error {
-      color: red;
-      margin-top: 15px;
+      width: var(--panel-width);
+      max-width: 100%;
+      margin-top: 0.9rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.9rem 1rem;
+      box-sizing: border-box;
+      border-radius: var(--field-radius);
+      border: 1px solid rgba(255, 190, 190, 0.48);
+      background: linear-gradient(180deg, rgba(94, 22, 22, 0.9), rgba(61, 14, 14, 0.84));
+      color: #ffe6e1;
+      box-shadow: 0 12px 28px rgba(12, 4, 4, 0.34);
+      backdrop-filter: blur(8px);
+    }
+
+    .error p {
+      margin: 0;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: left;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+
+    .error-icon {
+      flex: 0 0 auto;
+      width: 1.45rem;
+      height: 1.45rem;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(255, 237, 230, 0.18);
+      border: 1px solid rgba(255, 237, 230, 0.4);
+      font-size: 0.92rem;
+      font-weight: 800;
+      line-height: 1;
     }
 
     .success {
       color: #d9ece8;
-      margin-top: 15px;
-      padding: 10px 14px;
-      border-radius: 10px;
+      margin-top: 0.9rem;
+      padding: 0.8rem 1rem;
+      border-radius: var(--field-radius);
       background: rgba(16, 33, 31, 0.78);
       border: 1px solid rgba(217, 236, 232, 0.35);
       text-align: center;
+      width: var(--panel-width);
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 640px) {
+      .register-screen {
+        justify-content: center;
+        padding-bottom: max(5.5rem, 12vh);
+      }
+
+      .title {
+        margin-bottom: 1.5rem;
+        transform: none;
+      }
+
+      .login-button {
+        position: static;
+        width: var(--panel-width);
+        max-width: 100%;
+      }
     }
 
     @media (max-width: 760px) {

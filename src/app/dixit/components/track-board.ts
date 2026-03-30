@@ -8,13 +8,22 @@ import {
   SimpleChanges,
 } from '@angular/core';
 
-type TrackCellTone = 'normal' | 'gold' | 'pink' | 'blue' | 'goal';
+type TrackCellTone =
+  | 'normal'
+  | 'gold'
+  | 'pink'
+  | 'blue'
+  | 'goal'
+  | 'wildcard'
+  | 'event-back'
+  | 'event-forward';
 
 interface TrackCell {
   index: number;
   x: number;
   y: number;
   tone: TrackCellTone;
+  badge?: string;
 }
 
 interface TrackPoint {
@@ -46,12 +55,16 @@ export interface TrackBoardToken {
   standalone: true,
   template: `
     <article class="board-panel">
-      <header class="board-header">
-        <h2>{{ title }}</h2>
-        @if (subtitle) {
-          <p>{{ subtitle }}</p>
-        }
-      </header>
+      @if (title || subtitle) {
+        <header class="board-header">
+          @if (title) {
+            <h2>{{ title }}</h2>
+          }
+          @if (subtitle) {
+            <p>{{ subtitle }}</p>
+          }
+        </header>
+      }
 
       <div class="track-board">
         @for (cell of boardCells; track cell.index) {
@@ -61,10 +74,16 @@ export interface TrackBoardToken {
             [class.gold]="cell.tone === 'gold'"
             [class.pink]="cell.tone === 'pink'"
             [class.blue]="cell.tone === 'blue'"
+            [class.wildcard]="cell.tone === 'wildcard'"
+            [class.event-back]="cell.tone === 'event-back'"
+            [class.event-forward]="cell.tone === 'event-forward'"
             [style.left.%]="cell.x"
             [style.top.%]="cell.y"
           >
-            {{ cell.index + 1 }}
+            <span class="cell-number">{{ cell.index + 1 }}</span>
+            @if (cell.badge) {
+              <span class="cell-badge" aria-hidden="true">{{ cell.badge }}</span>
+            }
           </div>
         }
 
@@ -84,6 +103,10 @@ export interface TrackBoardToken {
             <img draggable="false" [src]="token.image" [alt]="'Ficha ' + token.name" />
           </button>
         }
+
+        <div class="board-overlay-slot">
+          <ng-content select="[board-overlay]"></ng-content>
+        </div>
       </div>
 
       @if (showControls) {
@@ -135,221 +158,7 @@ export interface TrackBoardToken {
       }
     </article>
   `,
-  styles: `
-    :host {
-      display: block;
-      width: 100%;
-    }
-
-    .board-panel {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 14px;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-
-    h2 {
-      margin-top: 0;
-      margin-bottom: 10px;
-    }
-
-    .board-header p {
-      margin: 0 0 10px;
-      opacity: 0.9;
-    }
-
-    .track-board {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 15 / 6;
-      border-radius: 14px;
-      overflow: hidden;
-      background:
-        radial-gradient(circle at 20% 20%, rgba(179, 231, 212, 0.32) 0%, rgba(0, 0, 0, 0) 44%),
-        radial-gradient(circle at 82% 72%, rgba(71, 126, 210, 0.28) 0%, rgba(0, 0, 0, 0) 42%),
-        linear-gradient(125deg, rgba(19, 80, 88, 0.9), rgba(14, 31, 62, 0.95));
-      border: 1px solid rgba(255, 255, 255, 0.18);
-    }
-
-    .track-cell {
-      --cell-base: #f7f8fb;
-      --cell-base-2: #e9edf4;
-      --cell-border: rgba(56, 63, 78, 0.5);
-      --cell-inset: rgba(255, 255, 255, 0.55);
-      position: absolute;
-      width: clamp(36px, 4.3vw, 54px);
-      aspect-ratio: 1;
-      transform: translate(-50%, -50%);
-      isolation: isolate;
-      overflow: hidden;
-      border-radius: 12px;
-      background:
-        linear-gradient(145deg, var(--cell-base), var(--cell-base-2)),
-        repeating-linear-gradient(
-          45deg,
-          rgba(255, 255, 255, 0.14) 0 6px,
-          rgba(0, 0, 0, 0.04) 6px 12px
-        );
-      color: #1a1f30;
-      border: 1px solid var(--cell-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: "FuenteDilana", sans-serif;
-      font-weight: 700;
-      font-size: clamp(11px, 1vw, 14px);
-      letter-spacing: 0.2px;
-      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-      box-shadow:
-        0 8px 14px rgba(0, 0, 0, 0.24),
-        inset 0 1px 0 var(--cell-inset),
-        inset 0 -3px 8px rgba(20, 24, 35, 0.15);
-      user-select: none;
-      transition:
-        transform 180ms ease,
-        filter 180ms ease,
-        box-shadow 180ms ease;
-    }
-
-    .track-cell::before {
-      content: '';
-      position: absolute;
-      inset: 4px;
-      border-radius: 8px;
-      border: 1px solid rgba(35, 44, 60, 0.2);
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .track-cell:hover {
-      transform: translate(-50%, -50%) scale(1.02);
-      filter: brightness(1.03);
-    }
-
-    .track-cell.goal {
-      --cell-base: #f3e6a0;
-      --cell-base-2: #dcc168;
-      --cell-border: rgba(102, 79, 15, 0.58);
-      --cell-inset: rgba(255, 250, 216, 0.62);
-    }
-
-    .track-cell.gold {
-      --cell-base: #f6d8b4;
-      --cell-base-2: #ebb67f;
-      --cell-border: rgba(130, 76, 28, 0.52);
-      --cell-inset: rgba(255, 236, 214, 0.62);
-    }
-
-    .track-cell.pink {
-      --cell-base: #f0c3ea;
-      --cell-base-2: #dd9fd5;
-      --cell-border: rgba(114, 51, 104, 0.52);
-      --cell-inset: rgba(255, 228, 250, 0.62);
-    }
-
-    .track-cell.blue {
-      --cell-base: #c2cbed;
-      --cell-base-2: #97a6da;
-      --cell-border: rgba(58, 70, 126, 0.56);
-      --cell-inset: rgba(228, 236, 255, 0.62);
-    }
-
-    .token-piece {
-      position: absolute;
-      width: clamp(20px, 2.3vw, 30px);
-      height: clamp(20px, 2.3vw, 30px);
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      padding: 0;
-      cursor: pointer;
-      transform: translate(-50%, -50%) translate(var(--offset-x, 0px), var(--offset-y, 0px));
-      transition:
-        left 300ms cubic-bezier(0.22, 1, 0.36, 1),
-        top 300ms cubic-bezier(0.22, 1, 0.36, 1),
-        transform 180ms ease,
-        filter 180ms ease;
-      z-index: 4;
-    }
-
-    .token-piece img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      border-radius: 999px;
-      border: 2px solid rgba(255, 255, 255, 0.92);
-      box-shadow: 0 2px 9px rgba(0, 0, 0, 0.34);
-    }
-
-    .token-piece.active {
-      z-index: 6;
-      transform: translate(-50%, -50%) translate(var(--offset-x, 0px), var(--offset-y, 0px))
-        scale(1.1);
-      filter: brightness(1.05);
-    }
-
-    .token-piece.moving {
-      z-index: 7;
-    }
-
-    .board-controls {
-      margin-top: 10px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .token-selector,
-    .move-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: 0;
-      border-radius: 999px;
-      padding: 9px 14px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    button:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
-
-    .token-selector button {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      background: rgba(255, 255, 255, 0.17);
-      color: #fff;
-    }
-
-    .token-selector button.active {
-      background: rgba(255, 255, 255, 0.94);
-      color: #1b2430;
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      display: inline-block;
-    }
-
-    @media (max-width: 700px) {
-      .board-controls {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-    }
-  `,
+  styleUrl: './track-board.css',
 })
 export class DixitTrackBoard implements OnChanges, OnDestroy {
   private readonly stackOffsets = [
@@ -373,6 +182,9 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
   @Input() showControls = true;
   @Input() interactive = true;
   @Input() cellPath: TrackPoint[] | null = null;
+  @Input() wildcardCells: number[] = [];
+  @Input() eventBackCells: number[] = [];
+  @Input() eventForwardCells: number[] = [];
 
   @Output() readonly tokensChanged = new EventEmitter<TrackBoardToken[]>();
 
@@ -545,9 +357,10 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
 
     return path.map((point, index) => ({
       index,
-      x: 5 + (point.col / maxCol) * 90,
-      y: 8 + (point.row / maxRow) * 84,
+      x: 6.5 + (point.col / maxCol) * 87,
+      y: 10 + (point.row / maxRow) * 79,
       tone: this.resolveCellTone(index),
+      badge: this.resolveCellBadge(index),
     }));
   }
 
@@ -581,6 +394,15 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     if (index === 0) {
       return 'goal';
     }
+    if (this.wildcardCells.includes(index)) {
+      return 'wildcard';
+    }
+    if (this.eventBackCells.includes(index)) {
+      return 'event-back';
+    }
+    if (this.eventForwardCells.includes(index)) {
+      return 'event-forward';
+    }
     if (index % 10 === 3) {
       return 'pink';
     }
@@ -591,5 +413,19 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       return 'blue';
     }
     return 'normal';
+  }
+
+  private resolveCellBadge(index: number): string | undefined {
+    if (this.wildcardCells.includes(index)) {
+      return '*';
+    }
+    if (this.eventBackCells.includes(index)) {
+      return '<<';
+    }
+    if (this.eventForwardCells.includes(index)) {
+      return '>>';
+    }
+
+    return undefined;
   }
 }

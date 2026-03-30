@@ -32,57 +32,101 @@ describe('Dixit', () => {
     component = fixture.componentInstance;
   });
 
-  it('should create', fakeAsync(() => {
+  it('should create and load the room id', fakeAsync(() => {
     fixture.detectChanges();
     tick();
 
     expect(component).toBeTruthy();
     expect(component.id).toBe('A1B2');
-
-    component.ngOnDestroy();
+    expect(component.phase).toBe('hand');
   }));
 
-  it('transitions from hand to choice and then to points', fakeAsync(() => {
+  it('selects a hand card when dropped into the board zone', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardDragStart(component.cards[1]);
+    component.onDropZoneDrop(createDragDropEvent('KH'));
+
+    expect(component.selectedHandCardCode).toBe('KH');
+
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Seleccionada: KH');
+  }));
+
+  it('progresses through the simulated websocket flow', fakeAsync(() => {
     fixture.detectChanges();
     tick();
 
     component.onHandCardSelected(component.cards[0]);
-    component.continueFromHandPhase();
-    tick(component.phaseTransitionDurationMs);
+    component.simulateChoicePhaseOpened();
 
     expect(component.phase).toBe('choice');
 
-    component.onChoiceConfirmed(component.choiceCards[1]);
-    tick(component.phaseTransitionDurationMs);
+    component.onChoiceCardSelected(component.choiceCards[1]);
+    component.submitVoteSelection();
+    component.simulatePointsPhaseOpened();
 
     expect(component.phase).toBe('points');
-    expect(component.pointsWaitingVotes).toBeTrue();
+    expect(component.pointsStage).toBe('waiting');
+    expect(component.pointsVotesReceived).toBe(1);
 
-    component.ngOnDestroy();
+    component.simulateAllVotesReceived();
+    component.simulateResultsReveal();
+
+    expect(component.pointsStage).toBe('reveal');
+    expect(component.pointsRevealedCards.length).toBeGreaterThan(0);
+
+    component.simulateRankingShown();
+
+    expect(component.pointsStage).toBe('ranking');
+    expect(component.pointsRanking.length).toBeGreaterThan(0);
   }));
 
-  it('prepares the next round after showing the ranking', fakeAsync(() => {
+  it('advances automatically from reveal to ranking after 3 seconds', fakeAsync(() => {
     fixture.detectChanges();
     tick();
 
     component.onHandCardSelected(component.cards[0]);
-    component.continueFromHandPhase();
-    tick(component.phaseTransitionDurationMs);
+    component.simulateChoicePhaseOpened();
+    component.onChoiceCardSelected(component.choiceCards[1]);
+    component.submitVoteSelection();
+    component.simulatePointsPhaseOpened();
+    component.simulateAllVotesReceived();
 
-    component.onChoiceConfirmed(component.choiceCards[1]);
-    tick(component.phaseTransitionDurationMs);
+    const positionsBeforeReveal = component.boardTokens.map((token) => token.position);
 
-    component.onPointsSkipWaitingRequested();
-    component.onPointsRankingRequested();
+    component.simulateResultsReveal();
+
+    expect(component.pointsStage).toBe('reveal');
+
+    tick(3000);
+
+    expect(component.pointsStage).toBe('ranking');
+    expect(component.boardTokens.map((token) => token.position)).not.toEqual(positionsBeforeReveal);
+  }));
+
+  it('prepares the next round from the ranking state', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardSelected(component.cards[0]);
+    component.simulateChoicePhaseOpened();
+    component.onChoiceCardSelected(component.choiceCards[1]);
+    component.submitVoteSelection();
+    component.simulatePointsPhaseOpened();
+    component.simulateAllVotesReceived();
+    component.simulateResultsReveal();
+    component.simulateRankingShown();
+
     component.prepareNextRound();
-    tick(component.phaseTransitionDurationMs);
 
     expect(component.phase).toBe('hand');
     expect(component.roundNumber).toBe(2);
     expect(component.selectedHandCardCode).toBe('');
     expect(component.selectedChoiceCardCode).toBe('');
-
-    component.ngOnDestroy();
+    expect(component.voteSubmitted).toBeFalse();
   }));
 });
 
@@ -107,4 +151,13 @@ function createCardsFixture(): DeckCard[] {
       suit: 'DIAMONDS',
     },
   ];
+}
+
+function createDragDropEvent(cardCode: string): DragEvent {
+  return {
+    preventDefault: () => undefined,
+    dataTransfer: {
+      getData: () => cardCode,
+    },
+  } as unknown as DragEvent;
 }

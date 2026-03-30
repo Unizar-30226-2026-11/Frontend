@@ -15,6 +15,12 @@ class TestHome {}
 })
 class TestStore {}
 
+@Component({
+  standalone: true,
+  template: '<p>dixit</p>',
+})
+class TestDixit {}
+
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -23,6 +29,7 @@ describe('App', () => {
         provideRouter([
           { path: '', component: TestHome },
           { path: 'store', component: TestStore },
+          { path: 'dixit/:id', component: TestDixit },
         ]),
       ],
     }).compileComponents();
@@ -52,5 +59,15 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('app-navigation-bar')).toBeTruthy();
+  });
+
+  it('should hide the navigation bar on dixit routes', async () => {
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/dixit/demo-room');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('app-navigation-bar')).toBeNull();
   });
 });

@@ -71,4 +71,29 @@ describe('Register', () => {
 
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/login']);
   }));
+
+  it('shows the duplicate-user error returned during registration', fakeAsync(() => {
+    authSpy.register.and.rejectWith(new Error('El usuario ya existe'));
+
+    component.registerForm.setValue({
+      email: 'tester@example.com',
+      username: 'tester',
+      password: 'abc123',
+      confirmPassword: 'abc123',
+    });
+
+    void component.onSubmit();
+    flushMicrotasks();
+
+    expect(component.error).toBe('El usuario ya existe');
+    expect(component.successMessage).toBeNull();
+    expect(component.isRedirecting).toBeFalsy();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  }));
+
+  it('navigates to login when clicking the existing-account button', () => {
+    component.goLogin();
+
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/login']);
+  });
 });
