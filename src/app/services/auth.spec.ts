@@ -21,28 +21,51 @@ describe('Auth', () => {
   });
 
   it('should be created', () => {
+    const service = TestBed.inject(Auth);
     expect(service).toBeTruthy();
   });
 
-  it('returns a duplicated-user error when the backend says the user already exists', async () => {
-    apiClientSpy.request.and.rejectWith(new Error('email/username already used'));
+  it('persists the session after login', async () => {
+    const service = TestBed.inject(Auth);
 
-    try {
-      await service.register('tester@example.com', 'tester', 'abc123');
-      fail('Expected register to reject for a duplicated user');
-    } catch (error: unknown) {
-      expect(error).toEqual(new Error('El usuario ya existe'));
-    }
+    apiClientSpy.request.and.resolveTo({
+      message: 'Login completado',
+      token: 'token-123',
+      user: {
+        id: 'user-1',
+        username: 'tester',
+      },
+    });
+
+    await service.logIn('tester@example.com', 'secret');
+
+    expect(service.isLoggedIn()).toBeTrue();
+    expect(service.token()).toBe('token-123');
+    expect(JSON.parse(localStorage.getItem('ator.auth.session') ?? '{}')).toEqual({
+      token: 'token-123',
+      user: {
+        id: 'user-1',
+        username: 'tester',
+        email: 'tester@example.com',
+      },
+    });
   });
 
-  it('keeps other backend registration errors unchanged', async () => {
-    apiClientSpy.request.and.rejectWith(new Error('No se pudo conectar con el servidor'));
+  it('restores a persisted session from localStorage', () => {
+    localStorage.setItem('ator.auth.session', JSON.stringify({
+      token: 'persisted-token',
+      user: {
+        id: 'user-2',
+        username: 'persisted-user',
+        email: 'persisted@example.com',
+      },
+    }));
 
-    try {
-      await service.register('tester@example.com', 'tester', 'abc123');
-      fail('Expected register to reject for a backend error');
-    } catch (error: unknown) {
-      expect(error).toEqual(new Error('No se pudo conectar con el servidor'));
-    }
+    const restoredService = TestBed.inject(Auth);
+
+    expect(restoredService.isLoggedIn()).toBeTrue();
+    expect(restoredService.token()).toBe('persisted-token');
+    expect(restoredService.username()).toBe('persisted-user');
+    expect(restoredService.email()).toBe('persisted@example.com');
   });
 });

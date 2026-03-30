@@ -23,6 +23,7 @@ export class DecksPull {
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(Auth);
   private readonly defaultImage = '/assets/Tablero.png';
+  private readonly blockedStoreKeywords = ['comodin', 'wildcard', 'joker'];
 
   getStoreCatalog(options: { forceRefresh?: boolean } = {}): Promise<StoreCatalogResponse> {
     const token = this.requireToken();
@@ -37,7 +38,7 @@ export class DecksPull {
         token,
         ttlMs: 20_000,
         forceRefresh: options.forceRefresh,
-      }),
+      }).catch(() => this.buildEmptyInventory()),
     ]).then(([shopResponse, inventoryResponse]) => ({
       items: this.toStoreItems(shopResponse.items, inventoryResponse),
       inventory: inventoryResponse,
@@ -67,14 +68,16 @@ export class DecksPull {
   private toStoreItems(items: ShopItemApi[], inventory: UserInventoryResponse): StoreItem[] {
     const ownedIds = this.extractOwnedIds(inventory);
 
-    return items.map((item) => ({
-      id: item.id,
-      type: item.type,
-      name: item.name,
-      price: item.price,
-      image: this.resolveItemImage(item),
-      owned: ownedIds.has(item.id),
-    }));
+    return items
+      .filter((item) => !this.isBlockedStoreItem(item))
+      .map((item) => ({
+        id: item.id,
+        type: item.type,
+        name: item.name,
+        price: item.price,
+        image: this.resolveItemImage(item),
+        owned: ownedIds.has(item.id),
+      }));
   }
 
   private extractOwnedIds(inventory: UserInventoryResponse): Set<string> {
@@ -106,6 +109,27 @@ export class DecksPull {
     }
 
     return this.defaultImage;
+  }
+
+  private buildEmptyInventory(): UserInventoryResponse {
+    return {
+      inventory: {
+        inventory: [],
+      },
+    };
+  }
+
+  private isBlockedStoreItem(item: ShopItemApi): boolean {
+    const searchableValue = this.normalizeStoreValue(`${item.id} ${item.type} ${item.name}`);
+    return this.blockedStoreKeywords.some((keyword) => searchableValue.includes(keyword));
+  }
+
+  private normalizeStoreValue(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
   }
 
   private requireToken(): string {

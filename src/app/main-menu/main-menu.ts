@@ -382,7 +382,7 @@ export class MainMenu implements OnInit {
       { length: Math.max(lobby.maxPlayers - occupiedSlots.length, 0) },
       (_, index) => ({
         slotId: occupiedSlots.length + index + 1,
-        name: 'slot libre',
+        name: '',
         state: 'abierto',
       })
     );

@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { Profile } from './profile';
 import { Auth } from '../services/auth';
 import { PlayerStore } from '../services/player-store';
-import { PlayerInfo } from '../interfaces/player-info';
+import { PlayerInfo, PlayerPresenceStatus } from '../interfaces/player-info';
 
 describe('Profile', () => {
   let component: Profile;
@@ -14,6 +14,8 @@ describe('Profile', () => {
     loading: ReturnType<typeof signal<boolean>>;
     error: ReturnType<typeof signal<string | null>>;
     loadPlayer: jasmine.Spy;
+    updateUsername: jasmine.Spy;
+    updateStatus: jasmine.Spy;
   };
   let authMock: {
     isLoggedIn: jasmine.Spy;
@@ -25,6 +27,8 @@ describe('Profile', () => {
       loading: signal(false),
       error: signal<string | null>(null),
       loadPlayer: jasmine.createSpy('loadPlayer').and.resolveTo(),
+      updateUsername: jasmine.createSpy('updateUsername').and.resolveTo('Nombre actualizado'),
+      updateStatus: jasmine.createSpy('updateStatus').and.resolveTo('Estado actualizado'),
     };
 
     authMock = {
@@ -58,7 +62,7 @@ describe('Profile', () => {
       email: 'tester@example.com',
       experienceLevel: 7,
       progressLevel: 45,
-      state: 'online',
+      state: 'ONLINE',
       personalState: 'ready',
       balance: 250,
     });
@@ -70,5 +74,60 @@ describe('Profile', () => {
     expect(text).toContain('USER_ID');
     expect(text).toContain('12');
     expect(text).toContain('tester@example.com');
+    expect(text).toContain('Online');
+  });
+
+  it('submits the updated username from the profile page', async () => {
+    playerStoreMock.player.set(createPlayer());
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('#profile-username');
+    input.value = 'new_tester';
+    input.dispatchEvent(new Event('input'));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.saveUsername();
+    fixture.detectChanges();
+
+    expect(playerStoreMock.updateUsername).toHaveBeenCalledOnceWith('new_tester');
+    expect(fixture.nativeElement.textContent as string).toContain('Nombre actualizado');
+  });
+
+  it('submits the updated player status from the profile page', async () => {
+    playerStoreMock.player.set(createPlayer());
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('#profile-status');
+    select.value = 'BUSY';
+    select.dispatchEvent(new Event('change'));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.saveStatus();
+    fixture.detectChanges();
+
+    expect(playerStoreMock.updateStatus).toHaveBeenCalledOnceWith('BUSY');
+    expect(fixture.nativeElement.textContent as string).toContain('Estado actualizado');
   });
 });
+
+function createPlayer(state: PlayerPresenceStatus = 'ONLINE'): PlayerInfo {
+  return {
+    id: 'u_12',
+    legacyUserId: 12,
+    username: 'tester',
+    email: 'tester@example.com',
+    experienceLevel: 7,
+    progressLevel: 45,
+    state,
+    personalState: 'ready',
+    balance: 250,
+  };
+}

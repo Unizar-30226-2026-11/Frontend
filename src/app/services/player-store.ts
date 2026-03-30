@@ -1,11 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { PlayerInfo } from '../interfaces/player-info';
+import { PlayerInfo, PlayerPresenceStatus } from '../interfaces/player-info';
+import { Auth } from './auth';
 import { PlayerInfoPull } from './player-info-pull';
 
 @Injectable({
   providedIn: 'root',
 })
 export class PlayerStore {
+  private readonly auth = inject(Auth);
   private readonly playerInfoPull = inject(PlayerInfoPull);
 
   player = signal<PlayerInfo | null>(null);
@@ -70,6 +72,42 @@ export class PlayerStore {
     };
     this.player.set(updatedPlayer);
     this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
+  }
+
+  async updateUsername(username: string): Promise<string> {
+    const currentPlayer = this.player();
+    if (!currentPlayer) {
+      throw new Error('No hay un jugador cargado para actualizar el nombre');
+    }
+
+    const nextUsername = username.trim();
+    const message = await this.playerInfoPull.updateUsername(nextUsername);
+    const updatedPlayer: PlayerInfo = {
+      ...currentPlayer,
+      username: nextUsername,
+    };
+
+    this.player.set(updatedPlayer);
+    this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
+    this.auth.updateSessionUser(nextUsername);
+    return message;
+  }
+
+  async updateStatus(status: PlayerPresenceStatus): Promise<string> {
+    const currentPlayer = this.player();
+    if (!currentPlayer) {
+      throw new Error('No hay un jugador cargado para actualizar el estado');
+    }
+
+    const message = await this.playerInfoPull.updateStatus(status);
+    const updatedPlayer: PlayerInfo = {
+      ...currentPlayer,
+      state: status,
+    };
+
+    this.player.set(updatedPlayer);
+    this.playerInfoPull.savePlayerInfoToCache(updatedPlayer);
+    return message;
   }
 
   clearPlayer(): void {

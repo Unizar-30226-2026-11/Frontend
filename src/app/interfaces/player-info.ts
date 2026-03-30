@@ -1,3 +1,7 @@
+export const PLAYER_PRESENCE_STATUSES = ['ONLINE', 'AWAY', 'BUSY', 'INVISIBLE'] as const;
+
+export type PlayerPresenceStatus = (typeof PLAYER_PRESENCE_STATUSES)[number];
+
 export interface UserProfileApi {
   id_user: number;
   username: string;
@@ -19,6 +23,18 @@ export interface UserBalanceResponse {
   };
 }
 
+export interface UpdateUsernamePayload {
+  username: string;
+}
+
+export interface UpdateStatusPayload {
+  status: PlayerPresenceStatus;
+}
+
+export interface PlayerMutationResponse {
+  message?: unknown;
+}
+
 export type InventoryEntryApi = string | { id?: string; itemId?: string; name?: string; type?: string };
 
 export interface UserInventoryResponse {
@@ -34,7 +50,7 @@ export interface PlayerInfo {
   email: string;
   experienceLevel: number;
   progressLevel: number;
-  state: string;
+  state: PlayerPresenceStatus;
   personalState: string;
   balance: number;
 }

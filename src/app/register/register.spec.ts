@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { Register } from './register';
 import { Auth } from '../services/auth';
+import { RegisterForm } from './components/register-form/register-form';
 
 describe('Register', () => {
   let component: Register;
@@ -40,31 +42,21 @@ describe('Register', () => {
     expect(component).toBeTruthy();
   });
 
-  it('shows an error when passwords do not match', () => {
-    component.registerForm.setValue({
-      email: 'tester@example.com',
-      username: 'tester',
-      password: 'abc123',
-      confirmPassword: 'xyz789',
-    });
+  it('passes register state down to the register form', () => {
+    component.error = 'Error de prueba';
+    component.submitting = true;
+    component.isRedirecting = false;
+    fixture.detectChanges();
 
-    void component.onSubmit();
+    const registerForm = fixture.debugElement.query(By.directive(RegisterForm)).componentInstance as RegisterForm;
 
-    expect(component.error).toBe('Las contrasenas no coinciden');
-    expect(component.successMessage).toBeNull();
-    expect(authSpy.register).not.toHaveBeenCalled();
-    expect(routerSpy.navigate).not.toHaveBeenCalled();
+    expect(registerForm.submitting).toBeTrue();
+    expect(registerForm.errorMessage).toBe('Error de prueba');
+    expect(registerForm.register).toBe(component.registerUser);
   });
 
   it('shows success feedback before redirecting to login', fakeAsync(() => {
-    component.registerForm.setValue({
-      email: 'tester@example.com',
-      username: 'tester',
-      password: 'abc123',
-      confirmPassword: 'abc123',
-    });
-
-    void component.onSubmit();
+    void component.registerUser('tester@example.com', 'tester', 'abc123');
     flushMicrotasks();
 
     expect(component.error).toBeNull();

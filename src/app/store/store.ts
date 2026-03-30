@@ -29,7 +29,7 @@ import { StoreItem } from '../interfaces/store-item';
             <span>{{ player.balance }}</span>
           </div>
           <p>Nivel: {{ player.experienceLevel }}</p>
-          <p>Estado: {{ player.state }}</p>
+          <p>Estado: {{ formatPlayerStatus(player.state) }}</p>
           <button type="button" (click)="reloadPlayer()">Actualizar datos</button>
         </article>
       }
@@ -188,6 +188,20 @@ export class Store {
   constructor() {
     this.ensurePlayerLoaded();
     this.ensureCatalogLoaded();
+  }
+
+  formatPlayerStatus(status: string): string {
+    switch (status.trim().toUpperCase()) {
+      case 'AWAY':
+        return 'Ausente';
+      case 'BUSY':
+        return 'Ocupado';
+      case 'INVISIBLE':
+        return 'Invisible';
+      case 'ONLINE':
+      default:
+        return 'Online';
+    }
   }
 
   private ensurePlayerLoaded(): void {

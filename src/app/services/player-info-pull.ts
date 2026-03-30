@@ -1,6 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import {
   PlayerInfo,
+  PlayerPresenceStatus,
+  UpdateStatusPayload,
+  UpdateUsernamePayload,
   UserBalanceResponse,
   UserProfileApi,
   UserProfileResponse,
@@ -32,6 +35,38 @@ export class PlayerInfoPull {
     ]).then(([profileResponse, balanceResponse]) =>
       this.normalizePlayer(profileResponse.profile, balanceResponse.balance.balance)
     );
+  }
+
+  async updateUsername(username: string): Promise<string> {
+    const token = this.requireToken();
+    const payload: UpdateUsernamePayload = {
+      username: username.trim(),
+    };
+
+    const response = await this.apiClient.request<unknown>('/users/profile', {
+      method: 'PUT',
+      token,
+      body: payload,
+      useCache: false,
+    });
+
+    this.apiClient.invalidateCache('/users/profile');
+    return this.extractMutationMessage(response, 'Nombre de usuario actualizado');
+  }
+
+  async updateStatus(status: PlayerPresenceStatus): Promise<string> {
+    const token = this.requireToken();
+    const payload: UpdateStatusPayload = { status };
+
+    const response = await this.apiClient.request<unknown>('/users/status', {
+      method: 'PATCH',
+      token,
+      body: payload,
+      useCache: false,
+    });
+
+    this.apiClient.invalidateCache('/users/profile');
+    return this.extractMutationMessage(response, 'Estado actualizado');
   }
 
   savePlayerInfoToCache(playerInfo: PlayerInfo): void {
@@ -78,10 +113,35 @@ export class PlayerInfoPull {
       email: profile.email,
       experienceLevel: profile.exp_level,
       progressLevel: profile.progress_level,
-      state: profile.state,
+      state: this.normalizePresenceStatus(profile.state),
       personalState: profile.personal_state,
       balance,
     };
+  }
+
+  private extractMutationMessage(response: unknown, fallback: string): string {
+    if (typeof response === 'object' && response !== null && 'message' in response) {
+      const candidate = response as { message?: unknown };
+      if (typeof candidate.message === 'string' && candidate.message.trim().length > 0) {
+        return candidate.message;
+      }
+    }
+
+    return fallback;
+  }
+
+  private normalizePresenceStatus(status: string): PlayerPresenceStatus {
+    switch (status.trim().toUpperCase()) {
+      case 'AWAY':
+        return 'AWAY';
+      case 'BUSY':
+        return 'BUSY';
+      case 'INVISIBLE':
+        return 'INVISIBLE';
+      case 'ONLINE':
+      default:
+        return 'ONLINE';
+    }
   }
 
   private requireToken(): string {

@@ -49,9 +49,9 @@ describe('Store', () => {
     decksPullSpy.getStoreCatalog.and.resolveTo({
       items: [
         {
-          id: 'item_wildcard_001',
+          id: 'item_deck_001',
           type: 'card',
-          name: 'Comodin de ataque',
+          name: 'Mazo Aurora',
           price: 300,
           image: '/assets/Tablero.png',
           owned: false,
@@ -102,27 +102,25 @@ describe('Store', () => {
 
   it('shows purchase success feedback and updates the balance', async () => {
     decksPullSpy.buyDeck.and.resolveTo({
-      itemId: 'item_wildcard_001',
-      message: "Has comprado 'Comodin de ataque' exitosamente.",
+      itemId: 'item_deck_001',
+      message: "Has comprado 'Mazo Aurora' exitosamente.",
       remainingCoins: 500,
     });
 
-    await component.buyDeck('item_wildcard_001');
+    await component.buyDeck('item_deck_001');
     fixture.detectChanges();
 
-    expect(component.purchaseMessage()).toBe("Has comprado 'Comodin de ataque' exitosamente.");
+    expect(component.purchaseMessage()).toBe("Has comprado 'Mazo Aurora' exitosamente.");
     expect(component.purchaseError()).toBeNull();
     expect(component.decks()[0].owned).toBeTrue();
     expect(playerStoreMock.updateBalance).toHaveBeenCalledWith(500);
-    expect(fixture.nativeElement.textContent).toContain(
-      "Has comprado 'Comodin de ataque' exitosamente."
-    );
+    expect(fixture.nativeElement.textContent).toContain("Has comprado 'Mazo Aurora' exitosamente.");
   });
 
   it('shows purchase error feedback when the API rejects the transaction', async () => {
     decksPullSpy.buyDeck.and.rejectWith(new Error('Saldo insuficiente.'));
 
-    await component.buyDeck('item_wildcard_001');
+    await component.buyDeck('item_deck_001');
     fixture.detectChanges();
 
     expect(component.purchaseMessage()).toBeNull();
