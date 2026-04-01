@@ -1,14 +1,40 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 
 import { Games } from './games';
+import { Auth } from '../services/auth';
+import { GamesPull } from '../services/games-pull';
 
 describe('Games', () => {
   let component: Games;
   let fixture: ComponentFixture<Games>;
+  let gamesPullSpy: jasmine.SpyObj<GamesPull>;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
+    gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGames', 'createLobby']);
+    gamesPullSpy.getGames.and.resolveTo([]);
+    gamesPullSpy.createLobby.and.resolveTo({
+      message: 'Sala creada',
+      lobbyCode: 'A1B2',
+      route: '/games/A1B2',
+    });
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
+    routerSpy.navigateByUrl.and.resolveTo(true);
+
     await TestBed.configureTestingModule({
-      imports: [Games]
+      imports: [Games],
+      providers: [
+        { provide: GamesPull, useValue: gamesPullSpy },
+        { provide: Router, useValue: routerSpy },
+        {
+          provide: Auth,
+          useValue: {
+            isLoggedIn: () => true,
+            token: () => 'token-123',
+          },
+        },
+      ],
     })
     .compileComponents();
 
@@ -19,5 +45,21 @@ describe('Games', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('creates a classic lobby and navigates to it', async () => {
+    component.createLobbyName = 'Sala de prueba';
+    component.createLobbyMaxPlayers = 5;
+    component.createLobbyPrivate = true;
+
+    await component.submitCreateLobby();
+
+    expect(gamesPullSpy.createLobby).toHaveBeenCalledOnceWith({
+      name: 'Sala de prueba',
+      maxPlayers: 5,
+      engine: 'Classic',
+      isPrivate: true,
+    });
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledOnceWith('/games/A1B2');
   });
 });

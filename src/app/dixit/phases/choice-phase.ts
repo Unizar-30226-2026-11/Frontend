@@ -5,175 +5,203 @@ import { DeckCard } from '../../services/card-pull';
   selector: 'app-dixit-choice-phase',
   standalone: true,
   template: `
-    <div class="choice-phase">
+    <section class="phase-stage-screen choice-stage-screen">
+      <div class="phase-stage-header">
+        <div class="phase-stage-copy">
+          <p class="overlay-label">Votacion</p>
+          <h2>{{ currentClue || 'Pista pendiente' }}</h2>
+          <p>
+            @if (selectedCard) {
+              Has elegido {{ selectedCard.code }}. Puedes cambiarla antes de confirmar.
+            } @else {
+              Elige una carta para votar y confirma tu decision.
+            }
+          </p>
+        </div>
 
-      <!-- Falta aquí poner la frase de la ronda actual. -->
-      <!-- <h2 class="round-title">{{ roundTitle }}</h2> -->
+        @if (voteSubmitted) {
+          <span class="status-pill">Voto confirmado</span>
+        }
+      </div>
 
-      <div class="choice-grid">
+      <div class="choice-stage-grid">
         @for (card of cards; track card.code) {
           <button
             type="button"
-            class="choice-card"
-            [class.selected]="card.code === getActiveSelectedCode()"
-            (click)="selectCard(card)"
+            class="vote-card stage-vote-card"
+            [class.selected]="card.code === selectedCardCode"
+            [class.locked]="voteSubmitted"
+            (click)="cardSelected.emit(card)"
           >
-            <img draggable="false" [src]="card.image" [alt]="card.value + ' de ' + card.suit" />
+            <img
+              draggable="false"
+              [src]="card.image"
+              [alt]="card.value + ' de ' + card.suit"
+            />
           </button>
         }
       </div>
-      <div class="confirm-section">
-        @if(getActiveSelectedCode()) {
-          <button type="button" class="confirm-button" (click)="confirmChoice()">
-            Confirmar
-          </button>
-        } @else {
-          <p>Selecciona una carta para confirmar tu elección</p>
-        }
+
+      <div class="phase-stage-footer">
+        <p>
+          @if (selectedCard) {
+            Tu voto actual es {{ selectedCard.code }}.
+          } @else {
+            Selecciona una de las cartas para continuar.
+          }
+        </p>
+
+        <button
+          type="button"
+          class="sidebar-action"
+          [disabled]="!selectedCardCode || voteSubmitted"
+          (click)="voteSubmitRequested.emit()"
+        >
+          Confirmar voto
+        </button>
       </div>
-    </div>
+    </section>
   `,
   styles: `
     :host {
-      display: flex;
-      flex: 1;
-      min-height: 0;
-      width: 100%;
+      display: block;
     }
 
-    .confirm-section {
-      margin-top: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    p {
-      /* 1. Fijamos el tamaño EXACTO para que el fondo ocupe el mismo espacio de siempre */
-      width: 379.14px;
-      height: 35px;
-      box-sizing: border-box; /* Garantiza que nada sume píxeles extra a tus medidas */
-
-      /* 2. Usamos Flexbox para que la letra flote en el centro de ese tamaño fijo */
-      display: flex;
-      align-items: center; /* Centra en vertical */
-      justify-content: center; /* Centra en horizontal */
-
-      /* 3. Quitamos el padding asimétrico (la zona verde) porque el tamaño ya lo da el width/height */
-      padding: 0;
+    .overlay-label {
       margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.72rem;
+      color: rgba(250, 233, 191, 0.84);
     }
 
-    .choice-phase {
-      flex: 1;
-      min-height: 0;
+    h2 {
+      margin: 0;
+      font-family: "FuenteDilana", sans-serif;
+      font-size: clamp(1.7rem, 2.8vw, 2.5rem);
+      line-height: 1.05;
+      color: #fff6d7;
+    }
+
+    .phase-stage-screen {
       width: 100%;
-      flex-direction: column;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /*padding: 12px; */
-      padding-top: 12px;
+      padding: 20px 22px;
+      border-radius: 28px;
+      display: grid;
+      gap: 18px;
+      background:
+        radial-gradient(circle at top left, rgba(255, 226, 158, 0.16), transparent 28%),
+        linear-gradient(145deg, rgba(8, 20, 29, 0.76), rgba(14, 42, 68, 0.84));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+      box-sizing: border-box;
     }
 
-    .choice-grid {
-      width: min(2000px, 100%);
+    .phase-stage-header,
+    .phase-stage-footer {
       display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
       flex-wrap: wrap;
-      justify-content: center;
-      align-items: center;
-      gap: 10px;
     }
 
-    .choice-card {
-      width: 200px;
-      max-width: 400px;
-      flex-shrink: 0;
+    .phase-stage-copy {
+      display: grid;
+      gap: 8px;
+      max-width: 48rem;
+    }
+
+    .phase-stage-copy p,
+    .phase-stage-footer p {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.88);
+      line-height: 1.52;
+    }
+
+    .choice-stage-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+      gap: 16px;
+      align-content: start;
+    }
+
+    .vote-card {
       appearance: none;
       background: transparent;
       border: 0;
       padding: 0;
-      margin: 0;
+      border-radius: 18px;
       cursor: pointer;
-      border-radius: 14px;
-      min-width: 0;
-      position: relative;
-      z-index: 0;
-      transform-origin: center center;
-      transition:
-        transform 160ms ease,
-        box-shadow 160ms ease,
-        filter 160ms ease;
-      box-shadow: none;
-      
+      transition: transform 160ms ease, box-shadow 160ms ease;
     }
 
-    .choice-card img {
+    .vote-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .vote-card.selected {
+      box-shadow: 0 0 0 4px rgba(255, 196, 63, 0.88);
+    }
+
+    .vote-card img {
       width: 100%;
-      height: auto;
       display: block;
-      border-radius: 14px;
+      border-radius: 18px;
     }
 
-    .choice-grid:hover .choice-card {
-      filter: saturate(0.94);
+    .stage-vote-card {
+      margin-top: 10px;
+      display: block;
+      width: 100%;
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
     }
 
-    .choice-card:hover {
-      transform: scale(1.035);
-      z-index: 2;
-      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-      filter: none !important;
+    .stage-vote-card.locked {
+      opacity: 0.96;
     }
 
-    .choice-card.selected {
-      outline: 5px solid #ffd54a;
-      outline-offset: 3px;
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(18, 121, 82, 0.14);
+      color: #d4ffe8;
+      font-weight: 700;
+      border: 1px solid rgba(96, 232, 168, 0.2);
     }
 
-    .confirm-button {
-      padding: 10px 18px;
-      /* margin-top: 20px; */
-      background: red;
+    .sidebar-action {
       border: 0;
       border-radius: 999px;
-      font-weight: 600;
+      padding: 10px 14px;
+      font-weight: 700;
       cursor: pointer;
+      background: linear-gradient(135deg, #f5d272, #ffefbc);
+      color: #18212d;
     }
 
-    @media (max-width: 760px) {
-      .choice-grid {
-        grid-template-columns: repeat(6, minmax(72px, 1fr));
-        gap: 8px;
-      }
+    .sidebar-action:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
   `,
 })
 export class DixitChoicePhase {
+  @Input() currentClue = '';
   @Input() cards: DeckCard[] = [];
   @Input() selectedCardCode = '';
-  @Output() readonly choiceConfirmed = new EventEmitter<DeckCard>();
-  private pendingSelectedCardCode = '';
+  @Input() voteSubmitted = false;
 
-  selectCard(card: DeckCard): void {
-    if (this.pendingSelectedCardCode === card.code) {
-      this.pendingSelectedCardCode = '';
-    } else {
-      this.pendingSelectedCardCode = card.code;
-    }
-  }
+  @Output() readonly cardSelected = new EventEmitter<DeckCard>();
+  @Output() readonly voteSubmitRequested = new EventEmitter<void>();
 
-  confirmChoice(): void {
-    const selectedCode = this.getActiveSelectedCode();
-    const selectedCard = this.cards.find((card) => card.code === selectedCode);
-    if (!selectedCard) {
-      return;
-    }
-
-    this.choiceConfirmed.emit(selectedCard);
-  }
-
-  getActiveSelectedCode(): string {
-    return this.pendingSelectedCardCode || this.selectedCardCode;
+  get selectedCard(): DeckCard | undefined {
+    return this.cards.find((card) => card.code === this.selectedCardCode);
   }
 }
