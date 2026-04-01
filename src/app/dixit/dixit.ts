@@ -4,6 +4,8 @@ import { CardPull } from '../services/card-pull';
 import type { DeckCard } from '../services/card-pull';
 import { DixitTrackBoard } from './components/track-board';
 import type { TrackBoardToken } from './components/track-board';
+import { DixitMinijuego1 } from './minijuegos/minijuego-1';
+import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 
 type DixitPhase = 'hand' | 'choice' | 'points';
@@ -96,7 +98,7 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
 @Component({
   selector: 'app-dixit',
   standalone: true,
-  imports: [DixitTrackBoard],
+  imports: [DixitTrackBoard, DixitMinijuego1, DixitMinijuego2],
   template: `
     <section class="dixit-table">
       <nav class="dixit-topbar" aria-label="Barra de partida">
@@ -405,6 +407,22 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
             <p class="overlay-label">Eventos simulados</p>
             <h3>Websocket</h3>
 
+            <button
+              type="button"
+              class="secondary-action sim-bonus-action"
+              (click)="openMinigame1()"
+            >
+              Simular minijuego 1
+            </button>
+
+            <button
+              type="button"
+              class="secondary-action sim-bonus-action"
+              (click)="openMinigame2()"
+            >
+              Simular minijuego 2
+            </button>
+
             <button type="button" class="secondary-action sim-bonus-action" (click)="simulateWildcardReward()">
               Simular: ganar comodin
             </button>
@@ -495,6 +513,14 @@ const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
         </article>
       </div>
     }
+
+    @if (isMinigame1Open) {
+      <app-dixit-minijuego-1 (close)="closeMinigame1()" />
+    }
+
+    @if (isMinigame2Open) {
+      <app-dixit-minijuego-2 (close)="closeMinigame2()" />
+    }
   `,
   styleUrl: './dixit.css',
 })
@@ -549,6 +575,8 @@ export class Dixit implements OnInit, OnDestroy {
   wildcards: WildcardReward[] = [];
   activeEffectPopup: BoardEffectPopup | null = null;
   isSimulationDrawerOpen = false;
+  isMinigame1Open = false;
+  isMinigame2Open = false;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingBoardTokens: TrackBoardToken[] | null = null;
@@ -689,6 +717,26 @@ export class Dixit implements OnInit, OnDestroy {
 
   closeSimulationDrawer(): void {
     this.isSimulationDrawerOpen = false;
+  }
+
+  openMinigame1(): void {
+    this.isMinigame1Open = true;
+    this.isMinigame2Open = false;
+    this.closeSimulationDrawer();
+  }
+
+  closeMinigame1(): void {
+    this.isMinigame1Open = false;
+  }
+
+  openMinigame2(): void {
+    this.isMinigame2Open = true;
+    this.isMinigame1Open = false;
+    this.closeSimulationDrawer();
+  }
+
+  closeMinigame2(): void {
+    this.isMinigame2Open = false;
   }
 
   simulateWildcardReward(): void {

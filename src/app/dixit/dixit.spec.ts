@@ -128,6 +128,17 @@ describe('Dixit', () => {
     expect(component.selectedChoiceCardCode).toBe('');
     expect(component.voteSubmitted).toBeFalse();
   }));
+
+  it('shows the minigame simulation button in the simulation drawer', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.isSimulationDrawerOpen = true;
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Simular minijuego 1');
+  }));
 });
 
 function createCardsFixture(): DeckCard[] {
