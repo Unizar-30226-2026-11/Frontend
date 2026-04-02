@@ -76,13 +76,6 @@ const PHASE_STEPS: readonly PhaseStep[] = [
   },
 ];
 
-const ROUND_CLUES = [
-  'Una mirada perdida.',
-  'El eco de un bosque dormido.',
-  'Nadie vio venir la tormenta.',
-  'La ultima luz antes del silencio.',
-] as const;
-
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3a3a', '#ffd166'] as const;
 
@@ -119,6 +112,7 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
           <div class="phase-current">
             <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
             <p>{{ currentPhaseInstruction }}</p>
+            <p class="storyteller-debug">{{ storytellerStatusText }}</p>
           </div>
           <span class="status-pill">{{ connectionStatusLabel }}</span>
         </div>
@@ -171,8 +165,10 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
               [cards]="cards"
               [selectedCardCode]="selectedHandCardCode"
               [clueDraft]="clueDraft"
+              [storytellerName]="currentStorytellerName"
               [isCurrentPlayerStoryteller]="isCurrentPlayerStoryteller"
               [handSubmitted]="handSubmitted"
+              [isStorySubmitDisabled]="isStorySubmitDisabled"
               [isHandSubmitDisabled]="isHandSubmitDisabled"
               [handSubmitButtonText]="handSubmitButtonText"
               [wildcards]="wildcards"
@@ -184,6 +180,7 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
               [chat]="handChatComposer"
               (cardSelected)="onHandCardSelected($event)"
               (clearSelectionRequested)="clearHandSelection()"
+              (storySubmitRequested)="submitStoryClue()"
               (handSubmitRequested)="submitHandSelection()"
               (clueDraftChanged)="updateClueDraft($event)"
               (wildcardUsed)="useWildcard($event)"
@@ -218,6 +215,11 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
 
             <p>Conexion: {{ connectionStatusLabel }}</p>
             <p>Ultima accion: {{ lastRealtimeAction || 'Sin eventos todavia' }}</p>
+            <p>Cuenta-cuentos: {{ currentStorytellerName || 'No resuelto todavia' }}</p>
+            <p>Storyteller ID: {{ currentStorytellerId || 'No presente en state.currentRound' }}</p>
+            <p>Claves state: {{ stateDebugKeysText }}</p>
+            <p>Claves currentRound: {{ currentRoundDebugKeysText }}</p>
+            <p>Pista actual: {{ currentClue || 'Esperando pista' }}</p>
 
             @if (chatPreview.length > 0) {
               <div class="chat-preview">
@@ -297,9 +299,10 @@ export class Dixit implements OnInit, OnDestroy {
   voteSubmitted = false;
   clueDraft = '';
   chatDraft = '';
-  currentClue: string = ROUND_CLUES[0];
+  currentClue = '';
   lastRealtimeAction = '';
   gameEnded = false;
+  storySubmitted = false;
 
   pointsVotesReceived = 0;
   pointsVotesTotal = 0;
@@ -348,6 +351,9 @@ export class Dixit implements OnInit, OnDestroy {
           return;
         }
 
+        if (!this.currentClue.trim()) {
+          this.storySubmitted = false;
+        }
         this.errorMessage = realtimeError;
         this.loading = false;
         this.cdr.detectChanges();
@@ -409,9 +415,15 @@ export class Dixit implements OnInit, OnDestroy {
 
   get currentPhaseInstruction(): string {
     if (this.phase === 'hand') {
+      if (!this.currentClue.trim()) {
+        return this.isCurrentPlayerStoryteller
+          ? 'Confirma la pista para abrir la ronda.'
+          : 'Esperando a que el cuenta-cuentos publique la pista.';
+      }
+
       return this.isCurrentPlayerStoryteller
-        ? 'Escribe la pista y envia tu carta al servidor.'
-        : 'Espera la pista y prepara tu carta para esta ronda.';
+        ? 'La pista ya esta publicada. Juega ahora tu carta.'
+        : 'La pista ya esta visible. Elige y envia tu carta.';
     }
 
     if (this.phase === 'choice') {
@@ -455,10 +467,56 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   get isCurrentPlayerStoryteller(): boolean {
-    const storytellerId = this.resolveStorytellerId(
-      this.realtime.gameState()?.state ?? {}
+    return !!this.currentStorytellerId && this.currentStorytellerId === this.currentUserId;
+  }
+
+  get currentStorytellerId(): string {
+    return this.resolveStorytellerId(this.realtime.gameState()?.state ?? {});
+  }
+
+  get currentStorytellerName(): string {
+    if (!this.currentStorytellerId) {
+      return '';
+    }
+
+    return (
+      this.playerRoster.find((player) => player.id === this.currentStorytellerId)?.name ??
+      this.currentStorytellerId
     );
-    return !!storytellerId && storytellerId === this.currentUserId;
+  }
+
+  get storytellerStatusText(): string {
+    if (!this.currentStorytellerId) {
+      return 'Cuenta-cuentos sin resolver en el state realtime.';
+    }
+
+    if (this.isCurrentPlayerStoryteller) {
+      return `Eres el cuenta-cuentos de esta ronda.`;
+    }
+
+    return `Cuenta-cuentos actual: ${this.currentStorytellerName}.`;
+  }
+
+  get stateDebugKeysText(): string {
+    const state = this.realtime.gameState()?.state ?? {};
+    const keys = Object.keys(state);
+    return keys.length > 0 ? keys.join(', ') : 'sin claves';
+  }
+
+  get currentRoundDebugKeysText(): string {
+    const currentRoundState = this.resolveCurrentRoundState(this.realtime.gameState()?.state ?? {});
+    const keys = Object.keys(currentRoundState);
+    return keys.length > 0 ? keys.join(', ') : 'sin claves';
+  }
+
+  get isStorySubmitDisabled(): boolean {
+    return (
+      !this.isCurrentPlayerStoryteller ||
+      this.realtime.connectionStatus() !== 'connected' ||
+      this.storySubmitted ||
+      !!this.currentClue.trim() ||
+      !this.clueDraft.trim()
+    );
   }
 
   get isHandSubmitDisabled(): boolean {
@@ -466,11 +524,11 @@ export class Dixit implements OnInit, OnDestroy {
       return true;
     }
 
-    return this.isCurrentPlayerStoryteller && !this.clueDraft.trim();
+    return !this.currentClue.trim();
   }
 
   get handSubmitButtonText(): string {
-    return this.isCurrentPlayerStoryteller ? 'Enviar pista y carta' : 'Jugar carta';
+    return 'Jugar carta';
   }
 
   get chatPreview() {
@@ -544,6 +602,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   private applyRealtimeGameState(update: RealtimeGameStateUpdate): void {
     const state = update.state;
+    const currentRoundState = this.resolveCurrentRoundState(state);
     const resolvedPhaseState = this.resolveRealtimePhase(state, update.lastAction);
 
     this.phase = resolvedPhaseState.phase;
@@ -554,8 +613,13 @@ export class Dixit implements OnInit, OnDestroy {
       'currentRound',
     ]) ?? this.roundNumber;
     this.currentClue =
+      this.readStringFromCandidates(currentRoundState, ['currentClue', 'clue', 'story', 'hint']) ??
       this.readStringFromCandidates(state, ['currentClue', 'clue', 'story', 'hint']) ??
-      this.currentClue;
+      '';
+    this.storySubmitted = !!this.currentClue.trim();
+    if (this.storySubmitted) {
+      this.clueDraft = this.currentClue;
+    }
     this.lastRealtimeAction = update.lastAction ?? this.lastRealtimeAction;
     this.gameEnded = (update.lastAction ?? '').toUpperCase().includes('ENDED');
 
@@ -563,9 +627,33 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
     this.applyRealtimePointsState(state);
+    this.logStorytellerResolution(state, currentRoundState, update.lastAction);
 
     this.loading = false;
     this.errorMessage = '';
+  }
+
+  private logStorytellerResolution(
+    state: Record<string, unknown>,
+    currentRoundState: Record<string, unknown>,
+    lastAction?: string
+  ): void {
+    const storytellerId = this.resolveStorytellerId(state);
+    const storytellerName =
+      this.playerRoster.find((player) => player.id === storytellerId)?.name ?? '';
+
+    console.info('[Dixit] Storyteller resolution', {
+      lobbyCode: this.id,
+      lastAction: lastAction ?? null,
+      storytellerId: storytellerId || null,
+      storytellerName: storytellerName || null,
+      currentUserId: this.currentUserId || null,
+      isCurrentPlayerStoryteller: storytellerId === this.currentUserId,
+      stateKeys: Object.keys(state),
+      currentRoundKeys: Object.keys(currentRoundState),
+      currentRound: currentRoundState,
+      currentClue: this.currentClue || null,
+    });
   }
 
   private applyRealtimePlayers(state: Record<string, unknown>): void {
@@ -733,7 +821,11 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private resolveCurrentPlayerState(state: Record<string, unknown>): Record<string, unknown> {
-    const playerEntries = this.readArrayFromCandidates(state, ['players', 'participants']);
+    const currentRoundState = this.resolveCurrentRoundState(state);
+    const playerEntries = [
+      ...this.readArrayFromCandidates(currentRoundState, ['players', 'participants']),
+      ...this.readArrayFromCandidates(state, ['players', 'participants']),
+    ];
     for (const entry of playerEntries) {
       const player = asRecord(entry);
       if (!player) {
@@ -750,8 +842,19 @@ export class Dixit implements OnInit, OnDestroy {
     return {};
   }
 
+  private resolveCurrentRoundState(state: Record<string, unknown>): Record<string, unknown> {
+    return this.readRecordFromCandidates(state, ['currentRound']) ?? {};
+  }
+
   private resolveStorytellerId(state: Record<string, unknown>): string {
+    const currentRoundState = this.resolveCurrentRoundState(state);
     return (
+      this.readStringFromCandidates(currentRoundState, [
+        'storytellerId',
+        'currentStorytellerId',
+        'narratorId',
+        'currentTurnPlayerId',
+      ]) ??
       this.readStringFromCandidates(state, [
         'storytellerId',
         'currentStorytellerId',
@@ -904,6 +1007,20 @@ export class Dixit implements OnInit, OnDestroy {
     return [];
   }
 
+  private readRecordFromCandidates(
+    source: Record<string, unknown>,
+    keys: readonly string[]
+  ): Record<string, unknown> | null {
+    for (const key of keys) {
+      const value = asRecord(source[key]);
+      if (value) {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
   onHandCardSelected(card: DeckCard): void {
     this.selectedHandCardCode = card.code;
   }
@@ -915,6 +1032,28 @@ export class Dixit implements OnInit, OnDestroy {
 
   updateClueDraft(nextClue: string): void {
     this.clueDraft = nextClue;
+  }
+
+  submitStoryClue(): void {
+    if (this.isStorySubmitDisabled) {
+      return;
+    }
+
+    const clue = this.clueDraft.trim();
+    try {
+      this.realtime.sendGameAction('SUBMIT_STORY', {
+        clue,
+        story: clue,
+        text: clue,
+      });
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar la pista';
+      return;
+    }
+
+    this.storySubmitted = true;
+    this.errorMessage = '';
   }
 
   updateChatDraft(nextDraft: string): void {
@@ -946,14 +1085,7 @@ export class Dixit implements OnInit, OnDestroy {
     };
 
     try {
-      if (this.isCurrentPlayerStoryteller) {
-        payload['clue'] = this.clueDraft.trim();
-        payload['story'] = this.clueDraft.trim();
-        payload['text'] = this.clueDraft.trim();
-        this.realtime.sendGameAction('SUBMIT_STORY', payload);
-      } else {
-        this.realtime.sendGameAction('PLAY_CARD', payload);
-      }
+      this.realtime.sendGameAction('PLAY_CARD', payload);
     } catch (error) {
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudo enviar la jugada';
@@ -1101,8 +1233,9 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRanking = [];
     this.currentRoundPlayers = [];
     this.pendingBoardTokens = null;
-    this.currentClue = ROUND_CLUES[(this.roundNumber - 1) % ROUND_CLUES.length];
+    this.currentClue = '';
     this.clueDraft = '';
+    this.storySubmitted = false;
     this.cards = this.rotateCards(this.cards);
     this.choiceCards = [...this.cards];
   }

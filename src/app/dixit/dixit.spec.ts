@@ -84,6 +84,40 @@ describe('Dixit', () => {
     expect(text).toContain('Seleccionada: KH');
   }));
 
+  it('reads the storyteller from currentRound and submits the clue separately', fakeAsync(() => {
+    realtimeSpy.gameState.and.returnValue({
+      state: {
+        currentRound: {
+          storytellerId: 'u_self',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    fixture.detectChanges();
+    tick();
+
+    component.updateClueDraft('Una pista real');
+    component.submitStoryClue();
+
+    expect(component.isCurrentPlayerStoryteller).toBeTrue();
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SUBMIT_STORY', {
+      clue: 'Una pista real',
+      story: 'Una pista real',
+      text: 'Una pista real',
+    });
+  }));
+
+  it('does not allow sending cards until a clue exists', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardSelected(component.cards[0]);
+
+    expect(component.currentClue).toBe('');
+    expect(component.isHandSubmitDisabled).toBeTrue();
+  }));
+
   it('submits the selected vote through the realtime service', fakeAsync(() => {
     fixture.detectChanges();
     tick();

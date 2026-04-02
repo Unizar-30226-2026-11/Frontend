@@ -304,9 +304,11 @@ export class DixitRealtime {
 
     socket.on('game:started', (payload: unknown) => {
       const data = asRecord(payload);
+      const wrappedData = asRecord(data?.['data']) ?? data;
+      const state = asRecord(wrappedData?.['state']);
       const lobbyCode =
-        readString(data ?? undefined, 'lobbyCode') ??
-        readString(data ?? undefined, 'code') ??
+        readString(wrappedData ?? undefined, 'lobbyCode') ??
+        readString(wrappedData ?? undefined, 'code') ??
         this.sessionState()?.lobbyCode ??
         '';
 
@@ -314,11 +316,23 @@ export class DixitRealtime {
         return;
       }
 
+      if (state) {
+        this.gameStateSignal.set({
+          state,
+          lastAction: 'GAME_STARTED',
+          receivedAt: Date.now(),
+        });
+      }
+
       this.gameStartedSignal.set({
         lobbyCode,
+        state: state ?? undefined,
         receivedAt: Date.now(),
       });
-      this.debug('event game:started', { lobbyCode });
+      this.debug('event game:started', {
+        lobbyCode,
+        hasState: !!state,
+      });
     });
   }
 

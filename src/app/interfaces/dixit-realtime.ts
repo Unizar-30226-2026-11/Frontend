@@ -45,6 +45,7 @@ export interface RealtimeGameStateUpdate {
 
 export interface RealtimeGameStarted {
   lobbyCode: string;
+  state?: Record<string, unknown>;
   receivedAt: number;
 }
 

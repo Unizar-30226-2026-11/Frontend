@@ -82,6 +82,12 @@
       font-weight: 600;
     }
 
+    .storyteller-debug {
+      width: 100%;
+      color: #ffe4a8;
+      font-size: 0.92rem;
+    }
+
     .topbar-actions {
       display: inline-flex;
       align-items: center;

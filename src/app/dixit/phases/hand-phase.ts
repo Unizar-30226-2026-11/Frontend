@@ -28,16 +28,24 @@ import {
             <div class="story-card hand-overlay">
               <div class="clue-copy">
                 <span class="overlay-label">Pista actual</span>
-                <h2>{{ currentClue || 'Pendiente de pista' }}</h2>
+                <h2>{{ currentClue || 'Esperando pista' }}</h2>
+                <p class="storyteller-copy">
+                  Cuenta-cuentos:
+                  <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                </p>
                 <p>
-                  @if (isCurrentPlayerStoryteller) {
-                    Elige una carta, escribe la pista y enviala al servidor.
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    Escribe la pista y confirmala para abrir la ronda.
+                  } @else if (!currentClue) {
+                    Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
+                  } @else if (isCurrentPlayerStoryteller) {
+                    La pista ya esta publicada. Ahora elige tu carta y enviala al servidor.
                   } @else {
-                    Elige una carta y espera la pista del narrador si todavia no ha llegado.
+                    La pista ya esta publicada. Elige una carta y enviala al servidor.
                   }
                 </p>
 
-                @if (isCurrentPlayerStoryteller) {
+                @if (!currentClue && isCurrentPlayerStoryteller) {
                   <label class="clue-field">
                     <span>Tu pista</span>
                     <input
@@ -51,6 +59,17 @@ import {
                 }
 
                 <div class="hand-submit-row">
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    <button
+                      type="button"
+                      class="secondary-action"
+                      [disabled]="isStorySubmitDisabled"
+                      (click)="storySubmitRequested.emit()"
+                    >
+                      Confirmar pista
+                    </button>
+                  }
+
                   @if (handSubmitted) {
                     <span class="status-pill">Jugada enviada</span>
                   }
@@ -677,8 +696,10 @@ export class DixitHandPhase {
   @Input() cards: DeckCard[] = [];
   @Input() selectedCardCode = '';
   @Input() clueDraft = '';
+  @Input() storytellerName = '';
   @Input() isCurrentPlayerStoryteller = false;
   @Input() handSubmitted = false;
+  @Input() isStorySubmitDisabled = true;
   @Input() isHandSubmitDisabled = true;
   @Input() handSubmitButtonText = 'Jugar carta';
   @Input() wildcards: DixitWildcardReward[] = [];
@@ -695,6 +716,7 @@ export class DixitHandPhase {
 
   @Output() readonly cardSelected = new EventEmitter<DeckCard>();
   @Output() readonly clearSelectionRequested = new EventEmitter<void>();
+  @Output() readonly storySubmitRequested = new EventEmitter<void>();
   @Output() readonly handSubmitRequested = new EventEmitter<void>();
   @Output() readonly clueDraftChanged = new EventEmitter<string>();
   @Output() readonly wildcardUsed = new EventEmitter<string>();

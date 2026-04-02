@@ -9,7 +9,7 @@ import { DeckCard } from '../../services/card-pull';
       <div class="phase-stage-header">
         <div class="phase-stage-copy">
           <p class="overlay-label">Votacion</p>
-          <h2>{{ currentClue || 'Pista pendiente' }}</h2>
+          <h2>{{ currentClue || 'Esperando pista' }}</h2>
           <p>
             @if (selectedCard) {
               Has elegido {{ selectedCard.code }}. Puedes cambiarla antes de confirmar.
