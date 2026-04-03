@@ -19,7 +19,11 @@ export class App {
       return false;
     }
 
-    if (currentPath.startsWith('/dixit/')) {
+    if (
+      currentPath.startsWith('/dixit/') ||
+      currentPath.startsWith('/dixit-stella/') ||
+      currentPath === '/stella-test'
+    ) {
       return false;
     }
 

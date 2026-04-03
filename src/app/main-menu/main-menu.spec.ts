@@ -105,7 +105,7 @@ describe('MainMenu', () => {
   it('starts the lobby and navigates to Dixit when the host presses the main action', async () => {
     await component.onPrimaryAction();
 
-    expect(gamesPullSpy.startLobby).toHaveBeenCalledOnceWith('A1B2');
+    expect(gamesPullSpy.startLobby).toHaveBeenCalledOnceWith('A1B2', 'Classic');
     expect(routerSpy.navigateByUrl).toHaveBeenCalledOnceWith('/dixit/A1B2');
   });
 });

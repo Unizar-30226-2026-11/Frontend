@@ -435,7 +435,7 @@ export class MainMenu implements OnInit {
     this.resetPrimaryActionFeedback();
 
     try {
-      const startResult = await this.gamesPull.startLobby(lobbyCode);
+      const startResult = await this.gamesPull.startLobby(lobbyCode, currentLobby.engine);
       if (this.currentLobbyCode !== lobbyCode) {
         return;
       }
