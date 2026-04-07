@@ -1,0 +1,377 @@
+    <section class="stella-table">
+      <nav class="stella-topbar" aria-label="Barra de partida Stella">
+        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
+
+        <div class="topbar-center">
+          <p class="eyebrow">{{ roomTitle }}</p>
+          <div class="round-meta">
+            <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
+            <span class="round-chip">Ronda {{ roundNumber }}/{{ totalRounds }}</span>
+          </div>
+          <p class="phase-copy">{{ currentPhaseMeta.description }}</p>
+        </div>
+
+        <div class="topbar-actions">
+          <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
+          <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
+        </div>
+      </nav>
+
+      @if (loading) {
+        <article class="status-card">
+          <p>Cargando la mesa Stella...</p>
+        </article>
+      } @else if (errorMessage) {
+        <article class="status-card error">
+          <p>{{ errorMessage }}</p>
+        </article>
+      } @else {
+        <div class="stella-layout">
+          <aside class="players-panel">
+            <div class="panel-header">
+              <p class="eyebrow">Jugadores</p>
+              <h2>Mesa actual</h2>
+            </div>
+
+            <div class="players-list">
+              @for (player of players; track player.id) {
+                <article
+                  class="player-card"
+                  [class.current-user]="player.isCurrentUser"
+                  [class.first-explorer]="isFirstExplorer(player.id)"
+                  [class.fallen]="player.hasFallen"
+                >
+                  <div class="player-head">
+                    <div class="player-name-wrap">
+                      <span class="player-dot" [style.background]="player.color"></span>
+                      <strong>{{ player.name }}</strong>
+                    </div>
+                    @if (player.isCurrentUser) {
+                      <span class="player-tag">Tu</span>
+                    }
+                  </div>
+
+                  <div class="player-states">
+                    @if (isFirstExplorer(player.id)) {
+                      <span class="status-pill accent">Primer explorador</span>
+                    }
+                    <span class="status-pill" [class.dark]="player.lanternState === 'DARK'">
+                      {{ player.lanternState === 'DARK' ? 'Oscuridad' : 'Luz' }}
+                    </span>
+                    <span class="status-pill" [class.fallen]="player.hasFallen">
+                      {{ player.hasFallen ? 'Caido' : 'Activo' }}
+                    </span>
+                  </div>
+
+                  <div class="player-metrics">
+                    <span>{{ player.score }} estrellas</span>
+                    <span>{{ player.selectionCount }}/10 marcadas</span>
+                    @if (phase === 'reveal' || phase === 'scoring' || phase === 'finished') {
+                      <span>{{ getRemainingSelectionCodes(player).length }} sin revelar</span>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </aside>
+
+          <main class="board-shell">
+            <section class="word-panel">
+              <div>
+                <p class="eyebrow">Carta de palabra</p>
+                <h2>{{ activeWord }}</h2>
+              </div>
+
+              @if (activeWordCard; as wordCard) {
+                <div class="word-card">
+                  <span>{{ wordCard.terms[0] }}</span>
+                  <strong>{{ activeWord }}</strong>
+                  <span>{{ wordCard.terms[1] }}</span>
+                </div>
+              }
+            </section>
+
+            <section class="board-grid" [class.limit-hit]="limitFeedbackActive">
+              @for (rowIndex of boardRowIndexes; track rowIndex) {
+                @for (card of getBoardCardsForRow(rowIndex); track card.code) {
+                  @let revealCount = getRevealCount(card.code);
+                  @let selectionOrder = getSelectionOrder(card.code);
+                  <article
+                    class="board-card"
+                    [class.selected]="isCardSelected(card.code)"
+                    [class.revealable]="isCardRevealable(card.code)"
+                    [class.revealed]="revealCount > 0"
+                  >
+                    <button
+                      type="button"
+                      class="inspect-button"
+                      aria-label="Ampliar carta"
+                      (click)="openInspection(card); $event.stopPropagation()"
+                    >
+                      +
+                    </button>
+
+                    <button
+                      type="button"
+                      class="board-card-button"
+                      [disabled]="!canInteractWithCard(card.code)"
+                      (click)="onBoardCardClicked(card.code)"
+                    >
+                      <img draggable="false" [src]="card.image" [alt]="card.value" loading="lazy" />
+                      <div class="board-card-meta">
+                        <span>{{ card.value }}</span>
+                        <small>{{ card.code }}</small>
+                      </div>
+                    </button>
+
+                    @if (selectionOrder > 0) {
+                      <span class="board-badge selection-badge">{{ selectionOrder }}</span>
+                    }
+
+                    @if (revealCount > 0) {
+                      <span class="board-badge reveal-badge">{{ revealCount }}x</span>
+                    }
+                  </article>
+                }
+              }
+            </section>
+
+            @if (phase === 'reveal') {
+              @if (activeExplorer; as explorer) {
+                <section class="reveal-banner">
+                  <div>
+                    <p class="eyebrow">Explorador activo</p>
+                    <h3>{{ explorer.name }}</h3>
+                    <p>{{ getRevealPrompt(explorer) }}</p>
+                  </div>
+
+                  <div class="reveal-banner-metrics">
+                    <span class="status-pill" [class.dark]="explorer.lanternState === 'DARK'">
+                      {{ explorer.lanternState === 'DARK' ? 'Oscuridad' : 'Luz' }}
+                    </span>
+                    <span class="status-pill" [class.fallen]="explorer.hasFallen">
+                      {{ explorer.hasFallen ? 'Caido' : getRemainingSelectionCodes(explorer).length + ' disponibles' }}
+                    </span>
+                  </div>
+                </section>
+              }
+            }
+
+            @if (phase === 'scoring') {
+              <section class="scoring-panel">
+                <div class="panel-header">
+                  <p class="eyebrow">Cierre de ronda</p>
+                  <h3>Balance de puntuacion</h3>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Jugador</th>
+                      <th>Antes</th>
+                      <th>Ronda</th>
+                      <th>Penalizacion</th>
+                      <th>Neto</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of scoringSummary; track row.playerId) {
+                      <tr>
+                        <td>{{ row.playerName }}</td>
+                        <td>{{ row.scoreBefore }}</td>
+                        <td>+{{ row.roundPoints }}</td>
+                        <td>{{ row.penalty > 0 ? '-' + row.penalty : '0' }}</td>
+                        <td>{{ row.netPoints >= 0 ? '+' + row.netPoints : row.netPoints }}</td>
+                        <td>{{ row.totalScore }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+            }
+
+            @if (phase === 'finished') {
+              @if (primaryWinner; as winner) {
+                <section class="final-panel">
+                  <p class="eyebrow">Partida terminada</p>
+                  <h3>
+                    @if (finalWinners.length === 1) {
+                      Gana {{ winner.name }}
+                    } @else {
+                      Victoria compartida
+                    }
+                  </h3>
+                  <p>
+                    @if (finalWinners.length > 1) {
+                      {{ getWinnersLabel() }} comparten la victoria con {{ winner.score }} estrellas.
+                    } @else {
+                      {{ winner.name }} termina con {{ winner.score }} estrellas.
+                    }
+                  </p>
+                </section>
+              }
+            }
+          </main>
+
+          <aside class="status-panel">
+            @if (phase === 'association') {
+              <section class="side-card">
+                <p class="eyebrow">Reglas</p>
+                <h3>Seleccion oculta</h3>
+                <ul class="rule-list">
+                  <li>Minimo 1 carta.</li>
+                  <li>Maximo 10 cartas.</li>
+                  <li>Tras confirmar no se puede modificar la seleccion.</li>
+                </ul>
+
+                <div class="selection-summary">
+                  <strong>{{ currentSelectionCount }}/10</strong>
+                  <p>{{ selectionMessage }}</p>
+                </div>
+
+                <div class="selection-list">
+                  @for (code of currentPlayer.selection; track code) {
+                    <span>{{ getCardLabel(code) }}</span>
+                  }
+                </div>
+              </section>
+            } @else if (phase === 'announce') {
+              <section class="side-card">
+                <p class="eyebrow">Pista 1-10</p>
+                <h3>Intensidad declarada</h3>
+                <div class="announce-track">
+                  @for (count of announceTrack; track count) {
+                    <div class="announce-cell">
+                      <strong>{{ count }}</strong>
+                      <div class="announce-tokens">
+                        @for (player of getPlayersAtCount(count); track player.id) {
+                          <span
+                            class="announce-token"
+                            [style.background]="player.color"
+                            [attr.title]="player.name"
+                          >
+                            {{ player.name.charAt(0) }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+                <p class="announce-copy">{{ selectionMessage }}</p>
+              </section>
+            } @else if (phase === 'reveal') {
+              <section class="side-card">
+                <p class="eyebrow">Resolucion</p>
+                <h3>{{ lastResolutionTitle }}</h3>
+                <p class="status-copy">{{ selectionMessage }}</p>
+
+                @if (latestRevealLog; as entry) {
+                  <article class="resolution-highlight">
+                    <strong>{{ entry.explorerName }}</strong>
+                    <p>{{ entry.cardLabel }} · {{ entry.outcomeLabel }}</p>
+                    <p>
+                      @if (entry.matchingPlayerNames.length > 0) {
+                        Coinciden: {{ entry.matchingPlayerNames.join(', ') }}
+                      } @else {
+                        Nadie mas habia marcado esa carta.
+                      }
+                    </p>
+                  </article>
+                }
+
+                <div class="log-list">
+                  @for (entry of revealLog; track entry.id) {
+                    <article class="log-entry">
+                      <strong>{{ entry.explorerName }}</strong>
+                      <p>{{ entry.cardCode }} · {{ entry.outcomeLabel }}</p>
+                    </article>
+                  }
+                </div>
+              </section>
+            } @else if (phase === 'scoring') {
+              <section class="side-card">
+                <p class="eyebrow">Penalizacion</p>
+                <h3>Oscuridad</h3>
+                <p class="status-copy">{{ selectionMessage }}</p>
+              </section>
+            } @else {
+              <section class="side-card">
+                <p class="eyebrow">Ganadores</p>
+                <h3>Clasificacion final</h3>
+                <div class="final-ranking">
+                  @for (player of getPlayersSortedByScore(); track player.id) {
+                    <div class="final-ranking-row">
+                      <span>{{ player.name }}</span>
+                      <strong>{{ player.score }}</strong>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          </aside>
+        </div>
+
+        <footer class="hud-panel">
+          <div class="hud-copy">
+            <p class="eyebrow">Estado</p>
+            <h3>{{ hudTitle }}</h3>
+            <p>{{ hudDescription }}</p>
+          </div>
+
+          <div class="hud-actions">
+            @if (phase === 'association') {
+              <button
+                type="button"
+                class="primary-action"
+                [disabled]="!canSubmitSelection"
+                (click)="submitSelection()"
+              >
+                Confirmar seleccion
+              </button>
+            } @else if (phase === 'announce') {
+              <button type="button" class="primary-action" (click)="startRevealPhase()">
+                Empezar revelado
+              </button>
+            } @else if (phase === 'reveal') {
+              <button
+                type="button"
+                class="primary-action"
+                [disabled]="isCurrentUserExplorer"
+                (click)="resolveExplorerTurn()"
+              >
+                Resolver turno actual
+              </button>
+            } @else if (phase === 'scoring') {
+              <button type="button" class="primary-action" (click)="advanceAfterScoring()">
+                {{ roundNumber === totalRounds ? 'Ver ganador' : 'Siguiente ronda' }}
+              </button>
+            } @else {
+              <button type="button" class="primary-action" (click)="returnToGames()">
+                Volver a salas
+              </button>
+            }
+          </div>
+        </footer>
+      }
+    </section>
+
+    @if (inspectedCard; as card) {
+      <div class="modal-backdrop" (click)="closeInspection()">
+        <article
+          class="modal-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="inspect-card-title"
+          (click)="$event.stopPropagation()"
+        >
+          <img draggable="false" [src]="card.image" [alt]="card.value" />
+          <div class="modal-copy">
+            <p class="eyebrow">Vista ampliada</p>
+            <h3 id="inspect-card-title">{{ card.value }}</h3>
+            <p>{{ card.code }}</p>
+          </div>
+          <button type="button" class="primary-action" (click)="closeInspection()">Cerrar</button>
+        </article>
+      </div>
+    }
