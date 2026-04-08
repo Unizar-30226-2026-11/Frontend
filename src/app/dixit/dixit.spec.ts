@@ -97,15 +97,16 @@ describe('Dixit', () => {
     fixture.detectChanges();
     tick();
 
+    component.onHandCardSelected(component.cards[0]);
     component.updateClueDraft('Una pista real');
     component.submitStoryClue();
 
     expect(component.isCurrentPlayerStoryteller).toBeTrue();
-    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SUBMIT_STORY', {
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SEND_STORY', {
+      cardId: 'AS',
       clue: 'Una pista real',
-      story: 'Una pista real',
-      text: 'Una pista real',
     });
+    expect(component.handSubmitted).toBeTrue();
   }));
 
   it('does not allow sending cards until a clue exists', fakeAsync(() => {

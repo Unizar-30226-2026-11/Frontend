@@ -39,7 +39,7 @@ import {
                   } @else if (!currentClue) {
                     Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
                   } @else if (isCurrentPlayerStoryteller) {
-                    La pista ya esta publicada. Ahora elige tu carta y enviala al servidor.
+                    La pista ya esta publicada. Esperando a que el resto envie su carta.
                   } @else {
                     La pista ya esta publicada. Elige una carta y enviala al servidor.
                   }
@@ -74,14 +74,16 @@ import {
                     <span class="status-pill">Jugada enviada</span>
                   }
 
-                  <button
-                    type="button"
-                    class="sidebar-action"
-                    [disabled]="isHandSubmitDisabled"
-                    (click)="handSubmitRequested.emit()"
-                  >
-                    {{ handSubmitButtonText }}
-                  </button>
+                  @if (!isCurrentPlayerStoryteller) {
+                    <button
+                      type="button"
+                      class="sidebar-action"
+                      [disabled]="isHandSubmitDisabled"
+                      (click)="handSubmitRequested.emit()"
+                    >
+                      {{ handSubmitButtonText }}
+                    </button>
+                  }
                 </div>
               </div>
 
@@ -408,9 +410,10 @@ import {
     }
 
     .secondary-action {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff4d2;
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(135deg, #f0c95a, #ffe7a6);
+      color: #1d2430;
+      border: 1px solid rgba(29, 36, 48, 0.12);
+      box-shadow: 0 10px 22px rgba(78, 59, 10, 0.14);
     }
 
     .sidebar-action:disabled,

@@ -9,14 +9,18 @@ import {
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
   RealtimeSession,
+  RealtimeToast,
 } from '../interfaces/dixit-realtime';
 import type { SocketIoClient } from '../../socket-io-client';
 import { ApiClient } from './api-client';
 import { Auth } from './auth';
+import { isApiRequestErrorStatus } from '../interfaces/api';
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
+const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
 const SOCKET_CONNECT_TIMEOUT_MS = 5_000;
 const REALTIME_LOG_PREFIX = '[DixitRealtime]';
+const DEFAULT_ACTIVE_GAME_NOTICE = 'Tienes una partida activa.';
 
 @Injectable({
   providedIn: 'root',
@@ -26,14 +30,21 @@ export class DixitRealtime {
   private readonly auth = inject(Auth);
 
   private socket: SocketIoClient | null = null;
+  private connectionPromise: Promise<void> | null = null;
+  private connectionSessionKey = '';
+  private toastSequence = 0;
 
   private readonly sessionState = signal<RealtimeSession | null>(this.restoreSession());
   private readonly connectionStatusState = signal<DixitConnectionStatus>('idle');
   private readonly lobbyStateSignal = signal<RealtimeLobbyState | null>(null);
-  private readonly gameStateSignal = signal<RealtimeGameStateUpdate | null>(null);
+  private readonly gameStateSignal = signal<RealtimeGameStateUpdate | null>(
+    this.restoreGameState(this.restoreSession()?.lobbyCode ?? null)
+  );
   private readonly gameStartedSignal = signal<RealtimeGameStarted | null>(null);
   private readonly chatMessagesSignal = signal<RealtimeChatMessage[]>([]);
   private readonly lastErrorSignal = signal('');
+  private readonly activeGameNoticeSignal = signal('');
+  private readonly toastSignal = signal<RealtimeToast | null>(null);
 
   readonly session = computed(() => this.sessionState());
   readonly activeLobbyCode = computed(() => this.sessionState()?.lobbyCode ?? '');
@@ -43,6 +54,8 @@ export class DixitRealtime {
   readonly gameStarted = computed(() => this.gameStartedSignal());
   readonly chatMessages = computed(() => this.chatMessagesSignal());
   readonly lastError = computed(() => this.lastErrorSignal());
+  readonly activeGameNotice = computed(() => this.activeGameNoticeSignal());
+  readonly toast = computed(() => this.toastSignal());
 
   async joinLobby(lobbyCode: string): Promise<void> {
     const normalizedLobbyCode = this.normalizeLobbyCode(lobbyCode);
@@ -60,14 +73,20 @@ export class DixitRealtime {
     this.connectionStatusState.set('joining');
     this.lastErrorSignal.set('');
 
-    const response = await this.apiClient.request<LobbyJoinResponse>(
-      `/lobbies/${encodeURIComponent(normalizedLobbyCode)}/join`,
-      {
-        method: 'POST',
-        token: this.requireToken(),
-        useCache: false,
-      }
-    );
+    let response: LobbyJoinResponse;
+    try {
+      response = await this.apiClient.request<LobbyJoinResponse>(
+        `/lobbies/${encodeURIComponent(normalizedLobbyCode)}/join`,
+        {
+          method: 'POST',
+          token: this.requireToken(),
+          useCache: false,
+        }
+      );
+    } catch (error) {
+      this.handleJoinLobbyError(normalizedLobbyCode, error);
+      throw error;
+    }
     this.debug('join lobby response', response);
 
     const nextSession = this.buildSession(normalizedLobbyCode, response);
@@ -89,19 +108,39 @@ export class DixitRealtime {
       return;
     }
 
-    if (activeSession?.lobbyCode === normalizedLobbyCode) {
+    // A cold start may restore a stale ticket from localStorage. Only reuse a
+    // previous session when there is still a live socket instance in memory.
+    if (activeSession?.lobbyCode === normalizedLobbyCode && this.socket !== null) {
       await this.connectWithSession(activeSession);
       return;
     }
 
     const storedSession = this.restoreSession();
-    if (storedSession?.lobbyCode === normalizedLobbyCode) {
+    if (storedSession?.lobbyCode === normalizedLobbyCode && this.socket !== null) {
       this.sessionState.set(storedSession);
       await this.connectWithSession(storedSession);
       return;
     }
 
     await this.joinLobby(normalizedLobbyCode);
+  }
+
+  async restoreActiveGameConnection(lobbyCode: string): Promise<void> {
+    const normalizedLobbyCode = this.normalizeLobbyCode(lobbyCode);
+    const activeSession = this.sessionState();
+
+    if (
+      activeSession?.lobbyCode === normalizedLobbyCode &&
+      this.socket !== null &&
+      this.socket.connected
+    ) {
+      this.connectionStatusState.set('connected');
+      this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
+      return;
+    }
+
+    this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
+    await this.ensureLobbyConnection(normalizedLobbyCode);
   }
 
   startLobby(): void {
@@ -140,9 +179,15 @@ export class DixitRealtime {
     this.disconnect(false);
   }
 
+  clearToast(): void {
+    this.toastSignal.set(null);
+  }
+
   disconnect(preserveSession = true): void {
     this.socket?.disconnect();
     this.socket = null;
+    this.connectionPromise = null;
+    this.connectionSessionKey = '';
 
     if (preserveSession) {
       if (this.sessionState() !== null) {
@@ -158,10 +203,43 @@ export class DixitRealtime {
     this.gameStartedSignal.set(null);
     this.chatMessagesSignal.set([]);
     this.lastErrorSignal.set('');
+    this.activeGameNoticeSignal.set('');
+    this.toastSignal.set(null);
     localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+    localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
   }
 
-  private async connectWithSession(session: RealtimeSession): Promise<void> {
+  private connectWithSession(session: RealtimeSession): Promise<void> {
+    const sessionKey = this.buildSessionKey(session);
+
+    if (
+      this.connectionPromise !== null &&
+      this.connectionSessionKey === sessionKey
+    ) {
+      return this.connectionPromise;
+    }
+
+    if (
+      this.socket !== null &&
+      this.socket.connected &&
+      this.sessionState() !== null &&
+      this.buildSessionKey(this.sessionState() as RealtimeSession) === sessionKey
+    ) {
+      this.connectionStatusState.set('connected');
+      return Promise.resolve();
+    }
+
+    this.connectionSessionKey = sessionKey;
+    this.connectionPromise = this.openSocketConnection(session).finally(() => {
+      if (this.connectionSessionKey === sessionKey) {
+        this.connectionPromise = null;
+      }
+    });
+
+    return this.connectionPromise;
+  }
+
+  private async openSocketConnection(session: RealtimeSession): Promise<void> {
     const socketFactory = window.io;
     if (!socketFactory) {
       const error = new Error('No se pudo cargar el cliente de Socket.IO');
@@ -175,29 +253,39 @@ export class DixitRealtime {
     this.connectionStatusState.set('connecting');
     this.lastErrorSignal.set('');
 
+    const credential = this.extractSocketCredential(session);
     const socket = socketFactory(session.socketUrl, {
       transports: ['websocket'],
       timeout: SOCKET_CONNECT_TIMEOUT_MS,
       reconnection: true,
       autoConnect: true,
-      auth: {
-        token: session.ticket,
-        ticket: session.ticket,
-        code: session.ticket,
-        lobbyCode: session.lobbyCode,
-      },
-      query: {
-        token: session.ticket,
-        ticket: session.ticket,
-        code: session.ticket,
-        lobbyCode: session.lobbyCode,
-      },
+      auth: credential
+        ? {
+            token: credential,
+            ticket: credential,
+            code: credential,
+            lobbyCode: session.lobbyCode,
+          }
+        : {
+            lobbyCode: session.lobbyCode,
+          },
+      query: credential
+        ? {
+            token: credential,
+            ticket: credential,
+            code: credential,
+            lobbyCode: session.lobbyCode,
+          }
+        : {
+            lobbyCode: session.lobbyCode,
+          },
     });
 
     this.socket = socket;
     this.debug('opening socket connection', {
       lobbyCode: session.lobbyCode,
       socketUrl: session.socketUrl,
+      joinOnConnect: session.joinOnConnect !== false,
     });
     this.attachSocketListeners(socket, session);
     await this.waitForSocketConnection(socket);
@@ -215,7 +303,14 @@ export class DixitRealtime {
         lobbyCode: session.lobbyCode,
         socketUrl: session.socketUrl,
       });
-      socket.emit('client:lobby:join', { lobbyCode: session.lobbyCode });
+
+      if (session.joinOnConnect !== false) {
+        socket.emit('client:lobby:join', { lobbyCode: session.lobbyCode });
+      }
+
+      if (this.auth.activeGameId() === session.lobbyCode) {
+        this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
+      }
     });
 
     socket.on('disconnect', () => {
@@ -226,6 +321,9 @@ export class DixitRealtime {
       this.connectionStatusState.set(
         this.sessionState() === null ? 'idle' : 'disconnected'
       );
+      if (this.auth.activeGameId() === session.lobbyCode) {
+        this.activeGameNoticeSignal.set('Se ha perdido la conexion con la partida. Reintentando...');
+      }
       this.debug('socket disconnected', { lobbyCode: session.lobbyCode });
     });
 
@@ -270,7 +368,7 @@ export class DixitRealtime {
         return;
       }
 
-      this.gameStateSignal.set({
+      this.setGameState({
         state,
         lastAction: readString(normalizedPayload, 'lastAction') ?? undefined,
         receivedAt: Date.now(),
@@ -281,13 +379,12 @@ export class DixitRealtime {
       });
     });
 
-    socket.on('server:game:ended', () => {
-      this.gameStateSignal.update((currentState) => ({
-        state: currentState?.state ?? {},
-        lastAction: 'GAME_ENDED',
-        receivedAt: Date.now(),
-      }));
-      this.debug('event server:game:ended');
+    socket.on('server:game:ended', (payload: unknown) => {
+      this.handleGameEnded(payload);
+    });
+
+    socket.on('game_ended', (payload: unknown) => {
+      this.handleGameEnded(payload);
     });
 
     socket.on('server:chat:message_received', (payload: unknown) => {
@@ -303,36 +400,35 @@ export class DixitRealtime {
     });
 
     socket.on('game:started', (payload: unknown) => {
-      const data = asRecord(payload);
-      const wrappedData = asRecord(data?.['data']) ?? data;
-      const state = asRecord(wrappedData?.['state']);
-      const lobbyCode =
-        readString(wrappedData ?? undefined, 'lobbyCode') ??
-        readString(wrappedData ?? undefined, 'code') ??
-        this.sessionState()?.lobbyCode ??
-        '';
+      this.handleGameStarted(payload, 'game:started');
+    });
 
-      if (!lobbyCode) {
-        return;
-      }
+    socket.on('server:game:started', (payload: unknown) => {
+      this.handleGameStarted(payload, 'server:game:started');
+    });
 
-      if (state) {
-        this.gameStateSignal.set({
-          state,
-          lastAction: 'GAME_STARTED',
-          receivedAt: Date.now(),
-        });
-      }
+    socket.on('session_recovered', (payload: unknown) => {
+      this.handleSessionRecovered(payload);
+    });
 
-      this.gameStartedSignal.set({
-        lobbyCode,
-        state: state ?? undefined,
-        receivedAt: Date.now(),
-      });
-      this.debug('event game:started', {
-        lobbyCode,
-        hasState: !!state,
-      });
+    socket.on('your_turn', (payload: unknown) => {
+      const message = this.resolveServerMessage(payload);
+      this.pushToast(
+        message === 'Se produjo un error en la conexion realtime'
+          ? 'Es tu turno.'
+          : message
+      );
+      this.debug('event your_turn', payload);
+    });
+
+    socket.on('opponent_disconnected', (payload: unknown) => {
+      const message = this.resolveServerMessage(payload);
+      this.activeGameNoticeSignal.set(
+        message === 'Se produjo un error en la conexion realtime'
+          ? 'Oponente desconectado. Esperando...'
+          : message
+      );
+      this.debug('event opponent_disconnected', payload);
     });
   }
 
@@ -387,6 +483,7 @@ export class DixitRealtime {
       ticket,
       socketUrl: this.extractSocketUrl(response),
       joinedAt: new Date().toISOString(),
+      joinOnConnect: true,
     };
   }
 
@@ -427,6 +524,40 @@ export class DixitRealtime {
       candidates.find((candidate) => typeof candidate === 'string' && candidate.trim())?.trim() ??
       this.resolveDefaultSocketUrl()
     );
+  }
+
+  private extractSocketCredential(session: RealtimeSession): string {
+    return session.ticket?.trim() || session.authToken?.trim() || '';
+  }
+
+  private handleJoinLobbyError(lobbyCode: string, error: unknown): void {
+    if (!isApiRequestErrorStatus(error, 404)) {
+      return;
+    }
+
+    this.debug('join lobby returned 404, clearing stale active game state', { lobbyCode });
+    this.clearRecoveredLobbyState(lobbyCode);
+  }
+
+  private clearRecoveredLobbyState(lobbyCode: string): void {
+    if (this.sessionState()?.lobbyCode === lobbyCode) {
+      this.disconnect(false);
+    } else {
+      const storedSession = this.restoreSession();
+      if (storedSession?.lobbyCode === lobbyCode) {
+        localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+      }
+      const storedGameState = this.restoreGameState(lobbyCode);
+      if (storedGameState) {
+        localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      }
+    }
+
+    if (this.auth.activeGameId() === lobbyCode) {
+      this.auth.setActiveGameId(null);
+    }
+
+    this.activeGameNoticeSignal.set('');
   }
 
   private resolveDefaultSocketUrl(): string {
@@ -509,6 +640,119 @@ export class DixitRealtime {
     };
   }
 
+  private handleSessionRecovered(payload: unknown): void {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    const state = asRecord(wrappedData?.['state']);
+    const recoveredGameId =
+      readString(wrappedData, 'gameId') ??
+      readString(wrappedData, 'lobbyCode') ??
+      this.sessionState()?.lobbyCode ??
+      '';
+
+    if (!recoveredGameId) {
+      return;
+    }
+
+    this.auth.setActiveGameId(recoveredGameId);
+    this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
+
+    if (state) {
+      this.setGameState({
+        state,
+        lastAction: 'SESSION_RECOVERED',
+        receivedAt: Date.now(),
+      });
+    }
+
+    this.debug('event session_recovered', {
+      gameId: recoveredGameId,
+      hasState: !!state,
+    });
+  }
+
+  private handleGameStarted(payload: unknown, eventName: string): void {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    const state = asRecord(wrappedData?.['state']);
+    const lobbyCode =
+      readString(wrappedData ?? undefined, 'lobbyCode') ??
+      readString(wrappedData ?? undefined, 'code') ??
+      this.sessionState()?.lobbyCode ??
+      '';
+
+    if (!lobbyCode) {
+      return;
+    }
+
+    if (state) {
+      this.setGameState({
+        state,
+        lastAction: 'GAME_STARTED',
+        receivedAt: Date.now(),
+      });
+    }
+
+    this.auth.setActiveGameId(lobbyCode);
+    this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
+    this.gameStartedSignal.set({
+      lobbyCode,
+      state: state ?? undefined,
+      receivedAt: Date.now(),
+    });
+    this.debug(`event ${eventName}`, {
+      lobbyCode,
+      hasState: !!state,
+    });
+  }
+
+  private handleGameEnded(payload: unknown): void {
+    const message = this.resolveGameEndedMessage(payload);
+
+    this.gameStateSignal.update((currentState) => ({
+      state: currentState?.state ?? {},
+      lastAction: 'GAME_ENDED',
+      receivedAt: Date.now(),
+    }));
+    this.auth.setActiveGameId(null);
+    this.activeGameNoticeSignal.set('');
+    this.pushToast(message);
+    this.debug('event game ended', payload);
+    this.disconnect(false);
+  }
+
+  private resolveGameEndedMessage(payload: unknown): string {
+    const data = asRecord(payload);
+    const winner =
+      readString(data, 'winner') ??
+      readString(data, 'winnerUsername') ??
+      readString(asRecord(data?.['data']), 'winner');
+
+    if (winner) {
+      return `La partida ha terminado. Ganador: ${winner}.`;
+    }
+
+    const serverMessage = this.resolveServerMessage(payload);
+    if (serverMessage !== 'Se produjo un error en la conexion realtime') {
+      return serverMessage;
+    }
+
+    return 'La partida ha terminado.';
+  }
+
+  private pushToast(message: string): void {
+    const normalizedMessage = message.trim();
+    if (!normalizedMessage) {
+      return;
+    }
+
+    this.toastSequence += 1;
+    this.toastSignal.set({
+      id: this.toastSequence,
+      message: normalizedMessage,
+    });
+  }
+
   private requireToken(): string {
     const token = this.auth.token();
     if (!token) {
@@ -536,6 +780,16 @@ export class DixitRealtime {
     return normalizedLobbyCode;
   }
 
+  private buildSessionKey(session: RealtimeSession): string {
+    return [
+      session.lobbyCode,
+      session.socketUrl,
+      session.ticket ?? '',
+      session.authToken ?? '',
+      session.joinOnConnect === false ? 'recovery' : 'join',
+    ].join('|');
+  }
+
   private resolveSocketErrorMessage(payload: unknown): string {
     if (payload instanceof Error && payload.message.trim()) {
       return payload.message;
@@ -549,6 +803,11 @@ export class DixitRealtime {
     return readString(data, 'message') ?? 'Se produjo un error en la conexion realtime';
   }
 
+  private setGameState(nextGameState: RealtimeGameStateUpdate): void {
+    this.gameStateSignal.set(nextGameState);
+    this.persistGameState(nextGameState);
+  }
+
   private restoreSession(): RealtimeSession | null {
     try {
       const rawSession = localStorage.getItem(REALTIME_SESSION_STORAGE_KEY);
@@ -559,8 +818,8 @@ export class DixitRealtime {
       const parsedSession = JSON.parse(rawSession) as Partial<RealtimeSession>;
       if (
         typeof parsedSession.lobbyCode !== 'string' ||
-        typeof parsedSession.ticket !== 'string' ||
-        typeof parsedSession.socketUrl !== 'string'
+        typeof parsedSession.socketUrl !== 'string' ||
+        (typeof parsedSession.ticket !== 'string' && typeof parsedSession.authToken !== 'string')
       ) {
         localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
         return null;
@@ -568,12 +827,20 @@ export class DixitRealtime {
 
       return {
         lobbyCode: parsedSession.lobbyCode,
-        ticket: parsedSession.ticket,
+        ticket:
+          typeof parsedSession.ticket === 'string' && parsedSession.ticket.trim()
+            ? parsedSession.ticket
+            : undefined,
+        authToken:
+          typeof parsedSession.authToken === 'string' && parsedSession.authToken.trim()
+            ? parsedSession.authToken
+            : undefined,
         socketUrl: parsedSession.socketUrl,
         joinedAt:
           typeof parsedSession.joinedAt === 'string'
             ? parsedSession.joinedAt
             : new Date().toISOString(),
+        joinOnConnect: parsedSession.joinOnConnect !== false,
       };
     } catch {
       localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
@@ -581,8 +848,77 @@ export class DixitRealtime {
     }
   }
 
+  private restoreGameState(lobbyCode: string | null): RealtimeGameStateUpdate | null {
+    if (!lobbyCode) {
+      return null;
+    }
+
+    try {
+      const rawGameState = localStorage.getItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      if (!rawGameState) {
+        return null;
+      }
+
+      const parsedGameState = JSON.parse(rawGameState) as Partial<RealtimeGameStateUpdate> & {
+        lobbyCode?: string;
+      };
+      if (
+        parsedGameState.lobbyCode !== lobbyCode ||
+        typeof parsedGameState.state !== 'object' ||
+        parsedGameState.state === null ||
+        (typeof parsedGameState.lastAction !== 'string' &&
+          typeof parsedGameState.lastAction !== 'undefined') ||
+        typeof parsedGameState.receivedAt !== 'number'
+      ) {
+        localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+        return null;
+      }
+
+      return {
+        state: parsedGameState.state as Record<string, unknown>,
+        lastAction: parsedGameState.lastAction,
+        receivedAt: parsedGameState.receivedAt,
+      };
+    } catch {
+      localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      return null;
+    }
+  }
+
   private persistSession(session: RealtimeSession): void {
-    localStorage.setItem(REALTIME_SESSION_STORAGE_KEY, JSON.stringify(session));
+    if (!session.ticket) {
+      localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+      return;
+    }
+
+    localStorage.setItem(
+      REALTIME_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        lobbyCode: session.lobbyCode,
+        ticket: session.ticket,
+        socketUrl: session.socketUrl,
+        joinedAt: session.joinedAt,
+        joinOnConnect: session.joinOnConnect !== false,
+      })
+    );
+  }
+
+  private persistGameState(gameState: RealtimeGameStateUpdate): void {
+    const lobbyCode = this.sessionState()?.lobbyCode;
+    if (!lobbyCode) {
+      localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      return;
+    }
+
+    localStorage.setItem(
+      REALTIME_GAME_STATE_STORAGE_KEY,
+      JSON.stringify({
+        lobbyCode,
+        state: gameState.state,
+        lastAction: gameState.lastAction,
+        receivedAt: gameState.receivedAt,
+      })
+    );
   }
 
   private debug(message: string, payload?: unknown): void {

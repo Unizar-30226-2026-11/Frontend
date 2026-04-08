@@ -11,14 +11,38 @@ import { Login } from './login/login';
 import { Profile } from './profile/profile';
 import { Auth } from './services/auth';
 
-export const redirectLoggedInHomeGuard: CanActivateFn = () => {
+function buildActiveGameUrlTree(router: Router, activeGameId: string) {
+  return router.createUrlTree(['/dixit', activeGameId]);
+}
+
+export const redirectLoggedInHomeGuard: CanActivateFn = async () => {
   const auth = inject(Auth);
+  const router = inject(Router);
+  await auth.ensureInitialized();
+  const activeGameId = auth.activeGameId();
+
+  if (activeGameId) {
+    return buildActiveGameUrlTree(router, activeGameId);
+  }
 
   if (!auth.isLoggedIn()) {
     return true;
   }
 
-  return inject(Router).createUrlTree(['/games']);
+  return router.createUrlTree(['/games']);
+};
+
+export const activeGameLobbyGuard: CanActivateFn = async () => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  await auth.ensureInitialized();
+  const activeGameId = auth.activeGameId();
+
+  if (!activeGameId) {
+    return true;
+  }
+
+  return buildActiveGameUrlTree(router, activeGameId);
 };
 
 export const routes: Routes = [
@@ -31,12 +55,14 @@ export const routes: Routes = [
     {
         path: 'games',
         title: 'Games List',
-        component: Games, 
+        component: Games,
+        canActivate: [activeGameLobbyGuard],
     },
     {
         path: 'games/:id',
         title: 'Waiting Menu',
         component: MainMenu,
+        canActivate: [activeGameLobbyGuard],
     },
     {
         path: 'store',

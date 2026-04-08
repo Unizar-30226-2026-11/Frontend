@@ -7,7 +7,7 @@ export type DixitConnectionStatus =
   | 'error';
 
 export type DixitGameActionType =
-  | 'SUBMIT_STORY'
+  | 'SEND_STORY'
   | 'PLAY_CARD'
   | 'VOTE_CARD'
   | 'USE_POWERUP';
@@ -57,7 +57,14 @@ export interface RealtimeChatMessage {
 
 export interface RealtimeSession {
   lobbyCode: string;
-  ticket: string;
+  ticket?: string;
+  authToken?: string;
   socketUrl: string;
   joinedAt: string;
+  joinOnConnect?: boolean;
+}
+
+export interface RealtimeToast {
+  id: number;
+  message: string;
 }

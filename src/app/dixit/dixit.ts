@@ -422,7 +422,7 @@ export class Dixit implements OnInit, OnDestroy {
       }
 
       return this.isCurrentPlayerStoryteller
-        ? 'La pista ya esta publicada. Juega ahora tu carta.'
+        ? 'La pista ya esta publicada. Esperando a que el resto envie su carta.'
         : 'La pista ya esta visible. Elige y envia tu carta.';
     }
 
@@ -514,12 +514,17 @@ export class Dixit implements OnInit, OnDestroy {
       !this.isCurrentPlayerStoryteller ||
       this.realtime.connectionStatus() !== 'connected' ||
       this.storySubmitted ||
+      !this.selectedHandCardCode ||
       !!this.currentClue.trim() ||
       !this.clueDraft.trim()
     );
   }
 
   get isHandSubmitDisabled(): boolean {
+    if (this.isCurrentPlayerStoryteller) {
+      return true;
+    }
+
     if (!this.selectedHandCardCode || this.handSubmitted || this.realtime.connectionStatus() !== 'connected') {
       return true;
     }
@@ -1021,6 +1026,10 @@ export class Dixit implements OnInit, OnDestroy {
     return null;
   }
 
+  private resolveActionCardId(cardCode: string): number | string {
+    return /^\d+$/.test(cardCode) ? Number(cardCode) : cardCode;
+  }
+
   onHandCardSelected(card: DeckCard): void {
     this.selectedHandCardCode = card.code;
   }
@@ -1040,11 +1049,11 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     const clue = this.clueDraft.trim();
+    const cardId = this.resolveActionCardId(this.selectedHandCardCode);
     try {
-      this.realtime.sendGameAction('SUBMIT_STORY', {
+      this.realtime.sendGameAction('SEND_STORY', {
+        cardId,
         clue,
-        story: clue,
-        text: clue,
       });
     } catch (error) {
       this.errorMessage =
@@ -1053,6 +1062,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.storySubmitted = true;
+    this.handSubmitted = true;
     this.errorMessage = '';
   }
 
@@ -1079,9 +1089,10 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    const cardId = this.resolveActionCardId(this.selectedHandCardCode);
     const payload: Record<string, unknown> = {
       cardCode: this.selectedHandCardCode,
-      cardId: this.selectedHandCardCode,
+      cardId,
     };
 
     try {
@@ -1097,7 +1108,7 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   goHome(): void {
-    void this.router.navigate(['/']);
+    void this.router.navigate(['/games']);
   }
 
   goToProfile(): void {
@@ -1150,10 +1161,11 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    const cardId = this.resolveActionCardId(this.selectedChoiceCardCode);
     try {
       this.realtime.sendGameAction('VOTE_CARD', {
         cardCode: this.selectedChoiceCardCode,
-        cardId: this.selectedChoiceCardCode,
+        cardId,
       });
     } catch (error) {
       this.errorMessage =

@@ -4,6 +4,20 @@ export interface ApiErrorPayload {
   currentBalance?: number;
 }
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
+export function isApiRequestErrorStatus(error: unknown, status: number): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.status === status;
+}
+
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiRequestOptions {
@@ -14,4 +28,5 @@ export interface ApiRequestOptions {
   ttlMs?: number;
   cacheKey?: string;
   useCache?: boolean;
+  credentials?: RequestCredentials;
 }
