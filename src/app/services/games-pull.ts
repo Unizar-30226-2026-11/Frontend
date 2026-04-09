@@ -1,6 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import {
+  CreateLobbyPayload,
+  CreateLobbyResponse,
   Game,
+  LobbyCreationResult,
   LobbyDetailsApi,
   LobbyDetailsResponse,
   LobbyListResponse,
@@ -51,6 +54,32 @@ export class GamesPull {
         forceRefresh: options.forceRefresh,
       })
       .then(({ lobby }) => this.toGame(lobby));
+  }
+
+  createLobby(payload: CreateLobbyPayload): Promise<LobbyCreationResult> {
+    const token = this.requireToken();
+
+    return this.apiClient
+      .request<CreateLobbyResponse>('/lobbies', {
+        method: 'POST',
+        token,
+        body: payload,
+        useCache: false,
+      })
+      .then((response) => {
+        const lobbyCode = response.lobby?.lobbyCode?.trim();
+        if (!lobbyCode) {
+          throw new Error('La API no devolvio el codigo de la nueva sala');
+        }
+
+        this.clearCache();
+
+        return {
+          message: response.message?.trim() || 'Sala creada correctamente.',
+          lobbyCode,
+          route: `/games/${encodeURIComponent(lobbyCode)}`,
+        };
+      });
   }
 
   startLobby(lobbyCode: string): Promise<LobbyStartResult> {

@@ -2,21 +2,49 @@ import { fakeAsync, ComponentFixture, TestBed, tick } from '@angular/core/testin
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
 import { Dixit } from './dixit';
+import { Auth } from '../services/auth';
 import { CardPull, DeckCard } from '../services/card-pull';
+import { DixitRealtime } from '../services/dixit-realtime';
 
 describe('Dixit', () => {
   let component: Dixit;
   let fixture: ComponentFixture<Dixit>;
   let cardPullSpy: jasmine.SpyObj<CardPull>;
+  let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
 
   beforeEach(async () => {
     cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
     cardPullSpy.getCards.and.resolveTo(createCardsFixture());
+    realtimeSpy = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
+      'ensureLobbyConnection',
+      'sendGameAction',
+      'lobbyState',
+      'gameState',
+      'activeLobbyCode',
+      'lastError',
+      'connectionStatus',
+      'chatMessages',
+    ]);
+    realtimeSpy.ensureLobbyConnection.and.resolveTo();
+    realtimeSpy.lobbyState.and.returnValue(null);
+    realtimeSpy.gameState.and.returnValue(null);
+    realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
+    realtimeSpy.lastError.and.returnValue('');
+    realtimeSpy.connectionStatus.and.returnValue('connected');
+    realtimeSpy.chatMessages.and.returnValue([]);
 
     await TestBed.configureTestingModule({
       imports: [Dixit],
       providers: [
         { provide: CardPull, useValue: cardPullSpy },
+        { provide: DixitRealtime, useValue: realtimeSpy },
+        {
+          provide: Auth,
+          useValue: {
+            session: () => ({ user: { id: 'u_self' } }),
+            username: () => 'Jugador test',
+          },
+        },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -39,6 +67,7 @@ describe('Dixit', () => {
     expect(component).toBeTruthy();
     expect(component.id).toBe('A1B2');
     expect(component.phase).toBe('hand');
+    expect(realtimeSpy.ensureLobbyConnection).toHaveBeenCalledOnceWith('A1B2');
   }));
 
   it('selects a hand card when dropped into the board zone', fakeAsync(() => {
@@ -55,33 +84,56 @@ describe('Dixit', () => {
     expect(text).toContain('Seleccionada: KH');
   }));
 
-  it('progresses through the simulated websocket flow', fakeAsync(() => {
+  it('reads the storyteller from currentRound and submits the clue separately', fakeAsync(() => {
+    realtimeSpy.gameState.and.returnValue({
+      state: {
+        currentRound: {
+          storytellerId: 'u_self',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardSelected(component.cards[0]);
+    component.updateClueDraft('Una pista real');
+    component.submitStoryClue();
+
+    expect(component.isCurrentPlayerStoryteller).toBeTrue();
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SEND_STORY', {
+      cardId: 'AS',
+      clue: 'Una pista real',
+    });
+    expect(component.handSubmitted).toBeTrue();
+  }));
+
+  it('does not allow sending cards until a clue exists', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.onHandCardSelected(component.cards[0]);
+
+    expect(component.currentClue).toBe('');
+    expect(component.isHandSubmitDisabled).toBeTrue();
+  }));
+
+  it('submits the selected vote through the realtime service', fakeAsync(() => {
     fixture.detectChanges();
     tick();
 
     component.onHandCardSelected(component.cards[0]);
     component.simulateChoicePhaseOpened();
 
-    expect(component.phase).toBe('choice');
-
     component.onChoiceCardSelected(component.choiceCards[1]);
     component.submitVoteSelection();
-    component.simulatePointsPhaseOpened();
 
-    expect(component.phase).toBe('points');
-    expect(component.pointsStage).toBe('waiting');
-    expect(component.pointsVotesReceived).toBe(1);
-
-    component.simulateAllVotesReceived();
-    component.simulateResultsReveal();
-
-    expect(component.pointsStage).toBe('reveal');
-    expect(component.pointsRevealedCards.length).toBeGreaterThan(0);
-
-    component.simulateRankingShown();
-
-    expect(component.pointsStage).toBe('ranking');
-    expect(component.pointsRanking.length).toBeGreaterThan(0);
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledOnceWith('VOTE_CARD', {
+      cardCode: 'KH',
+      cardId: 'KH',
+    });
+    expect(component.voteSubmitted).toBeTrue();
   }));
 
   it('advances automatically from reveal to ranking after 3 seconds', fakeAsync(() => {

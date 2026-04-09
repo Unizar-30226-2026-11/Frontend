@@ -1,5 +1,10 @@
 import { Injectable } from '@angular/core';
-import { ApiErrorPayload, ApiMethod, ApiRequestOptions } from '../interfaces/api';
+import {
+  ApiErrorPayload,
+  ApiMethod,
+  ApiRequestError,
+  ApiRequestOptions,
+} from '../interfaces/api';
 
 interface CacheEntry<T> {
   data: T;
@@ -112,6 +117,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: options.method,
       headers,
+      credentials: options.credentials,
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
     });
 
@@ -119,7 +125,7 @@ export class ApiClient {
     const parsedBody = rawBody ? this.parseBody(rawBody) : null;
 
     if (!response.ok) {
-      throw new Error(this.resolveErrorMessage(parsedBody));
+      throw new ApiRequestError(this.resolveErrorMessage(parsedBody), response.status);
     }
 
     return parsedBody as T;

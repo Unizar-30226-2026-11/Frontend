@@ -82,6 +82,12 @@
       font-weight: 600;
     }
 
+    .storyteller-debug {
+      width: 100%;
+      color: #ffe4a8;
+      font-size: 0.92rem;
+    }
+
     .topbar-actions {
       display: inline-flex;
       align-items: center;
@@ -311,6 +317,35 @@
     .points-copy {
       display: grid;
       gap: 12px;
+    }
+
+    .clue-field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .clue-field span {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: rgba(29, 36, 48, 0.8);
+    }
+
+    .clue-field input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid rgba(29, 36, 48, 0.18);
+      border-radius: 14px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.84);
+      color: #1d2430;
+      font: inherit;
+    }
+
+    .hand-submit-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .clue-copy p,
@@ -874,6 +909,19 @@
 
     .sim-bonus-action {
       justify-self: start;
+    }
+
+    .chat-preview {
+      display: grid;
+      gap: 8px;
+      max-height: 14rem;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .chat-preview p {
+      margin: 0;
+      line-height: 1.45;
     }
 
     .wildcard-popup-backdrop {

@@ -1,5 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Game } from '../interfaces/game';
 import { GamesPull } from '../services/games-pull';
 import { GameCard } from './components/game-card/game-card';
@@ -8,13 +10,79 @@ import { Auth } from '../services/auth';
 @Component({
   selector: 'app-games-view',
   standalone: true,
-  imports: [CommonModule, GameCard],
+  imports: [CommonModule, FormsModule, GameCard],
   template: `
     <section class="games-view">
       <header class="games-header">
-        <h1>Salas disponibles</h1>
-        <span class="games-count">{{ games().length }} resultados</span>
+        <div class="games-header-copy">
+          <h1>Salas disponibles</h1>
+          <span class="games-count">{{ games().length }} resultados</span>
+        </div>
+
+        <button
+          type="button"
+          class="create-lobby-button"
+          [disabled]="!auth.isLoggedIn() || createLobbyLoading()"
+          (click)="toggleCreateLobbyPanel()"
+        >
+          {{ isCreateLobbyPanelOpen() ? 'Cerrar' : 'Crear lobby' }}
+        </button>
       </header>
+
+      @if (isCreateLobbyPanelOpen()) {
+        <section class="create-lobby-panel">
+          <div class="create-lobby-grid">
+            <label class="field">
+              <span>Nombre</span>
+              <input
+                type="text"
+                maxlength="50"
+                [(ngModel)]="createLobbyName"
+                [disabled]="createLobbyLoading()"
+                placeholder="Mi sala de Dixit"
+              />
+            </label>
+
+            <label class="field">
+              <span>Jugadores</span>
+              <select [(ngModel)]="createLobbyMaxPlayers" [disabled]="createLobbyLoading()">
+                @for (count of [3, 4, 5, 6]; track count) {
+                  <option [ngValue]="count">{{ count }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Modo</span>
+              <input type="text" value="Classic" disabled />
+            </label>
+
+            <label class="field checkbox-field">
+              <input type="checkbox" [(ngModel)]="createLobbyPrivate" [disabled]="createLobbyLoading()" />
+              <span>Lobby privado</span>
+            </label>
+          </div>
+
+          @if (createLobbyMessage()) {
+            <p class="form-feedback success">{{ createLobbyMessage() }}</p>
+          }
+
+          @if (createLobbyError()) {
+            <p class="form-feedback error">{{ createLobbyError() }}</p>
+          }
+
+          <div class="create-lobby-actions">
+            <button
+              type="button"
+              class="submit-lobby-button"
+              [disabled]="createLobbyLoading() || !canCreateLobby()"
+              (click)="submitCreateLobby()"
+            >
+              {{ createLobbyLoading() ? 'Creando...' : 'Crear y entrar' }}
+            </button>
+          </div>
+        </section>
+      }
 
       @if (!auth.isLoggedIn()) {
         <div class="loading-error">
@@ -54,11 +122,17 @@ import { Auth } from '../services/auth';
 
     .games-header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
       gap: 16px;
       margin-bottom: 20px;
       color: black;
+      flex-wrap: wrap;
+    }
+
+    .games-header-copy {
+      display: grid;
+      gap: 4px;
     }
 
     .games-header h1 {
@@ -68,9 +142,105 @@ import { Auth } from '../services/auth';
     }
 
     .games-count {
-      padding-top: 10px;
-      font-size: 1.5rem;
+      font-size: 1rem;
       color: black;
+    }
+
+    .create-lobby-button,
+    .submit-lobby-button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 160ms ease, opacity 160ms ease;
+    }
+
+    .create-lobby-button {
+      background: linear-gradient(135deg, #101218, #1d2430);
+      color: #f5f0e3;
+    }
+
+    .submit-lobby-button {
+      background: linear-gradient(135deg, #d6891f, #f0bb61);
+      color: #1d2430;
+    }
+
+    .create-lobby-button:disabled,
+    .submit-lobby-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .create-lobby-panel {
+      margin-bottom: 24px;
+      padding: 20px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid rgba(16, 18, 24, 0.08);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+      color: #1d2430;
+    }
+
+    .create-lobby-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      font-weight: 600;
+    }
+
+    .field span {
+      font-size: 0.9rem;
+    }
+
+    .field input,
+    .field select {
+      min-height: 46px;
+      border-radius: 12px;
+      border: 1px solid rgba(16, 18, 24, 0.16);
+      padding: 0 14px;
+      font: inherit;
+      background: #fff;
+      color: #1d2430;
+    }
+
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 46px;
+    }
+
+    .checkbox-field input {
+      min-height: auto;
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .create-lobby-actions {
+      margin-top: 18px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .form-feedback {
+      margin: 14px 0 0;
+      font-weight: 600;
+    }
+
+    .form-feedback.success {
+      color: #136f4f;
+    }
+
+    .form-feedback.error {
+      color: #ad2323;
     }
 
     .games-grid {
@@ -115,10 +285,19 @@ import { Auth } from '../services/auth';
 export class Games {
   readonly auth = inject(Auth);
   private readonly gameService = inject(GamesPull);
+  private readonly router = inject(Router);
 
   readonly games = signal<Game[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly isCreateLobbyPanelOpen = signal(false);
+  readonly createLobbyLoading = signal(false);
+  readonly createLobbyError = signal<string | null>(null);
+  readonly createLobbyMessage = signal<string | null>(null);
+
+  createLobbyName = '';
+  createLobbyMaxPlayers = 4;
+  createLobbyPrivate = false;
 
   constructor() {
     if (this.auth.isLoggedIn()) {
@@ -141,5 +320,43 @@ export class Games {
       .finally(() => {
         this.loading.set(false);
       });
+  }
+
+  canCreateLobby(): boolean {
+    return this.createLobbyName.trim().length > 0;
+  }
+
+  toggleCreateLobbyPanel(): void {
+    this.isCreateLobbyPanelOpen.update((currentState) => !currentState);
+    this.createLobbyError.set(null);
+    this.createLobbyMessage.set(null);
+  }
+
+  async submitCreateLobby(): Promise<void> {
+    if (!this.auth.isLoggedIn() || !this.canCreateLobby()) {
+      return;
+    }
+
+    this.createLobbyLoading.set(true);
+    this.createLobbyError.set(null);
+    this.createLobbyMessage.set(null);
+
+    try {
+      const result = await this.gameService.createLobby({
+        name: this.createLobbyName.trim(),
+        maxPlayers: this.createLobbyMaxPlayers,
+        engine: 'Classic',
+        isPrivate: this.createLobbyPrivate,
+      });
+
+      this.createLobbyMessage.set(result.message);
+      await this.router.navigateByUrl(result.route);
+    } catch (error) {
+      this.createLobbyError.set(
+        error instanceof Error ? error.message : 'No se pudo crear la sala'
+      );
+    } finally {
+      this.createLobbyLoading.set(false);
+    }
   }
 }

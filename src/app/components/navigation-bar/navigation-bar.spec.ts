@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { NavigationBar } from './navigation-bar';
+import { Auth } from '../../services/auth';
 import { FriendsPull } from '../../services/friends-pull';
 
 describe('NavigationBar', () => {
@@ -36,6 +37,7 @@ describe('NavigationBar', () => {
       providers: [
         provideRouter([]),
         { provide: FriendsPull, useValue: friendsPullSpy },
+        { provide: Auth, useValue: { activeGameId: () => null } },
       ],
     }).compileComponents();
 

@@ -1,6 +1,7 @@
 import { Location } from '@angular/common';
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { Auth } from '../../services/auth';
 import {
   Friend,
   FriendsPull,
@@ -29,7 +30,7 @@ interface PendingFriendRequestViewModel {
   imports: [RouterLink],
   template: `
     <header class="store-navbar">
-      <a class="brand" routerLink="/games" aria-label="Ir al menu principal">
+      <a class="brand" [routerLink]="brandRoute()" [attr.aria-label]="brandAriaLabel()">
         A Tale of Recognition
       </a>
 
@@ -216,6 +217,7 @@ interface PendingFriendRequestViewModel {
 export class NavigationBar {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
+  private readonly auth = inject(Auth);
   private readonly friendsPull = inject(FriendsPull);
   private readonly cdr = inject(ChangeDetectorRef);
   communityOpen = false;
@@ -238,6 +240,17 @@ export class NavigationBar {
 
   isSettingsPage(): boolean {
     return this.router.url.split('?')[0].split('#')[0] === '/settings';
+  }
+
+  brandRoute(): string {
+    const activeGameId = this.auth.activeGameId();
+    return activeGameId ? `/dixit/${encodeURIComponent(activeGameId)}` : '/games';
+  }
+
+  brandAriaLabel(): string {
+    return this.auth.activeGameId()
+      ? 'Volver a la partida activa'
+      : 'Ir al menu principal';
   }
 
   switchCommunityPanel(): void {

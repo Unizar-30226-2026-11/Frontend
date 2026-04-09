@@ -9,6 +9,7 @@ import {
   CollectionsPull,
 } from '../services/collections-pull';
 import { Auth } from '../services/auth';
+import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 
 describe('MainMenu', () => {
@@ -16,6 +17,7 @@ describe('MainMenu', () => {
   let fixture: ComponentFixture<MainMenu>;
   let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
+  let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
   let routerSpy: jasmine.SpyObj<Router>;
   let authStub: {
     isLoggedIn: jasmine.Spy<() => boolean>;
@@ -38,6 +40,23 @@ describe('MainMenu', () => {
       status: 'starting',
       route: '/dixit/A1B2',
     });
+    realtimeSpy = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
+      'ensureLobbyConnection',
+      'joinLobby',
+      'startLobby',
+      'lobbyState',
+      'activeLobbyCode',
+      'lastError',
+      'gameStarted',
+      'connectionStatus',
+    ]);
+    realtimeSpy.ensureLobbyConnection.and.resolveTo();
+    realtimeSpy.joinLobby.and.resolveTo();
+    realtimeSpy.lobbyState.and.returnValue(null);
+    realtimeSpy.activeLobbyCode.and.returnValue('');
+    realtimeSpy.lastError.and.returnValue('');
+    realtimeSpy.gameStarted.and.returnValue(null);
+    realtimeSpy.connectionStatus.and.returnValue('idle');
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
     routerSpy.navigateByUrl.and.resolveTo(true);
     authStub = {
@@ -50,6 +69,7 @@ describe('MainMenu', () => {
       providers: [
         { provide: CollectionsPull, useValue: collectionsPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
+        { provide: DixitRealtime, useValue: realtimeSpy },
         { provide: Router, useValue: routerSpy },
         { provide: Auth, useValue: authStub },
         {
@@ -79,7 +99,11 @@ describe('MainMenu', () => {
   });
 
   it('loads lobby players from the route id', () => {
-    expect(gamesPullSpy.getGameDetails).toHaveBeenCalledOnceWith('A1B2');
+    expect(gamesPullSpy.getGameDetails).toHaveBeenCalledOnceWith('A1B2', {
+      forceRefresh: true,
+    });
+    expect(realtimeSpy.ensureLobbyConnection).toHaveBeenCalledOnceWith('A1B2');
+    expect(realtimeSpy.joinLobby).not.toHaveBeenCalled();
     expect(component.playersInRoom).toBe(2);
     expect(component.roomCapacity).toBe(4);
     expect(component.roomSlots).toEqual([
@@ -93,6 +117,24 @@ describe('MainMenu', () => {
   it('shows the host action when the authenticated player owns the lobby', () => {
     expect(component.isHost).toBeTrue();
     expect(component.primaryActionButtonText).toBe('Empezar partida');
+    expect(component.shouldShowJoinOverlay).toBeTrue();
+  });
+
+  it('does not restore realtime when the authenticated user is not in the lobby', async () => {
+    authStub.session.and.returnValue({ user: { id: 'u_999' } });
+    gamesPullSpy.getGameDetails.calls.reset();
+    realtimeSpy.ensureLobbyConnection.calls.reset();
+
+    const freshFixture = TestBed.createComponent(MainMenu);
+    const freshComponent = freshFixture.componentInstance;
+    freshFixture.detectChanges();
+    await freshFixture.whenStable();
+
+    expect(gamesPullSpy.getGameDetails).toHaveBeenCalledOnceWith('A1B2', {
+      forceRefresh: true,
+    });
+    expect(realtimeSpy.ensureLobbyConnection).not.toHaveBeenCalled();
+    expect(freshComponent.shouldShowJoinOverlay).toBeTrue();
   });
 
   it('shows the ready action for non-host players', () => {
@@ -102,11 +144,21 @@ describe('MainMenu', () => {
     expect(component.primaryActionButtonText).toBe('Listo');
   });
 
-  it('starts the lobby and navigates to Dixit when the host presses the main action', async () => {
+  it('joins the lobby only when the user requests it', async () => {
+    await component.joinCurrentLobby();
+
+    expect(realtimeSpy.joinLobby).toHaveBeenCalledOnceWith('A1B2');
+  });
+
+  it('starts the lobby when the host presses the main action after joining', async () => {
+    realtimeSpy.connectionStatus.and.returnValue('connected');
+    realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
+
     await component.onPrimaryAction();
 
-    expect(gamesPullSpy.startLobby).toHaveBeenCalledOnceWith('A1B2');
-    expect(routerSpy.navigateByUrl).toHaveBeenCalledOnceWith('/dixit/A1B2');
+    expect(realtimeSpy.startLobby).toHaveBeenCalledTimes(1);
+    expect(component.primaryActionMessage).toContain('Solicitud de inicio enviada');
+    expect(component.primaryActionButtonText).toBe('Empezar partida');
   });
 });
 
