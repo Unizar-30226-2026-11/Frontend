@@ -22,6 +22,8 @@ import { DixitHandPhase } from './phases/hand-phase';
 import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 import { DixitPointsPhase } from './phases/points-phase';
 import type { DixitChatComposer, DixitPlayerRow, DixitWildcardReward } from './dixit-phase.models';
+import { DixitMinijuego1 } from './minijuegos/minijuego-1';
+import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 
 type DixitPhase = 'hand' | 'choice' | 'points';
 type PointsStage = 'waiting' | 'reveal' | 'ranking';
@@ -101,7 +103,7 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
 @Component({
   selector: 'app-dixit',
   standalone: true,
-  imports: [DixitHandPhase, DixitChoicePhase, DixitPointsPhase],
+  imports: [DixitHandPhase, DixitChoicePhase, DixitPointsPhase, DixitMinijuego1, DixitMinijuego2],
   template: `
     <section class="dixit-table">
       <nav class="dixit-topbar" aria-label="Barra de partida">
