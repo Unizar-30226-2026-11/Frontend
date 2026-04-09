@@ -263,6 +263,14 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
         </article>
       </div>
     }
+
+    @if (isMinigame1Open) {
+      <app-dixit-minijuego-1 (close)="closeMinigame1()" />
+    }
+
+    @if (isMinigame2Open) {
+      <app-dixit-minijuego-2 (close)="closeMinigame2()" />
+    }
   `,
   styleUrl: './dixit.css',
 })
@@ -311,6 +319,8 @@ export class Dixit implements OnInit, OnDestroy {
   wildcards: DixitWildcardReward[] = [];
   activeEffectPopup: BoardEffectPopup | null = null;
   isSimulationDrawerOpen = false;
+  isMinigame1Open = false;
+  isMinigame2Open = false;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingBoardTokens: TrackBoardToken[] | null = null;
@@ -1125,6 +1135,26 @@ export class Dixit implements OnInit, OnDestroy {
 
   closeSimulationDrawer(): void {
     this.isSimulationDrawerOpen = false;
+  }
+
+  openMinigame1(): void {
+    this.isMinigame1Open = true;
+    this.isMinigame2Open = false;
+    this.closeSimulationDrawer();
+  }
+
+  closeMinigame1(): void {
+    this.isMinigame1Open = false;
+  }
+
+  openMinigame2(): void {
+    this.isMinigame2Open = true;
+    this.isMinigame1Open = false;
+    this.closeSimulationDrawer();
+  }
+
+  closeMinigame2(): void {
+    this.isMinigame2Open = false;
   }
 
   simulateWildcardReward(): void {

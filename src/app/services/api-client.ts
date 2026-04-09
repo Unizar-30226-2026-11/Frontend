@@ -17,7 +17,7 @@ interface CacheEntry<T> {
 export class ApiClient {
   readonly baseUrl = '/api';
 
-  private readonly defaultTtlMs = 60_000;
+  private readonly defaultTtlMs = 60000;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
 
