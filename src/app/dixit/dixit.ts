@@ -17,6 +17,8 @@ import { CardPull } from '../services/card-pull';
 import type { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import type { TrackBoardToken } from './components/track-board';
+import { DixitMinijuego1 } from './minijuegos/minijuego-1';
+import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
 import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
@@ -101,7 +103,13 @@ const WILDCARD_REWARDS: readonly Omit<DixitWildcardReward, 'id'>[] = [
 @Component({
   selector: 'app-dixit',
   standalone: true,
-  imports: [DixitHandPhase, DixitChoicePhase, DixitPointsPhase],
+  imports: [
+    DixitHandPhase,
+    DixitChoicePhase,
+    DixitPointsPhase,
+    DixitMinijuego1,
+    DixitMinijuego2,
+  ],
   template: `
     <section class="dixit-table">
       <nav class="dixit-topbar" aria-label="Barra de partida">
@@ -349,6 +357,19 @@ export class Dixit implements OnInit, OnDestroy {
         }
 
         this.applyRealtimeGameState(gameState);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const privateHand = this.realtime.privateHand();
+        if (!privateHand || privateHand.lobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimePrivateHand(privateHand.hand);
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -750,6 +771,18 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
+  private applyRealtimePrivateHand(hand: Array<number | string>): void {
+    const handCards = this.normalizeCards(hand);
+    if (handCards.length === 0) {
+      return;
+    }
+
+    this.cards = handCards;
+    if (this.choiceCards.length === 0) {
+      this.choiceCards = [...handCards];
+    }
+  }
+
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
     const currentPlayerState = this.resolveCurrentPlayerState(state);
     const selectedVoteCode =
@@ -886,6 +919,16 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private normalizeCard(entry: unknown, index: number): DeckCard | null {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      const code = String(entry);
+      return {
+        code,
+        image: DEFAULT_CARD_IMAGE,
+        value: code,
+        suit: 'DIXIT',
+      };
+    }
+
     if (typeof entry === 'string') {
       const code = entry.trim();
       if (!code) {
@@ -1100,13 +1143,8 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     const cardId = this.resolveActionCardId(this.selectedHandCardCode);
-    const payload: Record<string, unknown> = {
-      cardCode: this.selectedHandCardCode,
-      cardId,
-    };
-
     try {
-      this.realtime.sendGameAction('PLAY_CARD', payload);
+      this.realtime.sendGameAction('SUBMIT_CARD', { cardId });
     } catch (error) {
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudo enviar la jugada';
@@ -1193,8 +1231,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     const cardId = this.resolveActionCardId(this.selectedChoiceCardCode);
     try {
-      this.realtime.sendGameAction('VOTE_CARD', {
-        cardCode: this.selectedChoiceCardCode,
+      this.realtime.sendGameAction('CAST_VOTE', {
         cardId,
       });
     } catch (error) {

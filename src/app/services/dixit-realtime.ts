@@ -8,6 +8,7 @@ import {
   RealtimeGameStateUpdate,
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
+  RealtimePrivateHand,
   RealtimeSession,
   RealtimeToast,
 } from '../interfaces/dixit-realtime';
@@ -41,6 +42,7 @@ export class DixitRealtime {
     this.restoreGameState(this.restoreSession()?.lobbyCode ?? null)
   );
   private readonly gameStartedSignal = signal<RealtimeGameStarted | null>(null);
+  private readonly privateHandSignal = signal<RealtimePrivateHand | null>(null);
   private readonly chatMessagesSignal = signal<RealtimeChatMessage[]>([]);
   private readonly lastErrorSignal = signal('');
   private readonly activeGameNoticeSignal = signal('');
@@ -52,6 +54,7 @@ export class DixitRealtime {
   readonly lobbyState = computed(() => this.lobbyStateSignal());
   readonly gameState = computed(() => this.gameStateSignal());
   readonly gameStarted = computed(() => this.gameStartedSignal());
+  readonly privateHand = computed(() => this.privateHandSignal());
   readonly chatMessages = computed(() => this.chatMessagesSignal());
   readonly lastError = computed(() => this.lastErrorSignal());
   readonly activeGameNotice = computed(() => this.activeGameNoticeSignal());
@@ -143,12 +146,28 @@ export class DixitRealtime {
     await this.ensureLobbyConnection(normalizedLobbyCode);
   }
 
-  startLobby(): void {
-    this.debug('emit client:lobby:start');
-    this.emit('client:lobby:start', {});
+  startLobby(useDynamicPool?: boolean): void {
+    const payload =
+      typeof useDynamicPool === 'boolean' ? { useDynamicPool } : {};
+    this.debug('emit client:lobby:start', payload);
+    this.emit('client:lobby:start', payload);
   }
 
-  sendGameAction(actionType: DixitGameActionType, payload: Record<string, unknown>): void {
+  triggerStar(): void {
+    this.debug('emit client:game:trigger_star');
+    this.emit('client:game:trigger_star', {
+      lobbyCode: this.requireSession().lobbyCode,
+    });
+  }
+
+  claimStar(): void {
+    this.debug('emit client:game:claim_star');
+    this.emit('client:game:claim_star', {
+      lobbyCode: this.requireSession().lobbyCode,
+    });
+  }
+
+  sendGameAction(actionType: DixitGameActionType, payload: Record<string, unknown> = {}): void {
     this.debug(`emit client:game:action ${actionType}`, payload);
     this.emit('client:game:action', {
       lobbyCode: this.requireSession().lobbyCode,
@@ -173,7 +192,7 @@ export class DixitRealtime {
   leaveLobby(): void {
     if (this.socket !== null) {
       this.debug('emit client:lobby:leave');
-      this.socket.emit('client:lobby:leave', {});
+      this.socket.emit('client:lobby:leave');
     }
 
     this.disconnect(false);
@@ -201,6 +220,7 @@ export class DixitRealtime {
     this.lobbyStateSignal.set(null);
     this.gameStateSignal.set(null);
     this.gameStartedSignal.set(null);
+    this.privateHandSignal.set(null);
     this.chatMessagesSignal.set([]);
     this.lastErrorSignal.set('');
     this.activeGameNoticeSignal.set('');
@@ -259,26 +279,9 @@ export class DixitRealtime {
       timeout: SOCKET_CONNECT_TIMEOUT_MS,
       reconnection: true,
       autoConnect: true,
-      auth: credential
-        ? {
-            token: credential,
-            ticket: credential,
-            code: credential,
-            lobbyCode: session.lobbyCode,
-          }
-        : {
-            lobbyCode: session.lobbyCode,
-          },
-      query: credential
-        ? {
-            token: credential,
-            ticket: credential,
-            code: credential,
-            lobbyCode: session.lobbyCode,
-          }
-        : {
-            lobbyCode: session.lobbyCode,
-          },
+      auth: {
+        token: credential,
+      },
     });
 
     this.socket = socket;
@@ -305,7 +308,7 @@ export class DixitRealtime {
       });
 
       if (session.joinOnConnect !== false) {
-        socket.emit('client:lobby:join', { lobbyCode: session.lobbyCode });
+        socket.emit('client:lobby:join');
       }
 
       if (this.auth.activeGameId() === session.lobbyCode) {
@@ -379,6 +382,33 @@ export class DixitRealtime {
       });
     });
 
+    socket.on('server:game:private_hand', (payload: unknown) => {
+      this.handlePrivateHand(payload, session.lobbyCode);
+    });
+
+    socket.on('server:game:special_event', (payload: unknown) => {
+      const message = this.resolveSpecialEventMessage(payload);
+      if (message) {
+        this.pushToast(message);
+      }
+      this.debug('event server:game:special_event', payload);
+    });
+
+    socket.on('server:game:duel_available', (payload: unknown) => {
+      const challengerId = readString(asRecord(payload), 'challengerId');
+      this.pushToast(
+        challengerId
+          ? `Duelo disponible para ${challengerId}.`
+          : 'Duelo disponible. Elige un rival.'
+      );
+      this.debug('event server:game:duel_available', payload);
+    });
+
+    socket.on('server:game:deck_reshuffled', (payload: unknown) => {
+      this.pushToast('El mazo central se ha rebarajado.');
+      this.debug('event server:game:deck_reshuffled', payload);
+    });
+
     socket.on('server:game:ended', (payload: unknown) => {
       this.handleGameEnded(payload);
     });
@@ -407,8 +437,24 @@ export class DixitRealtime {
       this.handleGameStarted(payload, 'server:game:started');
     });
 
+    socket.on('server:session:recovered', (payload: unknown) => {
+      this.handleSessionRecovered(payload, 'server:session:recovered');
+    });
+
     socket.on('session_recovered', (payload: unknown) => {
-      this.handleSessionRecovered(payload);
+      this.handleSessionRecovered(payload, 'session_recovered');
+    });
+
+    socket.on('server:lobby:recovered', (payload: unknown) => {
+      this.handleLobbyRecovered(payload, session.lobbyCode);
+    });
+
+    socket.on('server:force_disconnect', (payload: unknown) => {
+      const message = this.resolveServerMessage(payload);
+      this.lastErrorSignal.set(message);
+      this.pushToast(message);
+      this.debug('event server:force_disconnect', payload);
+      this.disconnect(false);
     });
 
     socket.on('your_turn', (payload: unknown) => {
@@ -429,6 +475,21 @@ export class DixitRealtime {
           : message
       );
       this.debug('event opponent_disconnected', payload);
+    });
+
+    socket.on('star_spawned', (payload: unknown) => {
+      this.pushToast('Ha aparecido una estrella fugaz.');
+      this.debug('event star_spawned', payload);
+    });
+
+    socket.on('star_claimed', (payload: unknown) => {
+      const winnerId = readString(asRecord(payload), 'winnerId');
+      this.pushToast(
+        winnerId
+          ? `La estrella fugaz la ha capturado ${winnerId}.`
+          : 'La estrella fugaz ha sido capturada.'
+      );
+      this.debug('event star_claimed', payload);
     });
   }
 
@@ -640,7 +701,38 @@ export class DixitRealtime {
     };
   }
 
-  private handleSessionRecovered(payload: unknown): void {
+  private handlePrivateHand(payload: unknown, lobbyCode: string): void {
+    const data = asRecord(payload);
+    const rawHand = data ? readArray(data, 'hand') : [];
+    const hand = rawHand
+      .map((cardId) => this.normalizeCardId(cardId))
+      .filter((cardId): cardId is number | string => cardId !== null);
+
+    if (hand.length === 0) {
+      return;
+    }
+
+    this.privateHandSignal.set({
+      lobbyCode,
+      hand,
+      receivedAt: Date.now(),
+    });
+    this.debug('event server:game:private_hand', { lobbyCode, hand });
+  }
+
+  private normalizeCardId(value: unknown): number | string | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+
+    return null;
+  }
+
+  private handleSessionRecovered(payload: unknown, eventName: string): void {
     const data = asRecord(payload);
     const wrappedData = asRecord(data?.['data']) ?? data;
     const state = asRecord(wrappedData?.['state']);
@@ -665,10 +757,25 @@ export class DixitRealtime {
       });
     }
 
-    this.debug('event session_recovered', {
+    this.debug(`event ${eventName}`, {
       gameId: recoveredGameId,
       hasState: !!state,
     });
+  }
+
+  private handleLobbyRecovered(payload: unknown, fallbackLobbyCode: string): void {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    const lobbyData =
+      asRecord(wrappedData?.['lobby']) ??
+      asRecord(wrappedData?.['state']) ??
+      wrappedData;
+    const lobbyState = this.normalizeLobbyState(lobbyData, fallbackLobbyCode);
+
+    if (lobbyState) {
+      this.lobbyStateSignal.set(lobbyState);
+      this.debug('event server:lobby:recovered', lobbyState);
+    }
   }
 
   private handleGameStarted(payload: unknown, eventName: string): void {
@@ -738,6 +845,38 @@ export class DixitRealtime {
     }
 
     return 'La partida ha terminado.';
+  }
+
+  private resolveSpecialEventMessage(payload: unknown): string {
+    const data = asRecord(payload);
+    const effect = readString(data, 'effect');
+    if (!effect) {
+      return '';
+    }
+
+    const playerId = readString(data, 'pId');
+    const points = readNumber(data, 'points');
+    const squareId = readNumber(data, 'squareId');
+    const amount = readNumber(data, 'amount');
+    const message = readString(data, 'message');
+
+    switch (effect) {
+      case 'ODD':
+      case 'EVEN':
+        return [
+          playerId ?? 'Jugador',
+          points !== null ? `${points > 0 ? '+' : ''}${points} pts` : 'casilla especial',
+          squareId !== null ? `(casilla ${squareId})` : '',
+        ].filter(Boolean).join(' ');
+      case 'EQUILIBRIUM':
+        return 'Equilibrio: todos avanzan por posicion en el ranking.';
+      case 'SHUFFLE':
+        return `${playerId ?? 'Un jugador'} cambio toda su mano.`;
+      case 'CARD_BONUS':
+        return `${playerId ?? 'Un jugador'}: ${amount !== null && amount > 0 ? '+' : ''}${amount ?? 0} cartas por 2 rondas.`;
+      default:
+        return message ?? `Evento especial: ${effect}.`;
+    }
   }
 
   private pushToast(message: string): void {
@@ -950,4 +1089,16 @@ function readString(
 
   const value = source[key];
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readNumber(
+  source: Record<string, unknown> | null | undefined,
+  key: string
+): number | null {
+  if (!source) {
+    return null;
+  }
+
+  const value = source[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

@@ -20,6 +20,7 @@ describe('Dixit', () => {
       'sendGameAction',
       'lobbyState',
       'gameState',
+      'privateHand',
       'activeLobbyCode',
       'lastError',
       'connectionStatus',
@@ -28,6 +29,7 @@ describe('Dixit', () => {
     realtimeSpy.ensureLobbyConnection.and.resolveTo();
     realtimeSpy.lobbyState.and.returnValue(null);
     realtimeSpy.gameState.and.returnValue(null);
+    realtimeSpy.privateHand.and.returnValue(null);
     realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
     realtimeSpy.lastError.and.returnValue('');
     realtimeSpy.connectionStatus.and.returnValue('connected');
@@ -75,13 +77,13 @@ describe('Dixit', () => {
     tick();
 
     component.onHandCardDragStart(component.cards[1]);
-    component.onDropZoneDrop(createDragDropEvent('KH'));
+    component.onDropZoneDrop(createDragDropEvent('c_102'));
 
-    expect(component.selectedHandCardCode).toBe('KH');
+    expect(component.selectedHandCardCode).toBe('c_102');
 
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Seleccionada: KH');
+    expect(text).toContain('Seleccionada: c_102');
   }));
 
   it('reads the storyteller from currentRound and submits the clue separately', fakeAsync(() => {
@@ -103,7 +105,7 @@ describe('Dixit', () => {
 
     expect(component.isCurrentPlayerStoryteller).toBeTrue();
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SEND_STORY', {
-      cardId: 'AS',
+      cardId: 'c_101',
       clue: 'Una pista real',
     });
     expect(component.handSubmitted).toBeTrue();
@@ -129,9 +131,8 @@ describe('Dixit', () => {
     component.onChoiceCardSelected(component.choiceCards[1]);
     component.submitVoteSelection();
 
-    expect(realtimeSpy.sendGameAction).toHaveBeenCalledOnceWith('VOTE_CARD', {
-      cardCode: 'KH',
-      cardId: 'KH',
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledOnceWith('CAST_VOTE', {
+      cardId: 'c_102',
     });
     expect(component.voteSubmitted).toBeTrue();
   }));
@@ -196,22 +197,22 @@ describe('Dixit', () => {
 function createCardsFixture(): DeckCard[] {
   return [
     {
-      code: 'AS',
-      image: 'https://deckofcardsapi.com/static/img/AS.png',
-      value: 'ACE',
-      suit: 'SPADES',
+      code: 'c_101',
+      image: '/assets/Tablero.png',
+      value: 'Dragon de Fuego',
+      suit: 'DIXIT',
     },
     {
-      code: 'KH',
-      image: 'https://deckofcardsapi.com/static/img/KH.png',
-      value: 'KING',
-      suit: 'HEARTS',
+      code: 'c_102',
+      image: '/assets/Tablero.png',
+      value: 'Bosque Invertido',
+      suit: 'DIXIT',
     },
     {
-      code: 'QD',
-      image: 'https://deckofcardsapi.com/static/img/QD.png',
-      value: 'QUEEN',
-      suit: 'DIAMONDS',
+      code: 'c_103',
+      image: '/assets/Tablero.png',
+      value: 'Reloj Sumergido',
+      suit: 'DIXIT',
     },
   ];
 }
