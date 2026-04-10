@@ -31,6 +31,12 @@ class TestGames {}
 })
 class TestDixit {}
 
+@Component({
+  standalone: true,
+  template: '<p>dixit stella</p>',
+})
+class TestDixitStella {}
+
 describe('App', () => {
   let authStub: {
     ensureInitialized: jasmine.Spy<() => Promise<{ activeGameId: string | null } | null>>;
@@ -65,6 +71,8 @@ describe('App', () => {
           { path: 'store', component: TestStore },
           { path: 'games', component: TestGames },
           { path: 'dixit/:id', component: TestDixit },
+          { path: 'dixit-stella/:id', component: TestDixitStella },
+          { path: 'stella-test', component: TestDixitStella },
         ]),
         {
           provide: Auth,
@@ -118,6 +126,26 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const router = TestBed.inject(Router);
     await router.navigateByUrl('/dixit/demo-room');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('app-navigation-bar')).toBeNull();
+  });
+
+  it('should hide the navigation bar on dixit stella routes', async () => {
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/dixit-stella/demo-room');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('app-navigation-bar')).toBeNull();
+  });
+
+  it('should hide the navigation bar on the stella test route', async () => {
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/stella-test');
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

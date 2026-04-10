@@ -1,0 +1,397 @@
+    <section class="dixit-table">
+      <nav class="dixit-topbar" aria-label="Barra de partida">
+        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
+
+        <div class="phase-banner">
+          <p class="eyebrow">Sala {{ id || 'demo' }}</p>
+          <div class="phase-current">
+            <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
+            <p>{{ currentPhaseInstruction }}</p>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
+          <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
+        </div>
+      </nav>
+
+      @if (loading) {
+        <article class="status-card">
+          <p>Cargando cartas...</p>
+        </article>
+      } @else if (errorMessage) {
+        <article class="status-card error">
+          <p>{{ errorMessage }}</p>
+        </article>
+      } @else if (cards.length === 0) {
+        <article class="status-card">
+          <p>No se recibieron cartas para la demo.</p>
+        </article>
+      } @else {
+        <div class="table-main">
+          @if (phase === 'choice') {
+            <section class="phase-stage-screen choice-stage-screen">
+              <div class="phase-stage-header">
+                <div class="phase-stage-copy">
+                  <p class="overlay-label">Votacion</p>
+                  <h2>{{ currentClue }}</h2>
+                  <p>
+                    @if (selectedChoiceCard) {
+                      Has elegido {{ selectedChoiceCard.code }}. Puedes cambiarla antes de confirmar.
+                    } @else {
+                      Elige una carta para votar y confirma tu decision.
+                    }
+                  </p>
+                </div>
+
+                @if (voteSubmitted) {
+                  <span class="status-pill">Voto confirmado</span>
+                }
+              </div>
+
+              <div class="choice-stage-grid">
+                @for (card of choiceCards; track card.code) {
+                  <button
+                    type="button"
+                    class="vote-card stage-vote-card"
+                    [class.selected]="card.code === selectedChoiceCardCode"
+                    [class.locked]="voteSubmitted"
+                    (click)="onChoiceCardSelected(card)"
+                  >
+                    <img
+                      draggable="false"
+                      [src]="card.image"
+                      [alt]="card.value + ' de ' + card.suit"
+                    />
+                  </button>
+                }
+              </div>
+
+              <div class="phase-stage-footer">
+                <p>
+                  @if (selectedChoiceCard) {
+                    Tu voto actual es {{ selectedChoiceCard.code }}.
+                  } @else {
+                    Selecciona una de las cartas para continuar.
+                  }
+                </p>
+
+                <button
+                  type="button"
+                  class="sidebar-action"
+                  [disabled]="!selectedChoiceCardCode || voteSubmitted"
+                  (click)="submitVoteSelection()"
+                >
+                  Confirmar voto
+                </button>
+              </div>
+            </section>
+          } @else if (phase === 'points' && pointsStage !== 'ranking') {
+            <section
+              class="phase-stage-screen points-stage-screen"
+              [class.reveal-stage]="pointsStage === 'reveal'"
+              (click)="pointsStage === 'reveal' && simulateRankingShown()"
+            >
+              <div class="phase-stage-header">
+                <div class="phase-stage-copy">
+                  <p class="overlay-label">Puntuacion</p>
+                  <h2>{{ currentClue }}</h2>
+                  @if (pointsStage === 'waiting') {
+                    <p>Esperando votos antes de resolver la ronda.</p>
+                  } @else if (pointsStage === 'reveal') {
+                    <p>Revisa cartas, dueños y votos. Haz clic o espera 3 segundos.</p>
+                  }
+                </div>
+
+                @if (pointsStage === 'reveal') {
+                  <button
+                    type="button"
+                    class="secondary-action"
+                    (click)="$event.stopPropagation(); simulateRankingShown()"
+                  >
+                    Mostrar puntos ahora
+                  </button>
+                }
+              </div>
+
+              @if (pointsStage === 'waiting') {
+                <div class="points-stage-waiting">
+                  <p>{{ pointsVotesReceived }} / {{ pointsVotesTotal }} jugadores han votado.</p>
+                  <progress [value]="pointsVotesReceived" [max]="pointsVotesTotal || 1"></progress>
+                </div>
+              } @else if (pointsStage === 'reveal') {
+                <div class="reveal-grid stage-reveal-grid">
+                  @for (result of pointsRevealedCards; track result.card.code) {
+                    <article class="reveal-card stage-reveal-card">
+                      <img
+                        draggable="false"
+                        [src]="result.card.image"
+                        [alt]="result.card.value + ' de ' + result.card.suit"
+                      />
+                      <p class="owner-label">Carta de {{ result.ownerName }}</p>
+                      <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
+                    </article>
+                  }
+                </div>
+              }
+            </section>
+          }
+
+          <app-dixit-track-board
+            [title]="''"
+            [subtitle]="''"
+            [tokens]="boardTokens"
+            [wildcardCells]="wildcardCellPositions"
+            [eventBackCells]="eventBackCellPositions"
+            [eventForwardCells]="eventForwardCellPositions"
+            [showControls]="false"
+            [interactive]="false"
+          >
+            @if (phase === 'hand') {
+              <div board-overlay class="board-overlay-content">
+                <section class="board-overlay-shell" [attr.data-phase]="phase">
+                  <div class="story-card hand-overlay">
+                    <div class="clue-copy">
+                      <span class="overlay-label">Pista actual</span>
+                      <h2>{{ currentClue }}</h2>
+                      <p>Arrastra una carta al hueco central.</p>
+                    </div>
+
+                    <div
+                      class="drop-zone"
+                      [class.has-card]="!!selectedHandCard"
+                      [class.is-dragover]="isDropZoneActive"
+                      (dragover)="onDropZoneDragOver($event)"
+                      (dragleave)="onDropZoneDragLeave()"
+                      (drop)="onDropZoneDrop($event)"
+                    >
+                      @if (selectedHandCard; as selectedCard) {
+                        <img
+                          draggable="false"
+                          [src]="selectedCard.image"
+                          [alt]="selectedCard.value + ' de ' + selectedCard.suit"
+                        />
+                        <p>Seleccionada: {{ selectedCard.code }}</p>
+                      } @else {
+                        <p>Suelta aqui tu carta</p>
+                      }
+                    </div>
+                  </div>
+                </section>
+              </div>
+            }
+          </app-dixit-track-board>
+
+          @if (phase === 'hand') {
+            <section class="table-support">
+              <div class="chat-reserved" aria-hidden="true"></div>
+
+              <div class="cards-column">
+                <section class="cards-panel hand-cards-panel">
+                  <div class="section-header">
+                    <div class="section-header-copy">
+                      <p class="overlay-label">Tu mano</p>
+                      <h3>Cartas disponibles</h3>
+                    </div>
+
+                    <div class="section-header-side">
+                      <div class="section-header-copy aligned-right">
+                        <p class="overlay-label">Comodines</p>
+                        <p class="strip-text section-header-note">
+                          @if (wildcards.length === 0) {
+                            Sin comodines todavia.
+                          } @else {
+                            Usa uno antes de cerrar tu jugada.
+                          }
+                        </p>
+                      </div>
+
+                      @if (selectedHandCard) {
+                        <button type="button" class="secondary-action" (click)="clearHandSelection()">
+                          Quitar
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="hand-layout">
+                    <div class="hand-main">
+                      <div class="hand-cards">
+                        @for (card of cards; track card.code) {
+                          <button
+                            type="button"
+                            class="hand-card"
+                            [class.selected]="card.code === selectedHandCardCode"
+                            draggable="true"
+                            (dragstart)="onHandCardDragStart(card, $event)"
+                            (dragend)="onHandCardDragEnd()"
+                            (click)="onHandCardSelected(card)"
+                          >
+                            <img
+                              draggable="false"
+                              [src]="card.image"
+                              [alt]="card.value + ' de ' + card.suit"
+                            />
+                          </button>
+                        }
+                      </div>
+                    </div>
+
+                    <aside class="wildcards-strip">
+                      @if (wildcards.length > 0) {
+                        <div class="wildcards-list">
+                          @for (wildcard of wildcards; track wildcard.id) {
+                            <button
+                              type="button"
+                              class="wildcard-card"
+                              [disabled]="phase !== 'hand'"
+                              (click)="useWildcard(wildcard.id)"
+                            >
+                              <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
+                              <div class="wildcard-copy">
+                                <strong>{{ wildcard.name }}</strong>
+                                <p>{{ wildcard.description }}</p>
+                              </div>
+                            </button>
+                          }
+                        </div>
+                      }
+                    </aside>
+                  </div>
+                </section>
+              </div>
+
+              <aside class="players-panel">
+                <p class="overlay-label">Jugadores</p>
+                <h3>Mesa actual</h3>
+
+                <div class="players-list">
+                  @for (player of playerRows; track player.id) {
+                    <div class="player-row" [class.self]="player.isCurrentPlayer">
+                      <span class="player-dot" [style.background]="player.color"></span>
+                      <span class="player-name">{{ player.name }}</span>
+                      @if (player.isCurrentPlayer) {
+                        <span class="player-tag">Tu</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </aside>
+            </section>
+          }
+        </div>
+
+        @if (isSimulationDrawerOpen) {
+          <button
+            type="button"
+            class="sim-drawer-backdrop"
+            aria-label="Cerrar panel de simulacion"
+            (click)="closeSimulationDrawer()"
+          ></button>
+        }
+
+        <button
+          type="button"
+          class="sim-drawer-toggle"
+          [class.open]="isSimulationDrawerOpen"
+          (click)="toggleSimulationDrawer()"
+        >
+          {{ isSimulationDrawerOpen ? 'Cerrar' : 'Simular' }}
+        </button>
+
+        <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
+          <article class="sim-card">
+            <p class="overlay-label">Eventos simulados</p>
+            <h3>Websocket</h3>
+
+            <button type="button" class="secondary-action sim-bonus-action" (click)="simulateWildcardReward()">
+              Simular: ganar comodin
+            </button>
+
+            @if (phase === 'hand') {
+              <p>Abre la votacion cuando ya tengas carta.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="!selectedHandCardCode"
+                (click)="simulateChoicePhaseOpened()"
+              >
+                Abrir votacion
+              </button>
+            } @else if (phase === 'choice') {
+              <p>Cierra la votacion y abre la resolucion.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="!voteSubmitted"
+                (click)="simulatePointsPhaseOpened()"
+              >
+                Abrir puntuacion
+              </button>
+            } @else if (pointsStage === 'waiting') {
+              <p>Controla manualmente la llegada de votos.</p>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesReceived >= pointsVotesTotal"
+                (click)="simulateVoteReceived()"
+              >
+                Voto recibido
+              </button>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesTotal === 0 || pointsVotesReceived >= pointsVotesTotal"
+                (click)="simulateAllVotesReceived()"
+              >
+                Todos votaron
+              </button>
+              <button
+                type="button"
+                class="sidebar-action"
+                [disabled]="pointsVotesReceived < pointsVotesTotal"
+                (click)="simulateResultsReveal()"
+              >
+                Revelar cartas
+              </button>
+            } @else if (pointsStage === 'reveal') {
+              <p>Las cartas ya se ven. Puedes forzar ya el movimiento del tablero.</p>
+              <button type="button" class="sidebar-action" (click)="simulateRankingShown()">
+                Mostrar puntos
+              </button>
+            } @else {
+              <p>Inicia una ronda nueva desde aqui.</p>
+              <button type="button" class="sidebar-action" (click)="prepareNextRound()">
+                Siguiente ronda
+              </button>
+            }
+          </article>
+        </aside>
+      }
+    </section>
+
+    @if (activeEffectPopup; as popup) {
+      <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="effect-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Casilla especial</p>
+          <h2 id="effect-popup-title">{{ popup.title }}</h2>
+          <div class="wildcard-popup-card">
+            <span class="wildcard-icon large" aria-hidden="true">{{ popup.icon }}</span>
+            <div class="wildcard-copy">
+              <strong>{{ popup.title }}</strong>
+              <p>{{ popup.description }}</p>
+            </div>
+          </div>
+          <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
+            Continuar
+          </button>
+        </article>
+      </div>
+    }

@@ -305,7 +305,7 @@ export class DixitRealtime {
       });
 
       if (session.joinOnConnect !== false) {
-        socket.emit('client:lobby:join', { lobbyCode: session.lobbyCode });
+        socket.emit('client:lobby:join');
       }
 
       if (this.auth.activeGameId() === session.lobbyCode) {

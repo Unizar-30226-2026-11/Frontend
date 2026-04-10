@@ -7,6 +7,7 @@ import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
 import { Dixit } from './dixit/dixit';
+import { DixitStella } from './dixit-stella/dixit-stella';
 import { Login } from './login/login';
 import { Profile } from './profile/profile';
 import { Auth } from './services/auth';
@@ -78,6 +79,16 @@ export const routes: Routes = [
         path: 'dixit/:id',
         title: 'Dixit',
         component: Dixit,
+    },
+    {
+        path: 'dixit-stella/:id',
+        title: 'Dixit Stella',
+        component: DixitStella,
+    },
+    {
+        path: 'stella-test',
+        title: 'Stella Test',
+        component: DixitStella,
     },
     {
         path: 'register',

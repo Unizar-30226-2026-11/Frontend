@@ -18,13 +18,20 @@ describe('CardPull', () => {
     const cards = await service.getCards();
 
     expect(cards.length).toBe(6);
-    expect(cards.map((card) => card.code)).toEqual(['AS', 'KH', 'QD', 'JC', '0S', '7H']);
+    expect(cards.map((card) => card.code)).toEqual(['AS', 'AH', 'AD', 'AC', 'KS', 'KH']);
   });
 
   it('limits the demo cards when a count is provided', async () => {
     const cards = await service.getCards(3);
 
     expect(cards.length).toBe(3);
-    expect(cards.map((card) => card.code)).toEqual(['AS', 'KH', 'QD']);
+    expect(cards.map((card) => card.code)).toEqual(['AS', 'AH', 'AD']);
+  });
+
+  it('returns enough poker cards for the Stella board and row replacements', async () => {
+    const cards = await service.getCards(30);
+
+    expect(cards.length).toBe(30);
+    expect(cards[29].code).toBe('8H');
   });
 });

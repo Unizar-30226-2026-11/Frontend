@@ -1,0 +1,56 @@
+    <section class="store-view">
+      <h1>Tienda</h1>
+
+      @if (!auth.isLoggedIn()) {
+        <p class="store-info">Inicia sesion para ver tu perfil de jugador.</p>
+      } @else if (playerStore.loading()) {
+        <p class="store-info">Cargando informacion del jugador...</p>
+      } @else if (playerStore.error()) {
+        <p class="store-error">{{ playerStore.error() }}</p>
+        <button type="button" (click)="reloadPlayer()">Reintentar</button>
+      } @else if (playerStore.player(); as player) {
+        <article class="player-panel">
+          <h2>{{ player.username }}</h2>
+          <p>ID: {{ player.id }}</p>
+          <div class="balance-chip" aria-label="Balance actual">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ player.balance }}</span>
+          </div>
+          <p>Nivel: {{ player.experienceLevel }}</p>
+          <p>Estado: {{ formatPlayerStatus(player.state) }}</p>
+          <button type="button" (click)="reloadPlayer()">Actualizar datos</button>
+        </article>
+      }
+
+      @if (auth.isLoggedIn()) {
+        @if (purchaseMessage(); as purchaseMessageText) {
+          <p class="store-success" aria-live="polite">{{ purchaseMessageText }}</p>
+        }
+
+        @if (purchaseError(); as purchaseErrorMessage) {
+          <p class="store-error">{{ purchaseErrorMessage }}</p>
+        }
+
+        @if (catalogLoading()) {
+          <p class="store-info">Cargando articulos de la tienda...</p>
+        } @else if (catalogError()) {
+          <p class="store-error">{{ catalogError() }}</p>
+          <button type="button" (click)="reloadCatalog()">Reintentar tienda</button>
+        } @else {
+          <section class="decks-grid">
+            @for (deck of decks(); track deck.id) {
+              <app-decks-card
+                [deckImageSrc]="deck.image"
+                [deckPrice]="deck.price"
+                [deckName]="deck.name"
+                [deckType]="deck.type"
+                [deckOwned]="deck.owned"
+                [canBuy]="canBuy(deck)"
+                [buying]="purchasingDeckId() === deck.id"
+                (buy)="buyDeck(deck.id)"
+              />
+            }
+          </section>
+        }
+      }
+    </section>

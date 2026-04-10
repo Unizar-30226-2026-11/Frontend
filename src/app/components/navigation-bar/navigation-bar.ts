@@ -283,7 +283,7 @@ export class NavigationBar {
       return;
     }
 
-    this.router.navigateByUrl('/main-menu');
+    void this.router.navigateByUrl(this.brandRoute());
   }
 
   updateFriendTargetUserId(event: Event): void {

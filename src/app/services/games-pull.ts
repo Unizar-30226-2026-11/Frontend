@@ -3,6 +3,7 @@ import {
   CreateLobbyPayload,
   CreateLobbyResponse,
   Game,
+  LobbyEngine,
   LobbyCreationResult,
   LobbyDetailsApi,
   LobbyDetailsResponse,
@@ -82,7 +83,7 @@ export class GamesPull {
       });
   }
 
-  startLobby(lobbyCode: string): Promise<LobbyStartResult> {
+  startLobby(lobbyCode: string, engine?: LobbyEngine): Promise<LobbyStartResult> {
     const token = this.requireToken();
     const encodedLobbyCode = encodeURIComponent(lobbyCode);
 
@@ -103,7 +104,7 @@ export class GamesPull {
             response.message?.trim() || 'Partida iniciada. Preparando el tablero de juego.',
           lobbyCode: resolvedLobbyCode,
           status: response.lobby?.status?.trim() || 'starting',
-          route: this.resolveLobbyStartRoute(response, resolvedLobbyCode),
+          route: this.resolveLobbyStartRoute(response, resolvedLobbyCode, engine),
         };
       });
   }
@@ -143,7 +144,8 @@ export class GamesPull {
 
   private resolveLobbyStartRoute(
     response: LobbyStartResponse,
-    fallbackLobbyCode: string
+    fallbackLobbyCode: string,
+    fallbackEngine: LobbyEngine = 'Classic'
   ): string {
     const rawRoute = response.game?.route?.trim();
     if (rawRoute) {
@@ -151,6 +153,12 @@ export class GamesPull {
     }
 
     const gameId = response.game?.id?.trim() || fallbackLobbyCode;
+    const resolvedEngine = response.game?.engine ?? fallbackEngine;
+
+    if (resolvedEngine === 'Stella') {
+      return `/dixit-stella/${encodeURIComponent(gameId)}`;
+    }
+
     return `/dixit/${encodeURIComponent(gameId)}`;
   }
 }
