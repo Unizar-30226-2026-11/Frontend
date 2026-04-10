@@ -382,9 +382,12 @@ export class DixitRealtime {
       });
     });
 
-    socket.on('server:game:private_hand', (payload: unknown) => {
+    const handlePrivateHand = (payload: unknown): void => {
       this.handlePrivateHand(payload, session.lobbyCode);
-    });
+    };
+
+    socket.on('server:game:private_hand', handlePrivateHand);
+    socket.on('private:hand', handlePrivateHand);
 
     socket.on('server:game:special_event', (payload: unknown) => {
       const message = this.resolveSpecialEventMessage(payload);

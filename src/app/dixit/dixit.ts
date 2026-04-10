@@ -299,6 +299,9 @@ export class Dixit implements OnInit, OnDestroy {
   private readonly pointsByPlayer = new Map<string, number>();
 
   private currentRoundPlayers: RoundPlayer[] = [];
+  private ownedCards: DeckCard[] = [];
+  private latestPrivateHand: Array<number | string> = [];
+  private submittedHandRoundNumber: number | null = null;
 
   id = '';
   phase: DixitPhase = 'hand';
@@ -408,8 +411,11 @@ export class Dixit implements OnInit, OnDestroy {
         this.applyRealtimeGameState(currentGameState);
       }
 
-      if (this.cards.length === 0) {
-        this.cards = await this.cardPull.getCards(this.maxPlayersPerMatch);
+      this.ownedCards = await this.cardPull.getCards(this.maxPlayersPerMatch);
+      if (this.latestPrivateHand.length > 0) {
+        this.applyRealtimePrivateHand(this.latestPrivateHand);
+      } else if (this.cards.length === 0) {
+        this.cards = [...this.ownedCards];
       }
       if (this.choiceCards.length === 0) {
         this.choiceCards = [...this.cards];
@@ -640,14 +646,20 @@ export class Dixit implements OnInit, OnDestroy {
     const state = update.state;
     const currentRoundState = this.resolveCurrentRoundState(state);
     const resolvedPhaseState = this.resolveRealtimePhase(state, update.lastAction);
+    const nextRoundNumber =
+      this.readNumber(state, [
+        'roundNumber',
+        'round',
+        'currentRound',
+      ]) ?? this.roundNumber;
+
+    if (nextRoundNumber !== this.roundNumber) {
+      this.resetHandSubmissionState();
+    }
 
     this.phase = resolvedPhaseState.phase;
     this.pointsStage = resolvedPhaseState.pointsStage;
-    this.roundNumber = this.readNumber(state, [
-      'roundNumber',
-      'round',
-      'currentRound',
-    ]) ?? this.roundNumber;
+    this.roundNumber = nextRoundNumber;
     this.currentClue =
       this.readStringFromCandidates(currentRoundState, ['currentClue', 'clue', 'story', 'hint']) ??
       this.readStringFromCandidates(state, ['currentClue', 'clue', 'story', 'hint']) ??
@@ -765,21 +777,36 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (selectedHandCardCode) {
       this.selectedHandCardCode = selectedHandCardCode;
-      this.handSubmitted = true;
+      this.markHandSubmitted();
     } else if (this.phase === 'hand') {
-      this.handSubmitted = false;
+      this.handSubmitted =
+        this.submittedHandRoundNumber === this.roundNumber && !!this.selectedHandCardCode;
     }
   }
 
   private applyRealtimePrivateHand(hand: Array<number | string>): void {
-    const handCards = this.normalizeCards(hand);
+    this.latestPrivateHand = [...hand];
+    const handCards = this.buildPrivateHandCards(hand);
     if (handCards.length === 0) {
       return;
     }
 
+    const previousChoiceCardsWereHandCards =
+      this.phase === 'hand' ||
+      this.choiceCards.length === 0 ||
+      this.choiceCards.every((card) => handCards.some((handCard) => handCard.code === card.code));
+
     this.cards = handCards;
-    if (this.choiceCards.length === 0) {
+    if (previousChoiceCardsWereHandCards) {
       this.choiceCards = [...handCards];
+    }
+
+    if (
+      !this.handSubmitted &&
+      this.selectedHandCardCode &&
+      !this.cards.some((card) => card.code === this.selectedHandCardCode)
+    ) {
+      this.selectedHandCardCode = '';
     }
   }
 
@@ -916,6 +943,60 @@ export class Dixit implements OnInit, OnDestroy {
     return entries
       .map((entry, index) => this.normalizeCard(entry, index))
       .filter((entry): entry is DeckCard => entry !== null);
+  }
+
+  private buildPrivateHandCards(hand: Array<number | string>): DeckCard[] {
+    const usedOwnedCardIndexes = new Set<number>();
+    return hand
+      .map((cardId, index) => {
+        const code = this.normalizePrivateHandCardCode(cardId);
+        if (!code) {
+          return null;
+        }
+
+        const ownedCardIndex = this.findOwnedCardIndexForPrivateHand(code, index, usedOwnedCardIndexes);
+        if (ownedCardIndex >= 0) {
+          usedOwnedCardIndexes.add(ownedCardIndex);
+          return {
+            ...this.ownedCards[ownedCardIndex],
+            code,
+          };
+        }
+
+        return this.normalizeCard(code, index);
+      })
+      .filter((entry): entry is DeckCard => entry !== null);
+  }
+
+  private normalizePrivateHandCardCode(cardId: number | string): string {
+    if (typeof cardId === 'number' && Number.isFinite(cardId)) {
+      return String(cardId);
+    }
+
+    if (typeof cardId === 'string') {
+      return cardId.trim();
+    }
+
+    return '';
+  }
+
+  private findOwnedCardIndexForPrivateHand(
+    code: string,
+    preferredIndex: number,
+    usedOwnedCardIndexes: Set<number>
+  ): number {
+    const exactMatchIndex = this.ownedCards.findIndex(
+      (card, index) => !usedOwnedCardIndexes.has(index) && card.code === code
+    );
+    if (exactMatchIndex >= 0) {
+      return exactMatchIndex;
+    }
+
+    if (this.ownedCards[preferredIndex] && !usedOwnedCardIndexes.has(preferredIndex)) {
+      return preferredIndex;
+    }
+
+    return this.ownedCards.findIndex((_card, index) => !usedOwnedCardIndexes.has(index));
   }
 
   private normalizeCard(entry: unknown, index: number): DeckCard | null {
@@ -1083,13 +1164,27 @@ export class Dixit implements OnInit, OnDestroy {
     return /^\d+$/.test(cardCode) ? Number(cardCode) : cardCode;
   }
 
+  private markHandSubmitted(): void {
+    this.handSubmitted = true;
+    this.submittedHandRoundNumber = this.roundNumber;
+  }
+
+  private resetHandSubmissionState(): void {
+    this.selectedHandCardCode = '';
+    this.handSubmitted = false;
+    this.submittedHandRoundNumber = null;
+  }
+
   onHandCardSelected(card: DeckCard): void {
+    if (this.handSubmitted) {
+      return;
+    }
+
     this.selectedHandCardCode = card.code;
   }
 
   clearHandSelection(): void {
-    this.selectedHandCardCode = '';
-    this.handSubmitted = false;
+    this.resetHandSubmissionState();
   }
 
   updateClueDraft(nextClue: string): void {
@@ -1115,7 +1210,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.storySubmitted = true;
-    this.handSubmitted = true;
+    this.markHandSubmitted();
     this.errorMessage = '';
   }
 
@@ -1151,7 +1246,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
-    this.handSubmitted = true;
+    this.markHandSubmitted();
     this.errorMessage = '';
   }
 
@@ -1302,10 +1397,9 @@ export class Dixit implements OnInit, OnDestroy {
     this.roundNumber += 1;
     this.phase = 'hand';
     this.pointsStage = 'waiting';
-    this.selectedHandCardCode = '';
+    this.resetHandSubmissionState();
     this.selectedChoiceCardCode = '';
     this.voteSubmitted = false;
-    this.handSubmitted = false;
     this.pointsVotesReceived = 0;
     this.pointsVotesTotal = 0;
     this.pointsRevealedCards = [];

@@ -25,87 +25,118 @@ import {
       >
         <div board-overlay class="board-overlay-content">
           <section class="board-overlay-shell">
-            <div class="story-card hand-overlay">
+            <div class="story-card hand-overlay" [class.waiting-overlay]="handSubmitted">
               <div class="clue-copy">
-                <span class="overlay-label">Pista actual</span>
-                <h2>{{ currentClue || 'Esperando pista' }}</h2>
-                <p class="storyteller-copy">
-                  Cuenta-cuentos:
-                  <strong>{{ storytellerName || 'Pendiente' }}</strong>
-                </p>
-                <p>
-                  @if (!currentClue && isCurrentPlayerStoryteller) {
-                    Escribe la pista y confirmala para abrir la ronda.
-                  } @else if (!currentClue) {
-                    Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
-                  } @else if (isCurrentPlayerStoryteller) {
-                    La pista ya esta publicada. Esperando a que el resto envie su carta.
-                  } @else {
-                    La pista ya esta publicada. Elige una carta y enviala al servidor.
+                @if (handSubmitted) {
+                  <span class="overlay-label">Jugada enviada</span>
+                  <h2>Esperando al resto de jugadores</h2>
+                  <p class="storyteller-copy">
+                    Cuenta-cuentos:
+                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                  </p>
+                  <p>
+                    @if (isCurrentPlayerStoryteller) {
+                      Tu pista y tu carta ya estan enviadas. La ronda avanzara cuando todos hayan terminado.
+                    } @else {
+                      Tu carta ya esta enviada. La ronda avanzara cuando todos los jugadores hayan terminado.
+                    }
+                  </p>
+                  @if (currentClue) {
+                    <p class="submitted-detail">Pista: <strong>{{ currentClue }}</strong></p>
                   }
-                </p>
+                  @if (submittedCardLabel) {
+                    <p class="submitted-detail">Carta enviada: <strong>{{ submittedCardLabel }}</strong></p>
+                  }
+                  <div class="waiting-feedback" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                } @else {
+                  <span class="overlay-label">Pista actual</span>
+                  <h2>{{ currentClue || 'Esperando pista' }}</h2>
+                  <p class="storyteller-copy">
+                    Cuenta-cuentos:
+                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                  </p>
+                  <p>
+                    @if (!currentClue && isCurrentPlayerStoryteller) {
+                      Escribe la pista y confirmala para abrir la ronda.
+                    } @else if (!currentClue) {
+                      Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
+                    } @else if (isCurrentPlayerStoryteller) {
+                      La pista ya esta publicada. Esperando a que el resto envie su carta.
+                    } @else {
+                      La pista ya esta publicada. Elige una carta y enviala al servidor.
+                    }
+                  </p>
 
-                @if (!currentClue && isCurrentPlayerStoryteller) {
-                  <label class="clue-field">
-                    <span>Tu pista</span>
-                    <input
-                      type="text"
-                      maxlength="255"
-                      [value]="clueDraft"
-                      (input)="onClueDraftChanged($event)"
-                      placeholder="Escribe una pista para esta ronda"
-                    />
-                  </label>
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    <label class="clue-field">
+                      <span>Tu pista</span>
+                      <input
+                        type="text"
+                        maxlength="255"
+                        [value]="clueDraft"
+                        (input)="onClueDraftChanged($event)"
+                        placeholder="Escribe una pista para esta ronda"
+                      />
+                    </label>
+                  }
+
+                  <div class="hand-submit-row">
+                    @if (!currentClue && isCurrentPlayerStoryteller) {
+                      <button
+                        type="button"
+                        class="secondary-action"
+                        [disabled]="isStorySubmitDisabled"
+                        (click)="storySubmitRequested.emit()"
+                      >
+                        Confirmar pista
+                      </button>
+                    }
+
+                    @if (!isCurrentPlayerStoryteller) {
+                      <button
+                        type="button"
+                        class="sidebar-action"
+                        [disabled]="isHandSubmitDisabled"
+                        (click)="handSubmitRequested.emit()"
+                      >
+                        {{ handSubmitButtonText }}
+                      </button>
+                    }
+                  </div>
                 }
+              </div>
 
-                <div class="hand-submit-row">
-                  @if (!currentClue && isCurrentPlayerStoryteller) {
-                    <button
-                      type="button"
-                      class="secondary-action"
-                      [disabled]="isStorySubmitDisabled"
-                      (click)="storySubmitRequested.emit()"
-                    >
-                      Confirmar pista
-                    </button>
-                  }
-
-                  @if (handSubmitted) {
-                    <span class="status-pill">Jugada enviada</span>
-                  }
-
-                  @if (!isCurrentPlayerStoryteller) {
-                    <button
-                      type="button"
-                      class="sidebar-action"
-                      [disabled]="isHandSubmitDisabled"
-                      (click)="handSubmitRequested.emit()"
-                    >
-                      {{ handSubmitButtonText }}
-                    </button>
+              @if (handSubmitted) {
+                <div class="waiting-zone">
+                  <span class="waiting-check" aria-hidden="true">OK</span>
+                  <strong>Jugada registrada</strong>
+                  <p>Ya no necesitas hacer nada en esta fase.</p>
+                </div>
+              } @else {
+                <div
+                  class="drop-zone"
+                  [class.has-card]="!!selectedCard"
+                  [class.is-dragover]="isDropZoneActive"
+                  (dragover)="onDropZoneDragOver($event)"
+                  (dragleave)="onDropZoneDragLeave()"
+                  (drop)="onDropZoneDrop($event)"
+                >
+                  @if (selectedCard; as card) {
+                    <img
+                      draggable="false"
+                      [src]="card.image"
+                      [alt]="card.value + ' de ' + card.suit"
+                    />
+                    <p>Seleccionada: {{ card.code }}</p>
+                  } @else {
+                    <p>Suelta aqui tu carta</p>
                   }
                 </div>
-              </div>
-
-              <div
-                class="drop-zone"
-                [class.has-card]="!!selectedCard"
-                [class.is-dragover]="isDropZoneActive"
-                (dragover)="onDropZoneDragOver($event)"
-                (dragleave)="onDropZoneDragLeave()"
-                (drop)="onDropZoneDrop($event)"
-              >
-                @if (selectedCard; as card) {
-                  <img
-                    draggable="false"
-                    [src]="card.image"
-                    [alt]="card.value + ' de ' + card.suit"
-                  />
-                  <p>Seleccionada: {{ card.code }}</p>
-                } @else {
-                  <p>Suelta aqui tu carta</p>
-                }
-              </div>
+              }
             </div>
           </section>
         </div>
@@ -184,7 +215,8 @@ import {
                       type="button"
                       class="hand-card"
                       [class.selected]="card.code === selectedCardCode"
-                      draggable="true"
+                      [disabled]="handSubmitted"
+                      [attr.draggable]="handSubmitted ? 'false' : 'true'"
                       (dragstart)="onHandCardDragStart(card, $event)"
                       (dragend)="onHandCardDragEnd()"
                       (click)="cardSelected.emit(card)"
@@ -282,6 +314,11 @@ import {
       color: #1e2631;
       box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
       transform: translateX(4.5%);
+    }
+
+    .waiting-overlay {
+      background: rgba(239, 247, 244, 0.94);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(18, 111, 77, 0.16);
     }
 
     .overlay-label {
@@ -383,6 +420,67 @@ import {
       width: min(140px, 100%);
       border-radius: 16px;
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    .submitted-detail {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(18, 111, 77, 0.1);
+      color: #1d3f33;
+    }
+
+    .waiting-feedback {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 18px;
+    }
+
+    .waiting-feedback span {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #126f4d;
+      animation: waitingPulse 1.15s ease-in-out infinite;
+    }
+
+    .waiting-feedback span:nth-child(2) {
+      animation-delay: 140ms;
+    }
+
+    .waiting-feedback span:nth-child(3) {
+      animation-delay: 280ms;
+    }
+
+    .waiting-zone {
+      min-height: 210px;
+      border-radius: 20px;
+      border: 1px solid rgba(18, 111, 77, 0.24);
+      background: linear-gradient(160deg, rgba(18, 111, 77, 0.14), rgba(255, 255, 255, 0.62));
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .waiting-zone p {
+      margin: 0;
+      color: rgba(29, 36, 48, 0.72);
+    }
+
+    .waiting-check {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #126f4d;
+      color: #f7fff9;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      box-shadow: 0 12px 24px rgba(18, 111, 77, 0.22);
     }
 
     .status-pill {
@@ -575,6 +673,12 @@ import {
       box-shadow: 0 0 0 4px rgba(96, 180, 255, 0.88);
     }
 
+    .hand-card:disabled {
+      cursor: default;
+      opacity: 0.52;
+      transform: none;
+    }
+
     .hand-card img {
       width: 100%;
       display: block;
@@ -665,6 +769,19 @@ import {
       font-weight: 700;
     }
 
+    @keyframes waitingPulse {
+      0%,
+      100% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+
+      50% {
+        opacity: 1;
+        transform: translateY(-3px);
+      }
+    }
+
     @media (max-width: 1160px) {
       .table-support {
         grid-template-columns: 1fr;
@@ -733,6 +850,15 @@ export class DixitHandPhase {
     return this.cards.find((card) => card.code === this.selectedCardCode);
   }
 
+  get submittedCardLabel(): string {
+    const selectedCard = this.selectedCard;
+    if (selectedCard) {
+      return `${selectedCard.value} (${selectedCard.code})`;
+    }
+
+    return this.selectedCardCode;
+  }
+
   onClueDraftChanged(event: Event): void {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) {
@@ -752,6 +878,11 @@ export class DixitHandPhase {
   }
 
   onHandCardDragStart(card: DeckCard, event?: DragEvent): void {
+    if (this.handSubmitted) {
+      event?.preventDefault();
+      return;
+    }
+
     this.draggedHandCardCode = card.code;
     if (event?.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
