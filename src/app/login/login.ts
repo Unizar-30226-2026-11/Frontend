@@ -164,8 +164,11 @@ export class Login {
     this.error = null;
 
     try {
-      await this.auth.logIn(email, password);
-      await this.router.navigate(['/games']);
+      const session = await this.auth.logIn(email, password);
+      const targetRoute = session.activeGameId
+        ? ['/dixit', session.activeGameId]
+        : ['/games'];
+      await this.router.navigate(targetRoute);
     } catch (error: unknown) {
       this.error =
         error instanceof Error ? error.message : 'No se pudo iniciar sesion';

@@ -30,6 +30,7 @@ describe('Login', () => {
   it('logs in through Auth and redirects to the main menu', async () => {
     authSpy.logIn.and.resolveTo({
       token: 'token-123',
+      activeGameId: null,
       user: {
         id: 'u_1',
         username: 'tester',
@@ -40,9 +41,25 @@ describe('Login', () => {
     await component.logIn('tester@example.com', 'secret');
 
     expect(authSpy.logIn).toHaveBeenCalledWith('tester@example.com', 'secret');
-    expect(router.navigate).toHaveBeenCalledWith(['/menu']);
+    expect(router.navigate).toHaveBeenCalledWith(['/games']);
     expect(component.error).toBeNull();
     expect(component.submitting).toBeFalse();
+  });
+
+  it('redirects straight to the active game when login returns one', async () => {
+    authSpy.logIn.and.resolveTo({
+      token: 'token-123',
+      activeGameId: 'A1B2',
+      user: {
+        id: 'u_1',
+        username: 'tester',
+        email: 'tester@example.com',
+      },
+    });
+
+    await component.logIn('tester@example.com', 'secret');
+
+    expect(router.navigate).toHaveBeenCalledWith(['/dixit', 'A1B2']);
   });
 
   it('shows the API error when authentication fails', async () => {
@@ -50,7 +67,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'wrong');
 
-    expect(router.navigate).not.toHaveBeenCalledWith(['/menu']);
+    expect(router.navigate).not.toHaveBeenCalled();
     expect(component.error).toBe('Credenciales invalidas');
     expect(component.submitting).toBeFalse();
   });

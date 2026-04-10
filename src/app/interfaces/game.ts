@@ -18,6 +18,21 @@ export interface LobbyListResponse {
   lobbies: LobbySummaryApi[];
 }
 
+export interface CreateLobbyPayload {
+  name: string;
+  maxPlayers: number;
+  engine: LobbyEngine;
+  isPrivate: boolean;
+}
+
+export interface CreateLobbyResponse {
+  message?: string;
+  lobby?: {
+    lobbyCode?: string;
+    status?: string;
+  } & LobbyDetailsApi;
+}
+
 export interface LobbyDetailsResponse {
   message: string;
   lobby: LobbyDetailsApi;
@@ -44,6 +59,12 @@ export interface LobbyStartResult {
   message: string;
   lobbyCode: string;
   status: string;
+  route: string;
+}
+
+export interface LobbyCreationResult {
+  message: string;
+  lobbyCode: string;
   route: string;
 }
 

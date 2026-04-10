@@ -7,6 +7,7 @@ export interface AuthUser {
 export interface AuthSession {
   token: string;
   user: AuthUser;
+  activeGameId: string | null;
 }
 
 export interface LoginPayload {
@@ -32,8 +33,22 @@ export interface RegisterResponse {
 export interface LoginResponse {
   message: string;
   token: string;
+  activeGameId?: string | null;
   user: {
     id: string;
     username: string;
+    email?: string;
+  };
+}
+
+export interface RefreshResponse {
+  message?: string;
+  accessToken?: string;
+  token?: string;
+  activeGameId?: string | null;
+  user?: {
+    id?: string;
+    username?: string;
+    email?: string;
   };
 }

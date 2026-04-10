@@ -193,10 +193,10 @@ function createCardsFixture(count: number): DeckCard[] {
 
 function createWordCardsFixture(): WordCard[] {
   return [
-    { id: 'W01', terms: ['Aurora', 'Espejo'] },
-    { id: 'W02', terms: ['Silencio', 'Bosque'] },
-    { id: 'W03', terms: ['Mascara', 'Eco'] },
-    { id: 'W04', terms: ['Vertigo', 'Constelacion'] },
+    { id: 1, terms: ['Aurora', 'Espejo'] },
+    { id: 2, terms: ['Silencio', 'Bosque'] },
+    { id: 3, terms: ['Mascara', 'Eco'] },
+    { id: 4, terms: ['Vertigo', 'Constelacion'] },
   ];
 }
 

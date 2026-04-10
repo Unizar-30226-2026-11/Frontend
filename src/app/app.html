@@ -1,7 +1,23 @@
 @if (shouldShowNavigation()) {
   <app-navigation-bar />
 }
+@if (shouldShowActiveGameBanner()) {
+  <section class="active-game-banner" role="status" aria-live="polite">
+    <div class="active-game-copy">
+      <strong>Partida en curso</strong>
+      <span>{{ activeGameBannerMessage() }}</span>
+    </div>
+    <button type="button" class="active-game-button" (click)="goToActiveGame()">
+      Volver a la partida
+    </button>
+  </section>
+}
 <main class="app-content">
   <router-outlet />
 </main>
+@if (activeToastMessage(); as toastMessage) {
+  <aside class="app-toast" role="status" aria-live="polite">
+    {{ toastMessage }}
+  </aside>
+}
 

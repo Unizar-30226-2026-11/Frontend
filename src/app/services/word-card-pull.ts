@@ -2,14 +2,14 @@ import { Injectable } from '@angular/core';
 import { WordCard } from '../interfaces/word-card';
 
 const DEMO_WORD_CARDS: WordCard[] = [
-  { id: 'W01', terms: ['Aurora', 'Espejo'] },
-  { id: 'W02', terms: ['Silencio', 'Bosque'] },
-  { id: 'W03', terms: ['Mascara', 'Eco'] },
-  { id: 'W04', terms: ['Vertigo', 'Constelacion'] },
-  { id: 'W05', terms: ['Umbral', 'Marea'] },
-  { id: 'W06', terms: ['Labios', 'Ceniza'] },
-  { id: 'W07', terms: ['Danza', 'Neblina'] },
-  { id: 'W08', terms: ['Relicario', 'Tormenta'] },
+  { id: 1, terms: ['Aurora', 'Espejo'] },
+  { id: 2, terms: ['Silencio', 'Bosque'] },
+  { id: 3, terms: ['Mascara', 'Eco'] },
+  { id: 4, terms: ['Vertigo', 'Constelacion'] },
+  { id: 5, terms: ['Umbral', 'Marea'] },
+  { id: 6, terms: ['Labios', 'Ceniza'] },
+  { id: 7, terms: ['Danza', 'Neblina'] },
+  { id: 8, terms: ['Relicario', 'Tormenta'] },
 ];
 
 @Injectable({

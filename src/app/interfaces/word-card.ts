@@ -1,4 +1,4 @@
 export interface WordCard {
-  id: string;
+  id: number;
   terms: [string, string];
 }

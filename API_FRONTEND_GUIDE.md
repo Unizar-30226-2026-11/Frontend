@@ -142,6 +142,7 @@ There are some response-shape inconsistencies in current code (documented below 
   - `POST /api/lobbies`
   - `GET /api/lobbies`
   - `GET /api/lobbies/:lobbyCode`
+  - `POST	/lobbies/:lobbyCode/join`	Solicita acceso y obtiene el token (ticket) para el WebSocket.
 - Shop:
   - `GET /api/shop/items`
   - `POST /api/shop/buy`

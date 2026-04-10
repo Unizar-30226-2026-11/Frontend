@@ -46,7 +46,8 @@ export function buildRevealAndRanking(
   roundPlayers: RoundPlayer[],
   choiceCards: DeckCard[],
   playerRoster: readonly RosterPlayer[],
-  selectedChoiceCardCode: string
+  selectedChoiceCardCode: string,
+  currentPlayerId: string
 ): {
   revealedCards: DixitRevealedCard[];
   ranking: DixitRankingRow[];
@@ -72,7 +73,8 @@ export function buildRevealAndRanking(
       voterIndex,
       ownCardCode,
       playerRoster,
-      selectedChoiceCardCode
+      selectedChoiceCardCode,
+      currentPlayerId
     );
     if (!targetCode) {
       continue;
@@ -111,7 +113,8 @@ function resolveVoteCardCode(
   voterIndex: number,
   ownCardCode: string,
   playerRoster: readonly RosterPlayer[],
-  selectedChoiceCardCode: string
+  selectedChoiceCardCode: string,
+  currentPlayerId: string
 ): string | null {
   if (cardsInRound.length <= 1) {
     return null;
@@ -119,7 +122,7 @@ function resolveVoteCardCode(
 
   const voter = playerRoster[voterIndex];
   if (
-    voter?.id === 'you' &&
+    voter?.id === currentPlayerId &&
     selectedChoiceCardCode &&
     selectedChoiceCardCode !== ownCardCode &&
     cardsInRound.some((card) => card.code === selectedChoiceCardCode)
