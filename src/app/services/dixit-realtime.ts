@@ -34,6 +34,7 @@ export class DixitRealtime {
   private connectionPromise: Promise<void> | null = null;
   private connectionSessionKey = '';
   private toastSequence = 0;
+  private lastGameStateReceivedAt = 0;
 
   private readonly sessionState = signal<RealtimeSession | null>(this.restoreSession());
   private readonly connectionStatusState = signal<DixitConnectionStatus>('idle');
@@ -225,6 +226,7 @@ export class DixitRealtime {
     this.lastErrorSignal.set('');
     this.activeGameNoticeSignal.set('');
     this.toastSignal.set(null);
+    this.lastGameStateReceivedAt = 0;
     localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
     localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
   }
@@ -738,7 +740,7 @@ export class DixitRealtime {
   private handleSessionRecovered(payload: unknown, eventName: string): void {
     const data = asRecord(payload);
     const wrappedData = asRecord(data?.['data']) ?? data;
-    const state = asRecord(wrappedData?.['state']);
+    const state = this.extractRecoveredGameState(wrappedData);
     const recoveredGameId =
       readString(wrappedData, 'gameId') ??
       readString(wrappedData, 'lobbyCode') ??
@@ -769,6 +771,7 @@ export class DixitRealtime {
   private handleLobbyRecovered(payload: unknown, fallbackLobbyCode: string): void {
     const data = asRecord(payload);
     const wrappedData = asRecord(data?.['data']) ?? data;
+    const recoveredGameState = this.extractRecoveredGameState(wrappedData);
     const lobbyData =
       asRecord(wrappedData?.['lobby']) ??
       asRecord(wrappedData?.['state']) ??
@@ -778,6 +781,15 @@ export class DixitRealtime {
     if (lobbyState) {
       this.lobbyStateSignal.set(lobbyState);
       this.debug('event server:lobby:recovered', lobbyState);
+    }
+
+    if (recoveredGameState) {
+      this.setGameState({
+        state: recoveredGameState,
+        lastAction: 'LOBBY_RECOVERED',
+        receivedAt: Date.now(),
+      });
+      this.debug('event server:lobby:recovered game state', recoveredGameState);
     }
   }
 
@@ -946,8 +958,43 @@ export class DixitRealtime {
   }
 
   private setGameState(nextGameState: RealtimeGameStateUpdate): void {
+    if (nextGameState.receivedAt < this.lastGameStateReceivedAt) {
+      return;
+    }
+
+    this.lastGameStateReceivedAt = nextGameState.receivedAt;
     this.gameStateSignal.set(nextGameState);
     this.persistGameState(nextGameState);
+  }
+
+  private extractRecoveredGameState(
+    wrappedData: Record<string, unknown> | null
+  ): Record<string, unknown> | null {
+    if (!wrappedData) {
+      return null;
+    }
+
+    const candidates = [
+      asRecord(wrappedData['gameState']),
+      asRecord(wrappedData['currentGameState']),
+      asRecord(wrappedData['publicGameState']),
+      asRecord(wrappedData['state']),
+    ];
+
+    return candidates.find((candidate) => this.looksLikeGameState(candidate)) ?? null;
+  }
+
+  private looksLikeGameState(state: Record<string, unknown> | null): boolean {
+    if (!state) {
+      return false;
+    }
+
+    return (
+      typeof state['phase'] === 'string' ||
+      typeof state['mode'] === 'string' ||
+      asRecord(state['currentRound']) !== null ||
+      asRecord(state['scores']) !== null
+    );
   }
 
   private restoreSession(): RealtimeSession | null {

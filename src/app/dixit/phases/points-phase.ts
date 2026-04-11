@@ -74,17 +74,19 @@ export interface DixitRankingRow {
                 <tr>
                   <td>{{ row.playerName }}</td>
                   <td>{{ row.pointsBefore }}</td>
-                  <td>+{{ row.pointsEarned }}</td>
+                  <td>{{ row.pointsEarned > 0 ? '+' : '' }}{{ row.pointsEarned }}</td>
                   <td>{{ row.totalPoints }}</td>
                 </tr>
               }
             </tbody>
           </table>
-          <div class="ranking-actions">
-            <button type="button" (click)="nextRoundRequested.emit()">
-              Preparar siguiente ronda
-            </button>
-          </div>
+          @if (canAdvanceToNextRound) {
+            <div class="ranking-actions">
+              <button type="button" (click)="nextRoundRequested.emit()">
+                Preparar siguiente ronda
+              </button>
+            </div>
+          }
         </div>
       }
     </section>
@@ -201,6 +203,7 @@ export class DixitPointsPhase {
   @Input() revealedCards: DixitRevealedCard[] = [];
   @Input() ranking: DixitRankingRow[] = [];
   @Input() showRanking = false;
+  @Input() canAdvanceToNextRound = false;
 
   @Output() readonly skipWaitingRequested = new EventEmitter<void>();
   @Output() readonly rankingRequested = new EventEmitter<void>();

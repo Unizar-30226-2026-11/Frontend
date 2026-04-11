@@ -1,11 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
 import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
-import {
-  DixitChatComposer,
-  DixitPlayerRow,
-  DixitWildcardReward,
-} from '../dixit-phase.models';
+import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
 @Component({
   selector: 'app-dixit-hand-phase',
@@ -17,7 +13,6 @@ import {
         [title]="''"
         [subtitle]="''"
         [tokens]="boardTokens"
-        [wildcardCells]="wildcardCells"
         [eventBackCells]="eventBackCells"
         [eventForwardCells]="eventForwardCells"
         [showControls]="false"
@@ -188,17 +183,6 @@ import {
               </div>
 
               <div class="section-header-side">
-                <div class="section-header-copy aligned-right">
-                  <p class="overlay-label">Comodines</p>
-                  <p class="strip-text section-header-note">
-                    @if (wildcards.length === 0) {
-                      Sin comodines todavia.
-                    } @else {
-                      Usa uno antes de enviar tu accion al servidor.
-                    }
-                  </p>
-                </div>
-
                 @if (selectedCard) {
                   <button type="button" class="secondary-action" (click)="clearSelectionRequested.emit()">
                     Quitar
@@ -209,47 +193,34 @@ import {
 
             <div class="hand-layout">
               <div class="hand-main">
-                <div class="hand-cards">
-                  @for (card of cards; track card.code) {
-                    <button
-                      type="button"
-                      class="hand-card"
-                      [class.selected]="card.code === selectedCardCode"
-                      [disabled]="handSubmitted"
-                      [attr.draggable]="handSubmitted ? 'false' : 'true'"
-                      (dragstart)="onHandCardDragStart(card, $event)"
-                      (dragend)="onHandCardDragEnd()"
-                      (click)="cardSelected.emit(card)"
-                    >
-                      <img
-                        draggable="false"
-                        [src]="card.image"
-                        [alt]="card.value + ' de ' + card.suit"
-                      />
-                    </button>
-                  }
-                </div>
-              </div>
-
-              <aside class="wildcards-strip">
-                @if (wildcards.length > 0) {
-                  <div class="wildcards-list">
-                    @for (wildcard of wildcards; track wildcard.id) {
+                @if (cards.length === 0) {
+                  <div class="hand-empty-state">
+                    <strong>Esperando tu mano</strong>
+                    <p>La fase ya esta activa, pero las cartas todavia no han llegado por <code>private_hand</code>.</p>
+                  </div>
+                } @else {
+                  <div class="hand-cards">
+                    @for (card of cards; track card.code) {
                       <button
                         type="button"
-                        class="wildcard-card"
-                        (click)="wildcardUsed.emit(wildcard.id)"
+                        class="hand-card"
+                        [class.selected]="card.code === selectedCardCode"
+                        [disabled]="handSubmitted"
+                        [attr.draggable]="handSubmitted ? 'false' : 'true'"
+                        (dragstart)="onHandCardDragStart(card, $event)"
+                        (dragend)="onHandCardDragEnd()"
+                        (click)="cardSelected.emit(card)"
                       >
-                        <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
-                        <div class="wildcard-copy">
-                          <strong>{{ wildcard.name }}</strong>
-                          <p>{{ wildcard.description }}</p>
-                        </div>
+                        <img
+                          draggable="false"
+                          [src]="card.image"
+                          [alt]="card.value + ' de ' + card.suit"
+                        />
                       </button>
                     }
                   </div>
                 }
-              </aside>
+              </div>
             </div>
           </section>
         </div>
@@ -335,8 +306,7 @@ import {
     }
 
     h2,
-    h3,
-    .wildcard-icon {
+    h3 {
       font-family: "FuenteDilana", sans-serif;
     }
 
@@ -352,8 +322,6 @@ import {
     }
 
     .clue-copy p,
-    .wildcard-copy p,
-    .strip-text,
     .chat-message p {
       margin: 0;
       line-height: 1.52;
@@ -551,8 +519,7 @@ import {
     }
 
     .chat-list,
-    .players-list,
-    .wildcards-list {
+    .players-list {
       overflow-y: auto;
       min-height: 0;
       display: grid;
@@ -623,20 +590,8 @@ import {
       margin-left: auto;
     }
 
-    .aligned-right {
-      text-align: right;
-      justify-items: end;
-    }
-
-    .section-header-note {
-      max-width: 16rem;
-    }
-
     .hand-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) clamp(170px, 18vw, 220px);
-      gap: 14px;
-      align-items: stretch;
+      display: block;
       min-height: 0;
       height: 100%;
     }
@@ -651,6 +606,24 @@ import {
       gap: 12px;
       overflow-x: auto;
       padding-bottom: 6px;
+    }
+
+    .hand-empty-state {
+      min-height: 100%;
+      display: grid;
+      align-content: center;
+      justify-items: start;
+      gap: 8px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+    }
+
+    .hand-empty-state p {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.82);
+      line-height: 1.5;
     }
 
     .hand-card {
@@ -683,47 +656,6 @@ import {
       width: 100%;
       display: block;
       border-radius: 18px;
-    }
-
-    .wildcards-strip {
-      display: grid;
-      grid-template-rows: minmax(0, 1fr);
-      height: 100%;
-      min-width: 0;
-      min-height: 0;
-      padding-left: 14px;
-      border-left: 1px solid rgba(255, 255, 255, 0.08);
-      overflow: hidden;
-    }
-
-    .wildcard-card {
-      width: 100%;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      text-align: left;
-      border-radius: 18px;
-      padding: 14px;
-      background: linear-gradient(145deg, rgba(120, 69, 190, 0.28), rgba(58, 29, 112, 0.42));
-      border: 1px solid rgba(208, 182, 255, 0.26);
-      cursor: pointer;
-    }
-
-    .wildcard-icon {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: linear-gradient(145deg, #fbe7ff, #dcb3ff);
-      color: #41195f;
-      font-size: 1.2rem;
-    }
-
-    .wildcard-copy strong {
-      display: block;
-      color: #fff4d8;
-      margin-bottom: 4px;
     }
 
     .players-list {
@@ -822,10 +754,8 @@ export class DixitHandPhase {
   @Input() isStorySubmitDisabled = true;
   @Input() isHandSubmitDisabled = true;
   @Input() handSubmitButtonText = 'Jugar carta';
-  @Input() wildcards: DixitWildcardReward[] = [];
   @Input() players: DixitPlayerRow[] = [];
   @Input() boardTokens: TrackBoardToken[] = [];
-  @Input() wildcardCells: number[] = [];
   @Input() eventBackCells: number[] = [];
   @Input() eventForwardCells: number[] = [];
   @Input() chat: DixitChatComposer = {
@@ -839,7 +769,6 @@ export class DixitHandPhase {
   @Output() readonly storySubmitRequested = new EventEmitter<void>();
   @Output() readonly handSubmitRequested = new EventEmitter<void>();
   @Output() readonly clueDraftChanged = new EventEmitter<string>();
-  @Output() readonly wildcardUsed = new EventEmitter<string>();
   @Output() readonly chatDraftChanged = new EventEmitter<string>();
   @Output() readonly chatSubmitRequested = new EventEmitter<void>();
 
