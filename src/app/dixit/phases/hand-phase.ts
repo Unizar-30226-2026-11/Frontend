@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
 import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
 import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
@@ -6,6 +6,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 @Component({
   selector: 'app-dixit-hand-phase',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DixitTrackBoard],
   template: `
     <section class="hand-phase-layout">

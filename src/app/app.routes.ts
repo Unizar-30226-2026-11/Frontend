@@ -9,6 +9,7 @@ import { Settings } from './settings/settings';
 import { Dixit } from './dixit/dixit';
 import { Login } from './login/login';
 import { Profile } from './profile/profile';
+import { StarTest } from './test/star/star-test';
 import { Auth } from './services/auth';
 
 function buildActiveGameUrlTree(router: Router, activeGameId: string) {
@@ -94,6 +95,13 @@ export const routes: Routes = [
         path: 'profile',
         title: 'Profile',
         component: Profile,
+    },
+    {
+        path: 'test/star',
+        title: 'Test Star',
+        // Ruta aislada para depurar el flujo visual de la estrella fugaz
+        // sin depender de una partida realtime activa.
+        component: StarTest,
     },
     {
         path: '**',

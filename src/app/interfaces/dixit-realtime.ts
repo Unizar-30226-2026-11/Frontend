@@ -78,3 +78,35 @@ export interface RealtimeToast {
   id: number;
   message: string;
 }
+
+export interface RealtimeDuelChallenge {
+  challengerId: string;
+  receivedAt: number;
+}
+
+// Punto expresado en porcentaje de pantalla. El backend envía 0..100
+// y el frontend lo proyecta directamente sobre un overlay fixed.
+export interface RealtimeStarPoint {
+  x: number;
+  y: number;
+}
+
+// Payload normalizado de una estrella fugaz activa. Se conserva receivedAt
+// para poder descartar o coordinar estados tardíos si hiciera falta.
+export interface RealtimeStarSpawn {
+  starId: string;
+  path: {
+    start: RealtimeStarPoint;
+    end: RealtimeStarPoint;
+  };
+  duration: number;
+  receivedAt: number;
+}
+
+// Resultado de la captura de la estrella. El backend devuelve el ganador
+// y las puntuaciones completas ya recalculadas con el +3 aplicado.
+export interface RealtimeStarClaim {
+  winnerId: string;
+  newScores: Record<string, number>;
+  receivedAt: number;
+}

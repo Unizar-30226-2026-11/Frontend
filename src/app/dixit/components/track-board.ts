@@ -1,4 +1,6 @@
 import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   Input,
@@ -6,6 +8,7 @@ import {
   OnDestroy,
   Output,
   SimpleChanges,
+  inject,
 } from '@angular/core';
 
 type TrackCellTone =
@@ -53,6 +56,7 @@ export interface TrackBoardToken {
 @Component({
   selector: 'app-dixit-track-board',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="board-panel">
       @if (title || subtitle) {
@@ -161,6 +165,7 @@ export interface TrackBoardToken {
   styleUrl: './track-board.css',
 })
 export class DixitTrackBoard implements OnChanges, OnDestroy {
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly stackOffsets = [
     { x: 0, y: 0 },
     { x: 12, y: 0 },
@@ -199,6 +204,8 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
         this.selectedTokenId = this.internalTokens[0]?.id ?? '';
       }
     }
+
+    this.cdr.markForCheck();
   }
 
   ngOnDestroy(): void {
@@ -214,6 +221,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       return;
     }
     this.selectedTokenId = tokenId;
+    this.cdr.markForCheck();
   }
 
   moveSelectedToken(steps: number): void {
@@ -272,6 +280,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     }
 
     this.movingTokenIds.add(tokenId);
+    this.cdr.markForCheck();
     let pendingSteps = steps;
 
     const walk = (): void => {
@@ -290,11 +299,13 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       if (pendingSteps > 0) {
         const timer = setTimeout(walk, 260);
         this.moveTimers.push(timer);
+        this.cdr.markForCheck();
         return;
       }
 
       this.movingTokenIds.delete(tokenId);
       this.emitTokensChanged();
+      this.cdr.markForCheck();
     };
 
     walk();
