@@ -1,0 +1,55 @@
+    <div class="register-screen">
+
+      <h1 class="title">A Tale Of Recognition</h1>
+
+      <!-- <form class="register-form"
+            [formGroup]="registerForm"
+            (ngSubmit)="onSubmit()">
+
+        <input
+          type="email"
+          placeholder="Email"
+          formControlName="email"
+        />
+
+        <input
+          type="text"
+          placeholder="Nombre de Usuario"
+          formControlName="username"
+        />
+
+        <input
+          type="password"
+          placeholder="Contraseña"
+          formControlName="password"
+        />
+
+        <input
+          type="password"
+          placeholder="Repetir Contraseña"
+          formControlName="confirmPassword"
+        />
+
+        <button class="submit-button"
+                type="submit"
+                [disabled]="!registerForm.valid || submitting || isRedirecting">
+          {{ isRedirecting ? 'Redirigiendo...' : submitting ? 'Registrando...' : 'Registrarse' }}
+        </button>
+
+      </form> -->
+
+      <app-register-form
+        [register]="registerUser"
+        [submitting]="submitting || isRedirecting"
+        [errorMessage]="error"
+      />
+
+      <button class="login-button" type="button" (click)="goLogin()">Ya tengo una cuenta</button>
+
+      <div *ngIf="error" class="error" role="alert" aria-live="polite">
+        <span class="error-icon" aria-hidden="true">!</span>
+        <p>{{ error }}</p>
+      </div>
+      <p *ngIf="successMessage" class="success">{{ successMessage }}</p>
+
+    </div>

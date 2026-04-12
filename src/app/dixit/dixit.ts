@@ -25,7 +25,6 @@ import { DixitMinijuego1 } from './minijuegos/minijuego-1';
 import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
-import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 import { DixitPointsPhase } from './phases/points-phase';
 import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
 
@@ -1868,7 +1867,13 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
-    const { revealedCards, ranking } = this.buildRevealAndRanking(this.currentRoundPlayers);
+    const { revealedCards, ranking } = buildRevealAndRanking(
+      this.currentRoundPlayers,
+      this.choiceCards,
+      this.playerRoster,
+      this.selectedChoiceCardCode,
+      this.localCurrentPlayerId
+    );
     this.pointsRevealedCards = revealedCards;
     this.pointsRanking = ranking;
     this.pointsStage = 'reveal';
@@ -1976,71 +1981,13 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
     this.pendingBoardTokens = null;
-    this.currentRoundPlayers = this.getRoundPlayers();
+    this.currentRoundPlayers = getRoundPlayers(
+      this.playerRoster,
+      this.choiceCards,
+      this.pointsByPlayer
+    );
     this.pointsVotesTotal = this.currentRoundPlayers.length;
     this.pointsVotesReceived = this.voteSubmitted && this.pointsVotesTotal > 0 ? 1 : 0;
-  }
-
-  private getRoundPlayers(): RoundPlayer[] {
-    const totalPlayers = Math.min(this.choiceCards.length, this.playerRoster.length);
-
-    return this.playerRoster.slice(0, totalPlayers).map((player) => ({
-      ...player,
-      pointsBefore: this.pointsByPlayer.get(player.id) ?? 0,
-    }));
-  }
-
-  private buildRevealAndRanking(roundPlayers: RoundPlayer[]): {
-    revealedCards: DixitRevealedCard[];
-    ranking: DixitRankingRow[];
-  } {
-    const cardsInRound = this.choiceCards.slice(0, roundPlayers.length);
-    if (cardsInRound.length === 0) {
-      return {
-        revealedCards: [],
-        ranking: [],
-      };
-    }
-
-    const activePlayers = roundPlayers.slice(0, cardsInRound.length);
-    const voteCounts = new Map<string, number>();
-    for (const card of cardsInRound) {
-      voteCounts.set(card.code, 0);
-    }
-
-    for (let voterIndex = 0; voterIndex < activePlayers.length; voterIndex += 1) {
-      const ownCardCode = cardsInRound[voterIndex].code;
-      const targetCode = this.resolveVoteCardCode(cardsInRound, voterIndex, ownCardCode);
-      if (!targetCode) {
-        continue;
-      }
-
-      voteCounts.set(targetCode, (voteCounts.get(targetCode) ?? 0) + 1);
-    }
-
-    const revealedCards = cardsInRound.map((card, index) => ({
-      card,
-      ownerName: activePlayers[index].name,
-      votes: voteCounts.get(card.code) ?? 0,
-    }));
-
-    const ranking = activePlayers
-      .map((player, index) => {
-        const ownerCardCode = cardsInRound[index].code;
-        const pointsEarned = voteCounts.get(ownerCardCode) ?? 0;
-        const totalPoints = player.pointsBefore + pointsEarned;
-
-        return {
-          playerId: player.id,
-          playerName: player.name,
-          pointsBefore: player.pointsBefore,
-          pointsEarned,
-          totalPoints,
-        };
-      })
-      .sort((left, right) => right.totalPoints - left.totalPoints);
-
-    return { revealedCards, ranking };
   }
 
   private scheduleRevealRanking(): void {
@@ -2270,7 +2217,6 @@ export class Dixit implements OnInit, OnDestroy {
       position: this.pointsByPlayer.get(player.id) ?? 0,
     }));
   }
-
   private applyCurrentPlayerSpecialCells(ranking: DixitRankingRow[]): void {
     const currentPlayerPreviousPoints =
       this.boardTokens.find((token) => token.id === this.localCurrentPlayerId)?.position ?? 0;
@@ -2280,10 +2226,16 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
-    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(
-      currentPlayerPreviousPoints,
-      currentPlayerRow.totalPoints
-    );
+    const resolvedPoints = resolveCurrentPlayerSpecialCells({
+      previousPoints: currentPlayerPreviousPoints,
+      nextPoints: currentPlayerRow.totalPoints,
+      wildcardCellPositions: this.wildcardCellPositions,
+      eventBackCellPositions: this.eventBackCellPositions,
+      eventForwardCellPositions: this.eventForwardCellPositions,
+      roundNumber: this.roundNumber,
+      onWildcardReward: () => this.grantWildcardReward(),
+      onPopup: (popup) => this.enqueueEffectPopup(popup),
+    });
 
     if (resolvedPoints === currentPlayerRow.totalPoints) {
       return;
