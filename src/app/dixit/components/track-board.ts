@@ -1,4 +1,6 @@
 import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   Input,
@@ -6,6 +8,7 @@ import {
   OnDestroy,
   Output,
   SimpleChanges,
+  inject,
 } from '@angular/core';
 
 type TrackCellTone =
@@ -53,10 +56,116 @@ export interface TrackBoardToken {
 @Component({
   selector: 'app-dixit-track-board',
   standalone: true,
-  templateUrl: './track-board.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <article class="board-panel">
+      @if (title || subtitle) {
+        <header class="board-header">
+          @if (title) {
+            <h2>{{ title }}</h2>
+          }
+          @if (subtitle) {
+            <p>{{ subtitle }}</p>
+          }
+        </header>
+      }
+
+      <div class="track-board">
+        @for (cell of boardCells; track cell.index) {
+          <div
+            class="track-cell"
+            [class.goal]="cell.tone === 'goal'"
+            [class.gold]="cell.tone === 'gold'"
+            [class.pink]="cell.tone === 'pink'"
+            [class.blue]="cell.tone === 'blue'"
+            [class.wildcard]="cell.tone === 'wildcard'"
+            [class.event-back]="cell.tone === 'event-back'"
+            [class.event-forward]="cell.tone === 'event-forward'"
+            [style.left.%]="cell.x"
+            [style.top.%]="cell.y"
+          >
+            <span class="cell-number">{{ cell.index + 1 }}</span>
+            @if (cell.badge) {
+              <span class="cell-badge" aria-hidden="true">{{ cell.badge }}</span>
+            }
+          </div>
+        }
+
+        @for (token of internalTokens; track token.id) {
+          @let anchor = getTokenAnchor(token);
+          <button
+            type="button"
+            class="token-piece"
+            [class.active]="selectedTokenId === token.id"
+            [class.moving]="isTokenMoving(token.id)"
+            [style.left.%]="anchor.x"
+            [style.top.%]="anchor.y"
+            [style.--offset-x.px]="anchor.offsetX"
+            [style.--offset-y.px]="anchor.offsetY"
+            (click)="onTokenSelected(token.id)"
+          >
+            <img draggable="false" [src]="token.image" [alt]="'Ficha ' + token.name" />
+          </button>
+        }
+
+        <div class="board-overlay-slot">
+          <ng-content select="[board-overlay]"></ng-content>
+        </div>
+      </div>
+
+      @if (showControls) {
+        <div class="board-controls">
+          <div class="token-selector">
+            @for (token of internalTokens; track token.id) {
+              <button
+                type="button"
+                [class.active]="selectedTokenId === token.id"
+                (click)="onTokenSelected(token.id)"
+              >
+                <span class="dot" [style.background]="token.color"></span>
+                {{ token.name }}
+              </button>
+            }
+          </div>
+
+          <div class="move-actions">
+            <button
+              type="button"
+              (click)="moveSelectedToken(1)"
+              [disabled]="!interactive || isAnyTokenMoving()"
+            >
+              +1
+            </button>
+            <button
+              type="button"
+              (click)="moveSelectedToken(3)"
+              [disabled]="!interactive || isAnyTokenMoving()"
+            >
+              +3
+            </button>
+            <button
+              type="button"
+              (click)="rollAndMoveSelected()"
+              [disabled]="!interactive || isAnyTokenMoving()"
+            >
+              Dado
+            </button>
+            <button
+              type="button"
+              (click)="simulateRound()"
+              [disabled]="!interactive || isAnyTokenMoving()"
+            >
+              Simular ronda
+            </button>
+          </div>
+        </div>
+      }
+    </article>
+  `,
   styleUrl: './track-board.css',
 })
 export class DixitTrackBoard implements OnChanges, OnDestroy {
+  private readonly cdr = inject(ChangeDetectorRef);
   private readonly stackOffsets = [
     { x: 0, y: 0 },
     { x: 12, y: 0 },
@@ -95,6 +204,8 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
         this.selectedTokenId = this.internalTokens[0]?.id ?? '';
       }
     }
+
+    this.cdr.markForCheck();
   }
 
   ngOnDestroy(): void {
@@ -110,6 +221,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       return;
     }
     this.selectedTokenId = tokenId;
+    this.cdr.markForCheck();
   }
 
   moveSelectedToken(steps: number): void {
@@ -168,6 +280,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     }
 
     this.movingTokenIds.add(tokenId);
+    this.cdr.markForCheck();
     let pendingSteps = steps;
 
     const walk = (): void => {
@@ -186,11 +299,13 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       if (pendingSteps > 0) {
         const timer = setTimeout(walk, 260);
         this.moveTimers.push(timer);
+        this.cdr.markForCheck();
         return;
       }
 
       this.movingTokenIds.delete(tokenId);
       this.emitTokensChanged();
+      this.cdr.markForCheck();
     };
 
     walk();

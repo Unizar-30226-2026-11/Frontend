@@ -1,12 +1,23 @@
 import { TestBed } from '@angular/core/testing';
 
+import { ApiClient } from './api-client';
+import { Auth } from './auth';
 import { CardPull } from './card-pull';
 
 describe('CardPull', () => {
   let service: CardPull;
+  let apiClientSpy: jasmine.SpyObj<ApiClient>;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    apiClientSpy = jasmine.createSpyObj<ApiClient>('ApiClient', ['request']);
+
+    TestBed.configureTestingModule({
+      providers: [
+        CardPull,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: { token: () => 'demo-token' } },
+      ],
+    });
     service = TestBed.inject(CardPull);
   });
 
@@ -14,24 +25,51 @@ describe('CardPull', () => {
     expect(service).toBeTruthy();
   });
 
-  it('returns 6 demo cards by default', async () => {
+  it('loads cards from the API by default', async () => {
+    apiClientSpy.request.and.resolveTo({
+      cards: [
+        { cardId: 'c_101', name: 'Dragon de Fuego' },
+        { cardId: 'c_102', name: 'Bosque Invertido', imageUrl: '/cards/c_102.png' },
+      ],
+    });
+
     const cards = await service.getCards();
 
-    expect(cards.length).toBe(6);
-    expect(cards.map((card) => card.code)).toEqual(['AS', 'AH', 'AD', 'AC', 'KS', 'KH']);
+    expect(apiClientSpy.request).toHaveBeenCalledOnceWith('/users/cards', {
+      token: 'demo-token',
+      ttlMs: 20_000,
+      forceRefresh: undefined,
+    });
+    expect(cards).toEqual([
+      {
+        code: 'c_101',
+        image: '/assets/Tablero.png',
+        value: 'Dragon de Fuego',
+        suit: 'DIXIT',
+      },
+      {
+        code: 'c_102',
+        image: '/cards/c_102.png',
+        value: 'Bosque Invertido',
+        suit: 'DIXIT',
+      },
+    ]);
   });
 
-  it('limits the demo cards when a count is provided', async () => {
-    const cards = await service.getCards(3);
+  it('limits API cards when a count is provided', async () => {
+    apiClientSpy.request.and.resolveTo({
+      cards: {
+        cards: [
+          { cardId: 'c_101', name: 'Dragon de Fuego' },
+          { cardId: 'c_102', name: 'Bosque Invertido' },
+          { cardId: 'c_103', name: 'Reloj Sumergido' },
+        ],
+      },
+    });
 
-    expect(cards.length).toBe(3);
-    expect(cards.map((card) => card.code)).toEqual(['AS', 'AH', 'AD']);
-  });
+    const cards = await service.getCards(2);
 
-  it('returns enough poker cards for the Stella board and row replacements', async () => {
-    const cards = await service.getCards(30);
-
-    expect(cards.length).toBe(30);
-    expect(cards[29].code).toBe('8H');
+    expect(cards.length).toBe(2);
+    expect(cards.map((card) => card.code)).toEqual(['c_101', 'c_102']);
   });
 });

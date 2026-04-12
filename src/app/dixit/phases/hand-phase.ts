@@ -1,15 +1,12 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
 import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
-import {
-  DixitChatComposer,
-  DixitPlayerRow,
-  DixitWildcardReward,
-} from '../dixit-phase.models';
+import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
 @Component({
   selector: 'app-dixit-hand-phase',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [DixitTrackBoard],
   template: `
     <section class="hand-phase-layout">
@@ -17,7 +14,6 @@ import {
         [title]="''"
         [subtitle]="''"
         [tokens]="boardTokens"
-        [wildcardCells]="wildcardCells"
         [eventBackCells]="eventBackCells"
         [eventForwardCells]="eventForwardCells"
         [showControls]="false"
@@ -25,87 +21,118 @@ import {
       >
         <div board-overlay class="board-overlay-content">
           <section class="board-overlay-shell">
-            <div class="story-card hand-overlay">
+            <div class="story-card hand-overlay" [class.waiting-overlay]="handSubmitted">
               <div class="clue-copy">
-                <span class="overlay-label">Pista actual</span>
-                <h2>{{ currentClue || 'Esperando pista' }}</h2>
-                <p class="storyteller-copy">
-                  Cuenta-cuentos:
-                  <strong>{{ storytellerName || 'Pendiente' }}</strong>
-                </p>
-                <p>
-                  @if (!currentClue && isCurrentPlayerStoryteller) {
-                    Escribe la pista y confirmala para abrir la ronda.
-                  } @else if (!currentClue) {
-                    Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
-                  } @else if (isCurrentPlayerStoryteller) {
-                    La pista ya esta publicada. Esperando a que el resto envie su carta.
-                  } @else {
-                    La pista ya esta publicada. Elige una carta y enviala al servidor.
+                @if (handSubmitted) {
+                  <span class="overlay-label">Jugada enviada</span>
+                  <h2>Esperando al resto de jugadores</h2>
+                  <p class="storyteller-copy">
+                    Cuenta-cuentos:
+                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                  </p>
+                  <p>
+                    @if (isCurrentPlayerStoryteller) {
+                      Tu pista y tu carta ya estan enviadas. La ronda avanzara cuando todos hayan terminado.
+                    } @else {
+                      Tu carta ya esta enviada. La ronda avanzara cuando todos los jugadores hayan terminado.
+                    }
+                  </p>
+                  @if (currentClue) {
+                    <p class="submitted-detail">Pista: <strong>{{ currentClue }}</strong></p>
                   }
-                </p>
+                  @if (submittedCardLabel) {
+                    <p class="submitted-detail">Carta enviada: <strong>{{ submittedCardLabel }}</strong></p>
+                  }
+                  <div class="waiting-feedback" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                } @else {
+                  <span class="overlay-label">Pista actual</span>
+                  <h2>{{ currentClue || 'Esperando pista' }}</h2>
+                  <p class="storyteller-copy">
+                    Cuenta-cuentos:
+                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                  </p>
+                  <p>
+                    @if (!currentClue && isCurrentPlayerStoryteller) {
+                      Escribe la pista y confirmala para abrir la ronda.
+                    } @else if (!currentClue) {
+                      Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
+                    } @else if (isCurrentPlayerStoryteller) {
+                      La pista ya esta publicada. Esperando a que el resto envie su carta.
+                    } @else {
+                      La pista ya esta publicada. Elige una carta y enviala al servidor.
+                    }
+                  </p>
 
-                @if (!currentClue && isCurrentPlayerStoryteller) {
-                  <label class="clue-field">
-                    <span>Tu pista</span>
-                    <input
-                      type="text"
-                      maxlength="255"
-                      [value]="clueDraft"
-                      (input)="onClueDraftChanged($event)"
-                      placeholder="Escribe una pista para esta ronda"
-                    />
-                  </label>
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    <label class="clue-field">
+                      <span>Tu pista</span>
+                      <input
+                        type="text"
+                        maxlength="255"
+                        [value]="clueDraft"
+                        (input)="onClueDraftChanged($event)"
+                        placeholder="Escribe una pista para esta ronda"
+                      />
+                    </label>
+                  }
+
+                  <div class="hand-submit-row">
+                    @if (!currentClue && isCurrentPlayerStoryteller) {
+                      <button
+                        type="button"
+                        class="secondary-action"
+                        [disabled]="isStorySubmitDisabled"
+                        (click)="storySubmitRequested.emit()"
+                      >
+                        Confirmar pista
+                      </button>
+                    }
+
+                    @if (!isCurrentPlayerStoryteller) {
+                      <button
+                        type="button"
+                        class="sidebar-action"
+                        [disabled]="isHandSubmitDisabled"
+                        (click)="handSubmitRequested.emit()"
+                      >
+                        {{ handSubmitButtonText }}
+                      </button>
+                    }
+                  </div>
                 }
+              </div>
 
-                <div class="hand-submit-row">
-                  @if (!currentClue && isCurrentPlayerStoryteller) {
-                    <button
-                      type="button"
-                      class="secondary-action"
-                      [disabled]="isStorySubmitDisabled"
-                      (click)="storySubmitRequested.emit()"
-                    >
-                      Confirmar pista
-                    </button>
-                  }
-
-                  @if (handSubmitted) {
-                    <span class="status-pill">Jugada enviada</span>
-                  }
-
-                  @if (!isCurrentPlayerStoryteller) {
-                    <button
-                      type="button"
-                      class="sidebar-action"
-                      [disabled]="isHandSubmitDisabled"
-                      (click)="handSubmitRequested.emit()"
-                    >
-                      {{ handSubmitButtonText }}
-                    </button>
+              @if (handSubmitted) {
+                <div class="waiting-zone">
+                  <span class="waiting-check" aria-hidden="true">OK</span>
+                  <strong>Jugada registrada</strong>
+                  <p>Ya no necesitas hacer nada en esta fase.</p>
+                </div>
+              } @else {
+                <div
+                  class="drop-zone"
+                  [class.has-card]="!!selectedCard"
+                  [class.is-dragover]="isDropZoneActive"
+                  (dragover)="onDropZoneDragOver($event)"
+                  (dragleave)="onDropZoneDragLeave()"
+                  (drop)="onDropZoneDrop($event)"
+                >
+                  @if (selectedCard; as card) {
+                    <img
+                      draggable="false"
+                      [src]="card.image"
+                      [alt]="card.value + ' de ' + card.suit"
+                    />
+                    <p>Seleccionada: {{ card.code }}</p>
+                  } @else {
+                    <p>Suelta aqui tu carta</p>
                   }
                 </div>
-              </div>
-
-              <div
-                class="drop-zone"
-                [class.has-card]="!!selectedCard"
-                [class.is-dragover]="isDropZoneActive"
-                (dragover)="onDropZoneDragOver($event)"
-                (dragleave)="onDropZoneDragLeave()"
-                (drop)="onDropZoneDrop($event)"
-              >
-                @if (selectedCard; as card) {
-                  <img
-                    draggable="false"
-                    [src]="card.image"
-                    [alt]="card.value + ' de ' + card.suit"
-                  />
-                  <p>Seleccionada: {{ card.code }}</p>
-                } @else {
-                  <p>Suelta aqui tu carta</p>
-                }
-              </div>
+              }
             </div>
           </section>
         </div>
@@ -157,17 +184,6 @@ import {
               </div>
 
               <div class="section-header-side">
-                <div class="section-header-copy aligned-right">
-                  <p class="overlay-label">Comodines</p>
-                  <p class="strip-text section-header-note">
-                    @if (wildcards.length === 0) {
-                      Sin comodines todavia.
-                    } @else {
-                      Usa uno antes de enviar tu accion al servidor.
-                    }
-                  </p>
-                </div>
-
                 @if (selectedCard) {
                   <button type="button" class="secondary-action" (click)="clearSelectionRequested.emit()">
                     Quitar
@@ -178,46 +194,34 @@ import {
 
             <div class="hand-layout">
               <div class="hand-main">
-                <div class="hand-cards">
-                  @for (card of cards; track card.code) {
-                    <button
-                      type="button"
-                      class="hand-card"
-                      [class.selected]="card.code === selectedCardCode"
-                      draggable="true"
-                      (dragstart)="onHandCardDragStart(card, $event)"
-                      (dragend)="onHandCardDragEnd()"
-                      (click)="cardSelected.emit(card)"
-                    >
-                      <img
-                        draggable="false"
-                        [src]="card.image"
-                        [alt]="card.value + ' de ' + card.suit"
-                      />
-                    </button>
-                  }
-                </div>
-              </div>
-
-              <aside class="wildcards-strip">
-                @if (wildcards.length > 0) {
-                  <div class="wildcards-list">
-                    @for (wildcard of wildcards; track wildcard.id) {
+                @if (cards.length === 0) {
+                  <div class="hand-empty-state">
+                    <strong>Esperando tu mano</strong>
+                    <p>La fase ya esta activa, pero las cartas todavia no han llegado por <code>private_hand</code>.</p>
+                  </div>
+                } @else {
+                  <div class="hand-cards">
+                    @for (card of cards; track card.code) {
                       <button
                         type="button"
-                        class="wildcard-card"
-                        (click)="wildcardUsed.emit(wildcard.id)"
+                        class="hand-card"
+                        [class.selected]="card.code === selectedCardCode"
+                        [disabled]="handSubmitted"
+                        [attr.draggable]="handSubmitted ? 'false' : 'true'"
+                        (dragstart)="onHandCardDragStart(card, $event)"
+                        (dragend)="onHandCardDragEnd()"
+                        (click)="cardSelected.emit(card)"
                       >
-                        <span class="wildcard-icon" aria-hidden="true">{{ wildcard.icon }}</span>
-                        <div class="wildcard-copy">
-                          <strong>{{ wildcard.name }}</strong>
-                          <p>{{ wildcard.description }}</p>
-                        </div>
+                        <img
+                          draggable="false"
+                          [src]="card.image"
+                          [alt]="card.value + ' de ' + card.suit"
+                        />
                       </button>
                     }
                   </div>
                 }
-              </aside>
+              </div>
             </div>
           </section>
         </div>
@@ -284,6 +288,11 @@ import {
       transform: translateX(4.5%);
     }
 
+    .waiting-overlay {
+      background: rgba(239, 247, 244, 0.94);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(18, 111, 77, 0.16);
+    }
+
     .overlay-label {
       margin: 0;
       text-transform: uppercase;
@@ -298,8 +307,7 @@ import {
     }
 
     h2,
-    h3,
-    .wildcard-icon {
+    h3 {
       font-family: "FuenteDilana", sans-serif;
     }
 
@@ -315,8 +323,6 @@ import {
     }
 
     .clue-copy p,
-    .wildcard-copy p,
-    .strip-text,
     .chat-message p {
       margin: 0;
       line-height: 1.52;
@@ -383,6 +389,67 @@ import {
       width: min(140px, 100%);
       border-radius: 16px;
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+
+    .submitted-detail {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(18, 111, 77, 0.1);
+      color: #1d3f33;
+    }
+
+    .waiting-feedback {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 18px;
+    }
+
+    .waiting-feedback span {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #126f4d;
+      animation: waitingPulse 1.15s ease-in-out infinite;
+    }
+
+    .waiting-feedback span:nth-child(2) {
+      animation-delay: 140ms;
+    }
+
+    .waiting-feedback span:nth-child(3) {
+      animation-delay: 280ms;
+    }
+
+    .waiting-zone {
+      min-height: 210px;
+      border-radius: 20px;
+      border: 1px solid rgba(18, 111, 77, 0.24);
+      background: linear-gradient(160deg, rgba(18, 111, 77, 0.14), rgba(255, 255, 255, 0.62));
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      gap: 10px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .waiting-zone p {
+      margin: 0;
+      color: rgba(29, 36, 48, 0.72);
+    }
+
+    .waiting-check {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #126f4d;
+      color: #f7fff9;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      box-shadow: 0 12px 24px rgba(18, 111, 77, 0.22);
     }
 
     .status-pill {
@@ -453,8 +520,7 @@ import {
     }
 
     .chat-list,
-    .players-list,
-    .wildcards-list {
+    .players-list {
       overflow-y: auto;
       min-height: 0;
       display: grid;
@@ -525,20 +591,8 @@ import {
       margin-left: auto;
     }
 
-    .aligned-right {
-      text-align: right;
-      justify-items: end;
-    }
-
-    .section-header-note {
-      max-width: 16rem;
-    }
-
     .hand-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) clamp(170px, 18vw, 220px);
-      gap: 14px;
-      align-items: stretch;
+      display: block;
       min-height: 0;
       height: 100%;
     }
@@ -553,6 +607,24 @@ import {
       gap: 12px;
       overflow-x: auto;
       padding-bottom: 6px;
+    }
+
+    .hand-empty-state {
+      min-height: 100%;
+      display: grid;
+      align-content: center;
+      justify-items: start;
+      gap: 8px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px dashed rgba(255, 255, 255, 0.16);
+    }
+
+    .hand-empty-state p {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.82);
+      line-height: 1.5;
     }
 
     .hand-card {
@@ -575,51 +647,16 @@ import {
       box-shadow: 0 0 0 4px rgba(96, 180, 255, 0.88);
     }
 
+    .hand-card:disabled {
+      cursor: default;
+      opacity: 0.52;
+      transform: none;
+    }
+
     .hand-card img {
       width: 100%;
       display: block;
       border-radius: 18px;
-    }
-
-    .wildcards-strip {
-      display: grid;
-      grid-template-rows: minmax(0, 1fr);
-      height: 100%;
-      min-width: 0;
-      min-height: 0;
-      padding-left: 14px;
-      border-left: 1px solid rgba(255, 255, 255, 0.08);
-      overflow: hidden;
-    }
-
-    .wildcard-card {
-      width: 100%;
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px;
-      text-align: left;
-      border-radius: 18px;
-      padding: 14px;
-      background: linear-gradient(145deg, rgba(120, 69, 190, 0.28), rgba(58, 29, 112, 0.42));
-      border: 1px solid rgba(208, 182, 255, 0.26);
-      cursor: pointer;
-    }
-
-    .wildcard-icon {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: linear-gradient(145deg, #fbe7ff, #dcb3ff);
-      color: #41195f;
-      font-size: 1.2rem;
-    }
-
-    .wildcard-copy strong {
-      display: block;
-      color: #fff4d8;
-      margin-bottom: 4px;
     }
 
     .players-list {
@@ -665,6 +702,19 @@ import {
       font-weight: 700;
     }
 
+    @keyframes waitingPulse {
+      0%,
+      100% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+
+      50% {
+        opacity: 1;
+        transform: translateY(-3px);
+      }
+    }
+
     @media (max-width: 1160px) {
       .table-support {
         grid-template-columns: 1fr;
@@ -705,10 +755,8 @@ export class DixitHandPhase {
   @Input() isStorySubmitDisabled = true;
   @Input() isHandSubmitDisabled = true;
   @Input() handSubmitButtonText = 'Jugar carta';
-  @Input() wildcards: DixitWildcardReward[] = [];
   @Input() players: DixitPlayerRow[] = [];
   @Input() boardTokens: TrackBoardToken[] = [];
-  @Input() wildcardCells: number[] = [];
   @Input() eventBackCells: number[] = [];
   @Input() eventForwardCells: number[] = [];
   @Input() chat: DixitChatComposer = {
@@ -722,7 +770,6 @@ export class DixitHandPhase {
   @Output() readonly storySubmitRequested = new EventEmitter<void>();
   @Output() readonly handSubmitRequested = new EventEmitter<void>();
   @Output() readonly clueDraftChanged = new EventEmitter<string>();
-  @Output() readonly wildcardUsed = new EventEmitter<string>();
   @Output() readonly chatDraftChanged = new EventEmitter<string>();
   @Output() readonly chatSubmitRequested = new EventEmitter<void>();
 
@@ -731,6 +778,15 @@ export class DixitHandPhase {
 
   get selectedCard(): DeckCard | undefined {
     return this.cards.find((card) => card.code === this.selectedCardCode);
+  }
+
+  get submittedCardLabel(): string {
+    const selectedCard = this.selectedCard;
+    if (selectedCard) {
+      return `${selectedCard.value} (${selectedCard.code})`;
+    }
+
+    return this.selectedCardCode;
   }
 
   onClueDraftChanged(event: Event): void {
@@ -752,6 +808,11 @@ export class DixitHandPhase {
   }
 
   onHandCardDragStart(card: DeckCard, event?: DragEvent): void {
+    if (this.handSubmitted) {
+      event?.preventDefault();
+      return;
+    }
+
     this.draggedHandCardCode = card.code;
     if (event?.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';

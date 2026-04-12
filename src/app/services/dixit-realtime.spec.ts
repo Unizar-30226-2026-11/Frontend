@@ -78,24 +78,21 @@ describe('DixitRealtime', () => {
     expect(socketFactory.calls.mostRecent().args).toEqual([
       'http://fresh-socket.test',
       jasmine.objectContaining({
-        auth: jasmine.objectContaining({
-          ticket: 'fresh-ticket',
+        auth: {
           token: 'fresh-ticket',
-          code: 'fresh-ticket',
-          lobbyCode: 'A1B2',
-        }),
-        query: jasmine.objectContaining({
-          ticket: 'fresh-ticket',
-          token: 'fresh-ticket',
-          code: 'fresh-ticket',
-          lobbyCode: 'A1B2',
-        }),
+        },
       }),
     ]);
 
     socket.trigger('connect');
     tick();
 
+    expect(socket.emissions).toContain(
+      jasmine.objectContaining({
+        event: 'client:lobby:join',
+        payload: undefined,
+      })
+    );
     expect(isResolved).toBeTrue();
     expect(service.connectionStatus()).toBe('connected');
   }));
@@ -202,6 +199,43 @@ describe('DixitRealtime', () => {
     );
   }));
 
+  it('stores private hand updates from the documented server event', fakeAsync(() => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
+    socket.trigger('connect');
+    tick();
+
+    socket.trigger('server:game:private_hand', { hand: [1, '2', null, ''] });
+
+    expect(service.privateHand()).toEqual(
+      jasmine.objectContaining({
+        lobbyCode: 'A1B2',
+        hand: [1, '2'],
+      })
+    );
+  }));
+
   it('clears the active game when the join endpoint returns 404', fakeAsync(() => {
     localStorage.setItem(
       'ator.dixit.realtime.session',
@@ -240,6 +274,7 @@ describe('DixitRealtime', () => {
 
 class FakeSocketIoClient {
   connected = false;
+  readonly emissions: Array<{ event: string; payload?: unknown }> = [];
 
   private readonly listeners = new Map<string, Array<(payload?: unknown) => void>>();
   private readonly oneTimeListeners = new Map<string, Array<(payload?: unknown) => void>>();
@@ -258,7 +293,8 @@ class FakeSocketIoClient {
     return this;
   }
 
-  emit(_event: string, _payload?: unknown): FakeSocketIoClient {
+  emit(event: string, payload?: unknown): FakeSocketIoClient {
+    this.emissions.push({ event, payload });
     return this;
   }
 

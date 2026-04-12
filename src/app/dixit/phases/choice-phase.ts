@@ -11,10 +11,12 @@ import { DeckCard } from '../../services/card-pull';
           <p class="overlay-label">Votacion</p>
           <h2>{{ currentClue || 'Esperando pista' }}</h2>
           <p>
-            @if (selectedCard) {
+            @if (!canVote) {
+              Eres el cuenta-cuentos. Espera a que el resto de jugadores vote.
+            } @else if (selectedCard) {
               Has elegido {{ selectedCard.code }}. Puedes cambiarla antes de confirmar.
             } @else {
-              Elige una carta para votar y confirma tu decision.
+              Elige una carta para votar y confirma tu decision. Tu propia carta no se puede votar.
             }
           </p>
         </div>
@@ -31,6 +33,8 @@ import { DeckCard } from '../../services/card-pull';
             class="vote-card stage-vote-card"
             [class.selected]="card.code === selectedCardCode"
             [class.locked]="voteSubmitted"
+            [class.own-card]="card.code === disabledCardCode"
+            [disabled]="isCardDisabled(card)"
             (click)="cardSelected.emit(card)"
           >
             <img
@@ -38,13 +42,23 @@ import { DeckCard } from '../../services/card-pull';
               [src]="card.image"
               [alt]="card.value + ' de ' + card.suit"
             />
+            <div class="vote-card-copy">
+              <strong>{{ card.value }}</strong>
+              @if (card.code === disabledCardCode) {
+                <span class="vote-card-badge own">Tu carta</span>
+              } @else {
+                <span class="vote-card-code">{{ card.code }}</span>
+              }
+            </div>
           </button>
         }
       </div>
 
       <div class="phase-stage-footer">
         <p>
-          @if (selectedCard) {
+          @if (!canVote) {
+            El cuenta-cuentos no participa en la votacion.
+          } @else if (selectedCard) {
             Tu voto actual es {{ selectedCard.code }}.
           } @else {
             Selecciona una de las cartas para continuar.
@@ -54,7 +68,7 @@ import { DeckCard } from '../../services/card-pull';
         <button
           type="button"
           class="sidebar-action"
-          [disabled]="!selectedCardCode || voteSubmitted"
+          [disabled]="!selectedCardCode || voteSubmitted || !canVote || selectedCardCode === disabledCardCode"
           (click)="voteSubmitRequested.emit()"
         >
           Confirmar voto
@@ -135,11 +149,16 @@ import { DeckCard } from '../../services/card-pull';
       padding: 0;
       border-radius: 18px;
       cursor: pointer;
-      transition: transform 160ms ease, box-shadow 160ms ease;
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
     }
 
     .vote-card:hover {
       transform: translateY(-3px);
+    }
+
+    .vote-card:disabled {
+      cursor: not-allowed;
+      transform: none;
     }
 
     .vote-card.selected {
@@ -163,6 +182,45 @@ import { DeckCard } from '../../services/card-pull';
 
     .stage-vote-card.locked {
       opacity: 0.96;
+    }
+
+    .stage-vote-card.own-card {
+      opacity: 0.58;
+      box-shadow: 0 0 0 2px rgba(255, 116, 95, 0.45);
+    }
+
+    .vote-card-copy {
+      display: grid;
+      gap: 6px;
+      padding: 12px 12px 14px;
+      background: rgba(6, 17, 25, 0.88);
+      text-align: left;
+    }
+
+    .vote-card-copy strong {
+      color: #fff4d8;
+      line-height: 1.3;
+    }
+
+    .vote-card-code {
+      color: rgba(244, 239, 228, 0.78);
+      font-size: 0.9rem;
+    }
+
+    .vote-card-badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .vote-card-badge.own {
+      background: rgba(255, 116, 95, 0.18);
+      color: #ffd9d2;
+      border: 1px solid rgba(255, 116, 95, 0.24);
     }
 
     .status-pill {
@@ -196,6 +254,8 @@ export class DixitChoicePhase {
   @Input() currentClue = '';
   @Input() cards: DeckCard[] = [];
   @Input() selectedCardCode = '';
+  @Input() disabledCardCode = '';
+  @Input() canVote = true;
   @Input() voteSubmitted = false;
 
   @Output() readonly cardSelected = new EventEmitter<DeckCard>();
@@ -203,5 +263,9 @@ export class DixitChoicePhase {
 
   get selectedCard(): DeckCard | undefined {
     return this.cards.find((card) => card.code === this.selectedCardCode);
+  }
+
+  isCardDisabled(card: DeckCard): boolean {
+    return !this.canVote || this.voteSubmitted || card.code === this.disabledCardCode;
   }
 }

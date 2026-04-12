@@ -9,52 +9,96 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
+  RealtimeDuelChallenge,
   RealtimeGameStateUpdate,
   RealtimeLobbyState,
+  RealtimeStarClaim,
+  RealtimeStarSpawn,
 } from '../interfaces/dixit-realtime';
 import { Auth } from '../services/auth';
 import { CardPull } from '../services/card-pull';
 import type { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
+import { FallingStarOverlay } from './components/falling-star-overlay';
 import type { TrackBoardToken } from './components/track-board';
+import { DixitMinijuego1 } from './minijuegos/minijuego-1';
+import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
 import { DixitPointsPhase } from './phases/points-phase';
-import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
-import {
-  EVENT_BACK_CELL_POSITIONS,
-  EVENT_FORWARD_CELL_POSITIONS,
-  PHASE_STEPS,
-  WILDCARD_CELL_POSITIONS,
-  WILDCARD_REWARDS,
-  type BoardEffectPopup,
-  type DixitPhase,
-  type PhaseStep,
-  type PointsStage,
-  type RosterPlayer,
-  type RoundPlayer,
-} from './dixit.constants';
-import type { DixitChatComposer, DixitPlayerRow, DixitWildcardReward } from './dixit-phase.models';
-import { DixitMinijuego1 } from './minijuegos/minijuego-1';
-import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
-import {
-  buildRevealAndRanking,
-  getRoundPlayers,
-  resolveCurrentPlayerSpecialCells,
-} from './dixit.logic';
+import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
+
+type DixitPhase = 'hand' | 'choice' | 'points';
+type PointsStage = 'waiting' | 'reveal' | 'ranking';
+
+interface PhaseStep {
+  id: DixitPhase;
+  title: string;
+  description: string;
+}
+
+interface RosterPlayer {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface RoundPlayer extends RosterPlayer {
+  pointsBefore: number;
+}
+
+interface BoardEffectPopup {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+}
 
 interface ResolvedPhaseState {
   phase: DixitPhase;
   pointsStage: PointsStage;
 }
 
+interface RoundVoteEntry {
+  voterId: string;
+  targetCardCode: string;
+}
+
+const PHASE_STEPS: readonly PhaseStep[] = [
+  {
+    id: 'hand',
+    title: 'Elegir carta',
+    description: 'Selecciona una carta y enviala cuando el servidor te deje jugar.',
+  },
+  {
+    id: 'choice',
+    title: 'Votacion',
+    description: 'Con la pista visible, escoge la carta que quieres votar y confirma tu seleccion.',
+  },
+  {
+    id: 'points',
+    title: 'Puntuacion',
+    description: 'Espera el resultado del servidor y revisa la resolucion de la ronda.',
+  },
+];
+
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3a3a', '#ffd166'] as const;
+
+const EVENT_BACK_CELL_POSITIONS = [6, 14, 22, 30, 38] as const;
+const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
 
 @Component({
   selector: 'app-dixit',
   standalone: true,
-  imports: [DixitHandPhase, DixitChoicePhase, DixitPointsPhase, DixitMinijuego1, DixitMinijuego2],
+  imports: [
+    FallingStarOverlay,
+    DixitHandPhase,
+    DixitChoicePhase,
+    DixitPointsPhase,
+    DixitMinijuego1,
+    DixitMinijuego2,
+  ],
   template: `
     <section class="dixit-table">
       <nav class="dixit-topbar" aria-label="Barra de partida">
@@ -84,9 +128,9 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
         <article class="status-card error">
           <p>{{ errorMessage }}</p>
         </article>
-      } @else if (cards.length === 0) {
+      } @else if (phase === 'choice' && choiceCards.length === 0) {
         <article class="status-card">
-          <p>Esperando a que el servidor envie tu mano.</p>
+          <p>Esperando a que el servidor envie las cartas para votar.</p>
         </article>
       } @else {
         <div class="table-main">
@@ -95,6 +139,8 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
               [currentClue]="currentClue"
               [cards]="choiceCards"
               [selectedCardCode]="selectedChoiceCardCode"
+              [disabledCardCode]="currentPlayerPlayedCardCode"
+              [canVote]="!isCurrentPlayerStoryteller"
               [voteSubmitted]="voteSubmitted"
               (cardSelected)="onChoiceCardSelected($event)"
               (voteSubmitRequested)="submitVoteSelection()"
@@ -108,9 +154,10 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
               [revealedCards]="pointsRevealedCards"
               [ranking]="pointsRanking"
               [showRanking]="pointsStage === 'ranking'"
+              [canAdvanceToNextRound]="isCurrentPlayerHost"
               (skipWaitingRequested)="simulateResultsReveal()"
               (rankingRequested)="simulateRankingShown()"
-              (nextRoundRequested)="prepareNextRound()"
+              (nextRoundRequested)="requestNextRound()"
             />
           } @else {
             <app-dixit-hand-phase
@@ -124,10 +171,8 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
               [isStorySubmitDisabled]="isStorySubmitDisabled"
               [isHandSubmitDisabled]="isHandSubmitDisabled"
               [handSubmitButtonText]="handSubmitButtonText"
-              [wildcards]="wildcards"
               [players]="playerRows"
               [boardTokens]="boardTokens"
-              [wildcardCells]="wildcardCellPositions"
               [eventBackCells]="eventBackCellPositions"
               [eventForwardCells]="eventForwardCellPositions"
               [chat]="handChatComposer"
@@ -136,7 +181,6 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
               (storySubmitRequested)="submitStoryClue()"
               (handSubmitRequested)="submitHandSelection()"
               (clueDraftChanged)="updateClueDraft($event)"
-              (wildcardUsed)="useWildcard($event)"
               (chatDraftChanged)="updateChatDraft($event)"
               (chatSubmitRequested)="submitChatMessage()"
             />
@@ -192,6 +236,14 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
       }
     </section>
 
+    <app-falling-star-overlay
+      [star]="activeStar"
+      [claimEnabled]="canClaimActiveStar"
+      [winnerLabel]="starWinnerLabel"
+      [winnerSequence]="starClaimSequence"
+      (claimRequested)="claimVisibleStar()"
+    />
+
     @if (activeEffectPopup; as popup) {
       <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
         <article
@@ -217,6 +269,45 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
       </div>
     }
 
+    @if (activeDuelChallenge) {
+      <div class="wildcard-popup-backdrop" (click)="closeDuelModal()">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="duel-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Duelo</p>
+          <h2 id="duel-popup-title">Elige un rival</h2>
+          <p class="duel-copy">
+            Has caido en una casilla de duelo. Selecciona el jugador contra el que quieres resolverlo.
+          </p>
+
+          <div class="duel-options">
+            @for (player of duelTargetPlayers; track player.id) {
+              <button
+                type="button"
+                class="duel-option"
+                (click)="resolveDuel(player.id)"
+              >
+                <span class="player-dot" [style.background]="player.color"></span>
+                <span>{{ player.name }}</span>
+              </button>
+            }
+          </div>
+
+          @if (duelTargetPlayers.length === 0) {
+            <p class="duel-copy">No hay rivales disponibles ahora mismo.</p>
+          }
+
+          <button type="button" class="sidebar-action" (click)="closeDuelModal()">
+            Cerrar
+          </button>
+        </article>
+      </div>
+    }
+
     @if (isMinigame1Open) {
       <app-dixit-minijuego-1 (close)="closeMinigame1()" />
     }
@@ -228,7 +319,6 @@ const DEFAULT_PLAYER_COLORS = ['#ff7725', '#27c93f', '#2b79ff', '#d645ff', '#ff3
   styleUrl: './dixit.css',
 })
 export class Dixit implements OnInit, OnDestroy {
-  readonly wildcardCellPositions: number[] = [...WILDCARD_CELL_POSITIONS];
   readonly eventBackCellPositions: number[] = [...EVENT_BACK_CELL_POSITIONS];
   readonly eventForwardCellPositions: number[] = [...EVENT_FORWARD_CELL_POSITIONS];
 
@@ -244,6 +334,9 @@ export class Dixit implements OnInit, OnDestroy {
   private readonly pointsByPlayer = new Map<string, number>();
 
   private currentRoundPlayers: RoundPlayer[] = [];
+  private ownedCards: DeckCard[] = [];
+  private latestPrivateHand: Array<number | string> = [];
+  private submittedHandRoundNumber: number | null = null;
 
   id = '';
   phase: DixitPhase = 'hand';
@@ -264,25 +357,36 @@ export class Dixit implements OnInit, OnDestroy {
   lastRealtimeAction = '';
   gameEnded = false;
   storySubmitted = false;
+  currentPlayerPlayedCardCode = '';
+  activeDuelChallenge: RealtimeDuelChallenge | null = null;
+  activeStar: RealtimeStarSpawn | null = null;
+  starWinnerLabel = '';
 
   pointsVotesReceived = 0;
   pointsVotesTotal = 0;
   pointsRevealedCards: DixitRevealedCard[] = [];
   pointsRanking: DixitRankingRow[] = [];
-  wildcards: DixitWildcardReward[] = [];
   activeEffectPopup: BoardEffectPopup | null = null;
   isSimulationDrawerOpen = false;
   isMinigame1Open = false;
   isMinigame2Open = false;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
+  private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
+  private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingBoardTokens: TrackBoardToken[] | null = null;
+  private nextRoundTimerRoundNumber: number | null = null;
+  private lastAppliedGameStateReceivedAt = 0;
+  private lastAppliedStarClaimReceivedAt = 0;
+  starClaimSequence = 0;
 
   constructor() {
     this.bootstrapFallbackRoster();
 
     effect(
       () => {
+        // Sincroniza altas/bajas/cambios de la lobby recibidos por websocket
+        // con el roster y los colores locales del tablero.
         const lobbyState = this.realtime.lobbyState();
         if (!lobbyState || lobbyState.code !== this.id) {
           return;
@@ -296,6 +400,8 @@ export class Dixit implements OnInit, OnDestroy {
 
     effect(
       () => {
+        // Este es el punto principal de entrada del estado público de partida
+        // enviado por websocket o por recovered.
         const gameState = this.realtime.gameState();
         if (!gameState || this.realtime.activeLobbyCode() !== this.id) {
           return;
@@ -309,6 +415,22 @@ export class Dixit implements OnInit, OnDestroy {
 
     effect(
       () => {
+        // La mano privada llega por un evento separado del estado público.
+        const privateHand = this.realtime.privateHand();
+        if (!privateHand || privateHand.lobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimePrivateHand(privateHand.hand);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        // Propaga errores de socket/servidor a la capa visual sin bloquear
+        // la reactividad del resto de eventos.
         const realtimeError = this.realtime.lastError();
         if (!realtimeError || this.realtime.activeLobbyCode() !== this.id) {
           return;
@@ -323,9 +445,61 @@ export class Dixit implements OnInit, OnDestroy {
       },
       { injector: this.injector }
     );
+
+    effect(
+      () => {
+        // Abre el modal de duelo cuando el backend notifica que solo este usuario
+        // puede resolverlo.
+        const duelChallenge = this.realtime.duelChallenge();
+        if (!duelChallenge || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        this.activeDuelChallenge = duelChallenge;
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const activeStar = this.realtime.activeStar();
+        // La estrella es un efecto volátil de sala. Solo se pinta si corresponde
+        // a la lobby activa que el componente está mostrando.
+        if (activeLobbyCode !== this.id) {
+          this.activeStar = null;
+          this.cdr.detectChanges();
+          return;
+        }
+
+        this.activeStar = activeStar;
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const starClaim = this.realtime.starClaim();
+        // starClaim se trata como un evento: se aplica una vez, se actualiza UI
+        // y luego se limpia en el servicio para no repetir el efecto.
+        if (!starClaim || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeStarClaim(starClaim);
+        this.realtime.clearStarClaim();
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
   }
 
   async ngOnInit(): Promise<void> {
+    // Reconecta contra la lobby, reaplica cualquier estado websocket ya restaurado
+    // y solo después carga el catálogo de cartas local usado para mapear ids a imágenes.
     this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? '';
 
     try {
@@ -340,8 +514,16 @@ export class Dixit implements OnInit, OnDestroy {
         this.applyRealtimeGameState(currentGameState);
       }
 
-      if (this.cards.length === 0) {
-        this.cards = await this.cardPull.getCards(this.maxPlayersPerMatch);
+      const currentActiveStar = this.realtime.activeStar();
+      if (currentActiveStar && this.realtime.activeLobbyCode() === this.id) {
+        this.activeStar = currentActiveStar;
+      }
+
+      this.ownedCards = await this.cardPull.getCards(this.maxPlayersPerMatch);
+      if (this.latestPrivateHand.length > 0) {
+        this.applyRealtimePrivateHand(this.latestPrivateHand);
+      } else if (this.cards.length === 0) {
+        this.cards = [...this.ownedCards];
       }
       if (this.choiceCards.length === 0) {
         this.choiceCards = [...this.cards];
@@ -362,6 +544,8 @@ export class Dixit implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.clearRevealRankingTimer();
+    this.clearNextRoundTimer();
+    this.clearStarWinnerTimer();
   }
 
   get currentPhaseMeta(): PhaseStep {
@@ -390,6 +574,10 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     if (this.phase === 'choice') {
+      if (this.isCurrentPlayerStoryteller) {
+        return 'Eres el cuenta-cuentos. Espera a que el resto complete la votacion.';
+      }
+
       return 'Vota arriba y confirma tu decision.';
     }
 
@@ -519,6 +707,19 @@ export class Dixit implements OnInit, OnDestroy {
     }));
   }
 
+  get duelTargetPlayers(): DixitPlayerRow[] {
+    return this.playerRows.filter((player) => !player.isCurrentPlayer);
+  }
+
+  get isCurrentPlayerHost(): boolean {
+    const hostId = this.realtime.lobbyState()?.hostId ?? '';
+    return !!hostId && hostId === this.currentUserId;
+  }
+
+  get canClaimActiveStar(): boolean {
+    return !!this.activeStar && this.realtime.connectionStatus() === 'connected';
+  }
+
   private bootstrapFallbackRoster(): void {
     const fallbackPlayers: RosterPlayer[] = [
       {
@@ -549,6 +750,8 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private applyRealtimeLobbyState(lobbyState: RealtimeLobbyState): void {
+    // Convierte el roster realtime a la representación visual del tablero y
+    // garantiza que cada jugador tenga entrada en el marcador local.
     const nextRoster = lobbyState.players.map((player, index) => ({
       id: player.id,
       name: player.username,
@@ -569,17 +772,34 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private applyRealtimeGameState(update: RealtimeGameStateUpdate): void {
+    // Aplica un snapshot público completo de partida. Aquí se resuelven fase,
+    // pista, tablero, votos y puntuaciones a partir del state más reciente.
+    if (update.receivedAt < this.lastAppliedGameStateReceivedAt) {
+      return;
+    }
+
     const state = update.state;
     const currentRoundState = this.resolveCurrentRoundState(state);
     const resolvedPhaseState = this.resolveRealtimePhase(state, update.lastAction);
+    const previousPointsByPlayer = new Map(this.pointsByPlayer);
+    const previousPhase = this.phase;
+    const previousRoundNumber = this.roundNumber;
+    const nextRoundNumber =
+      this.readNumber(state, [
+        'roundNumber',
+        'round',
+        'currentRound',
+      ]) ?? this.roundNumber;
+
+    if (nextRoundNumber !== this.roundNumber) {
+      this.resetHandSubmissionState();
+    }
 
     this.phase = resolvedPhaseState.phase;
     this.pointsStage = resolvedPhaseState.pointsStage;
-    this.roundNumber = this.readNumber(state, [
-      'roundNumber',
-      'round',
-      'currentRound',
-    ]) ?? this.roundNumber;
+    this.roundNumber = nextRoundNumber;
+    this.lastAppliedGameStateReceivedAt = update.receivedAt;
+    this.resetPhasePresentationState(previousPhase, previousRoundNumber);
     this.currentClue =
       this.readStringFromCandidates(currentRoundState, ['currentClue', 'clue', 'story', 'hint']) ??
       this.readStringFromCandidates(state, ['currentClue', 'clue', 'story', 'hint']) ??
@@ -587,6 +807,9 @@ export class Dixit implements OnInit, OnDestroy {
     this.storySubmitted = !!this.currentClue.trim();
     if (this.storySubmitted) {
       this.clueDraft = this.currentClue;
+    } else if (this.phase === 'hand') {
+      this.resetHandSubmissionState();
+      this.clueDraft = '';
     }
     this.lastRealtimeAction = update.lastAction ?? this.lastRealtimeAction;
     this.gameEnded = (update.lastAction ?? '').toUpperCase().includes('ENDED');
@@ -594,8 +817,9 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRealtimePlayers(state);
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
-    this.applyRealtimePointsState(state);
+    this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
     this.logStorytellerResolution(state, currentRoundState, update.lastAction);
+    this.syncRealtimePhaseTimers();
 
     this.loading = false;
     this.errorMessage = '';
@@ -624,7 +848,33 @@ export class Dixit implements OnInit, OnDestroy {
     });
   }
 
+  private resetPhasePresentationState(
+    previousPhase: DixitPhase,
+    previousRoundNumber: number
+  ): void {
+    const roundChanged = previousRoundNumber !== this.roundNumber;
+    const movedOutOfPoints = previousPhase === 'points' && this.phase !== 'points';
+
+    if (!roundChanged && !movedOutOfPoints) {
+      return;
+    }
+
+    this.clearRevealRankingTimer();
+    this.clearNextRoundTimer();
+    this.pointsVotesReceived = 0;
+    this.pointsVotesTotal = 0;
+    this.pointsRevealedCards = [];
+    this.pointsRanking = [];
+    this.currentRoundPlayers = [];
+    this.pendingBoardTokens = null;
+    this.selectedChoiceCardCode = '';
+    this.voteSubmitted = false;
+    this.currentPlayerPlayedCardCode = '';
+  }
+
   private applyRealtimePlayers(state: Record<string, unknown>): void {
+    // Algunos payloads repiten datos de jugadores dentro del state público.
+    // Si existen, se priorizan para mantener nombres/ids coherentes con backend.
     const playerEntries = this.readArrayFromCandidates(state, ['players', 'participants']);
     if (!playerEntries.length) {
       this.boardTokens = this.buildBoardTokensFromScores();
@@ -664,6 +914,9 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private applyRealtimeCards(state: Record<string, unknown>): void {
+    // Mezcla varias fuentes websocket: mano pública/privada, boardCards y playedCards,
+    // manteniendo las cartas conocidas para no perder la imagen asociada a cada id.
+    const currentRoundState = this.resolveCurrentRoundState(state);
     const currentPlayerState = this.resolveCurrentPlayerState(state);
     const handCards = this.normalizeCards(
       this.readArrayFromCandidates(currentPlayerState, ['hand', 'cards'])
@@ -672,16 +925,22 @@ export class Dixit implements OnInit, OnDestroy {
       this.cards = handCards;
     }
 
-    const choiceCards = this.normalizeCards(
-      this.readArrayFromCandidates(state, [
-        'choiceCards',
-        'voteOptions',
-        'submittedCards',
-        'tableCards',
-        'cardsToVote',
-      ])
+    const boardCardEntries = this.readArrayFromCandidates(currentRoundState, ['boardCards']);
+    const fallbackChoiceEntries = this.readArrayFromCandidates(state, [
+      'choiceCards',
+      'voteOptions',
+      'submittedCards',
+      'tableCards',
+      'cardsToVote',
+    ]);
+    const choiceCards = this.normalizeChoiceCards(
+      boardCardEntries.length > 0 ? boardCardEntries : fallbackChoiceEntries
     );
     this.choiceCards = choiceCards.length > 0 ? choiceCards : [...this.cards];
+    this.currentPlayerPlayedCardCode = this.resolveCurrentPlayerPlayedCardCode(
+      currentRoundState,
+      currentPlayerState
+    );
 
     const selectedHandCardCode =
       this.readStringFromCandidates(currentPlayerState, [
@@ -697,13 +956,62 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (selectedHandCardCode) {
       this.selectedHandCardCode = selectedHandCardCode;
-      this.handSubmitted = true;
+      this.markHandSubmitted();
     } else if (this.phase === 'hand') {
-      this.handSubmitted = false;
+      this.handSubmitted =
+        this.submittedHandRoundNumber === this.roundNumber && !!this.selectedHandCardCode;
+    }
+
+    if (
+      this.phase === 'choice' &&
+      !this.voteSubmitted &&
+      this.selectedChoiceCardCode === this.currentPlayerPlayedCardCode
+    ) {
+      this.selectedChoiceCardCode = '';
+    }
+
+    if (
+      this.phase === 'choice' &&
+      this.selectedChoiceCardCode &&
+      !this.choiceCards.some((card) => card.code === this.selectedChoiceCardCode)
+    ) {
+      this.selectedChoiceCardCode = '';
+    }
+  }
+
+  private applyRealtimePrivateHand(hand: Array<number | string>): void {
+    // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
+    this.latestPrivateHand = [...hand];
+    const handCards = this.buildPrivateHandCards(hand);
+    if (handCards.length === 0) {
+      return;
+    }
+
+    // Esta comprobación se ejecuta cada vez que llega private_hand. Con un Set
+    // evitamos el every+some anidado y dejamos la verificación en tiempo lineal.
+    const handCodes = new Set(handCards.map((card) => card.code));
+    const previousChoiceCardsWereHandCards =
+      this.phase === 'hand' ||
+      this.choiceCards.length === 0 ||
+      this.choiceCards.every((card) => handCodes.has(card.code));
+
+    this.cards = handCards;
+    if (previousChoiceCardsWereHandCards) {
+      this.choiceCards = [...handCards];
+    }
+
+    if (
+      !this.handSubmitted &&
+      this.selectedHandCardCode &&
+      !this.cards.some((card) => card.code === this.selectedHandCardCode)
+    ) {
+      this.selectedHandCardCode = '';
     }
   }
 
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
+    // Reconstruye la selección/voto del jugador actual si el backend ya lo conoce,
+    // por ejemplo tras un refresh y recovered.
     const currentPlayerState = this.resolveCurrentPlayerState(state);
     const selectedVoteCode =
       this.readStringFromCandidates(currentPlayerState, ['voteCardCode', 'selectedVoteCardCode']) ??
@@ -717,10 +1025,18 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  private applyRealtimePointsState(state: Record<string, unknown>): void {
+  private applyRealtimePointsState(
+    state: Record<string, unknown>,
+    currentRoundState: Record<string, unknown>,
+    previousPointsByPlayer: Map<string, number>
+  ): void {
+    // Rehidrata la fase de scoring usando la verdad del backend: votos, reveal y scores.
+    const roundVotes = this.normalizeRoundVotes(currentRoundState);
     this.pointsVotesReceived =
-      this.readNumber(state, ['votesReceived', 'receivedVotes', 'voteCount']) ??
-      this.pointsVotesReceived;
+      roundVotes.length > 0
+        ? roundVotes.length
+        : this.readNumber(state, ['votesReceived', 'receivedVotes', 'voteCount']) ??
+          this.pointsVotesReceived;
     this.pointsVotesTotal =
       this.readNumber(state, ['votesTotal', 'expectedVotes', 'playerCount']) ??
       Math.max(this.playerRoster.length - 1, 0);
@@ -728,26 +1044,140 @@ export class Dixit implements OnInit, OnDestroy {
     const revealedCards = this.normalizeRevealedCards(
       this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults'])
     );
-    if (revealedCards.length > 0) {
-      this.pointsRevealedCards = revealedCards;
+    const roundRevealCards =
+      revealedCards.length > 0
+        ? revealedCards
+        : this.buildRevealedCardsFromRound(currentRoundState, roundVotes);
+    if (roundRevealCards.length > 0) {
+      this.pointsRevealedCards = roundRevealCards;
     }
 
     const ranking = this.normalizeRanking(
-      this.readArrayFromCandidates(state, ['ranking', 'scoreboard', 'scores'])
+      this.readArrayFromCandidates(state, ['ranking', 'scoreboard'])
     );
-    if (ranking.length > 0) {
-      this.pointsRanking = ranking;
-      for (const row of ranking) {
-        this.pointsByPlayer.set(row.playerId, row.totalPoints);
+    const scoresRanking =
+      ranking.length > 0
+        ? ranking
+        : this.buildRankingFromScores(state, previousPointsByPlayer);
+    if (scoresRanking.length > 0) {
+      this.pointsRanking = scoresRanking;
+      if (this.pointsStage === 'ranking') {
+        for (const row of scoresRanking) {
+          this.pointsByPlayer.set(row.playerId, row.totalPoints);
+        }
+        this.boardTokens = this.buildBoardTokensFromScores();
       }
-      this.boardTokens = this.buildBoardTokensFromScores();
     }
+  }
+
+  private buildRevealedCardsFromRound(
+    currentRoundState: Record<string, unknown>,
+    votes: RoundVoteEntry[]
+  ): DixitRevealedCard[] {
+    // Monta el tablero revelado directamente desde storytellerCardId, playedCards y votes
+    // cuando el backend aún no manda una estructura de reveal más elaborada.
+    const cardOwners = new Map<string, string>();
+    const storytellerId = this.resolveStorytellerId({ currentRound: currentRoundState });
+    const storytellerCardCode = this.normalizeDynamicCardCode(currentRoundState['storytellerCardId']);
+    if (storytellerId && storytellerCardCode) {
+      cardOwners.set(storytellerCardCode, storytellerId);
+    }
+
+    const playedCards = asRecord(currentRoundState['playedCards']) ?? {};
+    for (const [playerId, cardValue] of Object.entries(playedCards)) {
+      const cardCode = this.normalizeDynamicCardCode(cardValue);
+      if (cardCode) {
+        cardOwners.set(cardCode, playerId);
+      }
+    }
+
+    if (cardOwners.size === 0) {
+      return [];
+    }
+
+    const voteCounts = new Map<string, number>();
+    for (const vote of votes) {
+      voteCounts.set(vote.targetCardCode, (voteCounts.get(vote.targetCardCode) ?? 0) + 1);
+    }
+
+    return Array.from(cardOwners.entries()).map(([cardCode, ownerId], index) => ({
+      card: this.normalizeChoiceCard(cardCode, index) ?? {
+        code: cardCode,
+        image: DEFAULT_CARD_IMAGE,
+        value: cardCode,
+        suit: 'DIXIT',
+      },
+      ownerName: this.playerRoster.find((player) => player.id === ownerId)?.name ?? ownerId,
+      votes: voteCounts.get(cardCode) ?? 0,
+    }));
+  }
+
+  private buildRankingFromScores(
+    state: Record<string, unknown>,
+    previousPointsByPlayer: Map<string, number>
+  ): DixitRankingRow[] {
+    // Calcula la tabla visible de scoring a partir de state.scores comparando
+    // contra la fotografía de puntos previa a la ronda.
+    const scoresRecord = asRecord(state['scores']);
+    if (!scoresRecord) {
+      return [];
+    }
+
+    return Object.entries(scoresRecord)
+      .map(([playerId, totalPointsValue]) => {
+        if (typeof totalPointsValue !== 'number' || !Number.isFinite(totalPointsValue)) {
+          return null;
+        }
+
+        const totalPoints = totalPointsValue;
+        const pointsBefore = previousPointsByPlayer.get(playerId) ?? 0;
+        return {
+          playerId,
+          playerName: this.playerRoster.find((player) => player.id === playerId)?.name ?? playerId,
+          pointsBefore,
+          pointsEarned: totalPoints - pointsBefore,
+          totalPoints,
+        };
+      })
+      .filter((entry): entry is DixitRankingRow => entry !== null)
+      .sort((left, right) => right.totalPoints - left.totalPoints);
+  }
+
+  private normalizeRoundVotes(currentRoundState: Record<string, unknown>): RoundVoteEntry[] {
+    // Acepta varios alias de claves para los votos porque la forma exacta puede
+    // variar entre modos o versiones del backend.
+    return this.readArrayFromCandidates(currentRoundState, ['votes'])
+      .map((entry) => {
+        const vote = asRecord(entry);
+        if (!vote) {
+          return null;
+        }
+
+        const voterId = this.readStringFromCandidates(vote, ['voterId', 'playerId', 'userId']) ?? '';
+        const targetCardCode =
+          this.normalizeDynamicCardCode(vote['targetCardId']) ??
+          this.normalizeDynamicCardCode(vote['cardId']) ??
+          this.normalizeDynamicCardCode(vote['target']) ??
+          '';
+
+        if (!voterId || !targetCardCode) {
+          return null;
+        }
+
+        return {
+          voterId,
+          targetCardCode,
+        };
+      })
+      .filter((entry): entry is RoundVoteEntry => entry !== null);
   }
 
   private resolveRealtimePhase(
     state: Record<string, unknown>,
     lastAction?: string
   ): ResolvedPhaseState {
+    // Prioriza state.phase cuando existe. lastAction queda como fallback para
+    // soportar payloads heredados o incompletos.
     const rawPhase =
       this.readStringFromCandidates(state, [
         'phase',
@@ -756,29 +1186,28 @@ export class Dixit implements OnInit, OnDestroy {
         'currentPhase',
       ]) ??
       '';
-    const normalizedPhase = rawPhase.toLowerCase();
     const normalizedAction = (lastAction ?? '').toLowerCase();
+    const resolvedPhaseFromState = this.mapRealtimePhase(rawPhase);
+
+    if (resolvedPhaseFromState) {
+      return resolvedPhaseFromState;
+    }
 
     if (
-      normalizedPhase.includes('vote') ||
-      normalizedPhase.includes('choice') ||
       normalizedAction.includes('vote')
     ) {
       return { phase: 'choice', pointsStage: 'waiting' };
     }
 
     if (
-      normalizedPhase.includes('score') ||
-      normalizedPhase.includes('point') ||
-      normalizedPhase.includes('reveal') ||
       normalizedAction.includes('reveal') ||
       normalizedAction.includes('ranking')
     ) {
-      if (normalizedPhase.includes('rank') || normalizedAction.includes('ranking')) {
+      if (normalizedAction.includes('ranking')) {
         return { phase: 'points', pointsStage: 'ranking' };
       }
 
-      if (normalizedPhase.includes('reveal') || normalizedAction.includes('reveal')) {
+      if (normalizedAction.includes('reveal')) {
         return { phase: 'points', pointsStage: 'reveal' };
       }
 
@@ -788,13 +1217,91 @@ export class Dixit implements OnInit, OnDestroy {
     return { phase: 'hand', pointsStage: 'waiting' };
   }
 
+  private mapRealtimePhase(rawPhase: string): ResolvedPhaseState | null {
+    // Traduce las etiquetas del backend a las tres fases visuales del frontend.
+    const normalizedPhase = rawPhase.trim().toLowerCase();
+    if (!normalizedPhase) {
+      return null;
+    }
+
+    if (this.phaseMatches(normalizedPhase, ['ranking', 'rank'])) {
+      return { phase: 'points', pointsStage: 'ranking' };
+    }
+
+    if (
+      this.phaseMatches(normalizedPhase, [
+        'reveal',
+        'result',
+        'results',
+        'resolution',
+        'score',
+        'scores',
+        'scoring',
+        'points',
+        'point',
+      ])
+    ) {
+      return { phase: 'points', pointsStage: 'reveal' };
+    }
+
+    if (
+      this.phaseMatches(normalizedPhase, [
+        'vote',
+        'voting',
+        'choice',
+        'guess',
+        'guessing',
+        'pick',
+        'picking',
+        'select',
+        'selection',
+        'choosing',
+      ])
+    ) {
+      return { phase: 'choice', pointsStage: 'waiting' };
+    }
+
+    if (
+      this.phaseMatches(normalizedPhase, [
+        'hand',
+        'story',
+        'storytelling',
+        'submit',
+        'submission',
+        'submitting',
+        'play',
+        'playing',
+      ])
+    ) {
+      return { phase: 'hand', pointsStage: 'waiting' };
+    }
+
+    return null;
+  }
+
+  private phaseMatches(normalizedPhase: string, aliases: readonly string[]): boolean {
+    return aliases.some(
+      (alias) => normalizedPhase === alias || normalizedPhase.includes(alias)
+    );
+  }
+
   private resolveCurrentPlayerState(state: Record<string, unknown>): Record<string, unknown> {
+    // Busca el bloque del jugador local dentro del state público para recuperar
+    // mano/voto/carta jugada cuando el backend lo expone.
     const currentRoundState = this.resolveCurrentRoundState(state);
-    const playerEntries = [
-      ...this.readArrayFromCandidates(currentRoundState, ['players', 'participants']),
-      ...this.readArrayFromCandidates(state, ['players', 'participants']),
-    ];
-    for (const entry of playerEntries) {
+    return (
+      this.findPlayerStateInEntries(
+        this.readArrayFromCandidates(currentRoundState, ['players', 'participants'])
+      ) ??
+      this.findPlayerStateInEntries(this.readArrayFromCandidates(state, ['players', 'participants'])) ??
+      {}
+    );
+  }
+
+  // Evita concatenar arrays intermedios cada vez que buscamos el bloque del usuario
+  // actual dentro del state recibido por websocket.
+  private findPlayerStateInEntries(entries: unknown[]): Record<string, unknown> | null {
+    for (const entry of entries) {
       const player = asRecord(entry);
       if (!player) {
         continue;
@@ -807,7 +1314,7 @@ export class Dixit implements OnInit, OnDestroy {
       }
     }
 
-    return {};
+    return null;
   }
 
   private resolveCurrentRoundState(state: Record<string, unknown>): Record<string, unknown> {
@@ -815,6 +1322,8 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private resolveStorytellerId(state: Record<string, unknown>): string {
+    // El storyteller puede venir tanto en la raíz como dentro de currentRound.
+    // Se prueban varios alias usados por backend.
     const currentRoundState = this.resolveCurrentRoundState(state);
     return (
       this.readStringFromCandidates(currentRoundState, [
@@ -838,7 +1347,77 @@ export class Dixit implements OnInit, OnDestroy {
       .filter((entry): entry is DeckCard => entry !== null);
   }
 
+  private normalizeChoiceCards(entries: unknown[]): DeckCard[] {
+    return entries
+      .map((entry, index) => this.normalizeChoiceCard(entry, index))
+      .filter((entry): entry is DeckCard => entry !== null);
+  }
+
+  private buildPrivateHandCards(hand: Array<number | string>): DeckCard[] {
+    const usedOwnedCardIndexes = new Set<number>();
+    return hand
+      .map((cardId, index) => {
+        const code = this.normalizePrivateHandCardCode(cardId);
+        if (!code) {
+          return null;
+        }
+
+        const ownedCardIndex = this.findOwnedCardIndexForPrivateHand(code, index, usedOwnedCardIndexes);
+        if (ownedCardIndex >= 0) {
+          usedOwnedCardIndexes.add(ownedCardIndex);
+          return {
+            ...this.ownedCards[ownedCardIndex],
+            code,
+          };
+        }
+
+        return this.normalizeCard(code, index);
+      })
+      .filter((entry): entry is DeckCard => entry !== null);
+  }
+
+  private normalizePrivateHandCardCode(cardId: number | string): string {
+    if (typeof cardId === 'number' && Number.isFinite(cardId)) {
+      return String(cardId);
+    }
+
+    if (typeof cardId === 'string') {
+      return cardId.trim();
+    }
+
+    return '';
+  }
+
+  private findOwnedCardIndexForPrivateHand(
+    code: string,
+    preferredIndex: number,
+    usedOwnedCardIndexes: Set<number>
+  ): number {
+    const exactMatchIndex = this.ownedCards.findIndex(
+      (card, index) => !usedOwnedCardIndexes.has(index) && card.code === code
+    );
+    if (exactMatchIndex >= 0) {
+      return exactMatchIndex;
+    }
+
+    if (this.ownedCards[preferredIndex] && !usedOwnedCardIndexes.has(preferredIndex)) {
+      return preferredIndex;
+    }
+
+    return this.ownedCards.findIndex((_card, index) => !usedOwnedCardIndexes.has(index));
+  }
+
   private normalizeCard(entry: unknown, index: number): DeckCard | null {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      const code = String(entry);
+      return {
+        code,
+        image: DEFAULT_CARD_IMAGE,
+        value: code,
+        suit: 'DIXIT',
+      };
+    }
+
     if (typeof entry === 'string') {
       const code = entry.trim();
       if (!code) {
@@ -874,7 +1453,85 @@ export class Dixit implements OnInit, OnDestroy {
     };
   }
 
+  private normalizeChoiceCard(entry: unknown, index: number): DeckCard | null {
+    const normalizedCard = this.normalizeCard(entry, index);
+    if (!normalizedCard) {
+      return null;
+    }
+
+    const knownCard = this.findKnownCardByCode(normalizedCard.code);
+    if (!knownCard) {
+      return normalizedCard;
+    }
+
+    return {
+      ...knownCard,
+      code: normalizedCard.code,
+    };
+  }
+
+  private findKnownCardByCode(code: string): DeckCard | null {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
+      return null;
+    }
+
+    const knownCardSources = [this.choiceCards, this.cards, this.ownedCards];
+    for (const source of knownCardSources) {
+      const match = source.find((card) => card.code === normalizedCode);
+      if (match) {
+        return match;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveCurrentPlayerPlayedCardCode(
+    currentRoundState: Record<string, unknown>,
+    currentPlayerState: Record<string, unknown>
+  ): string {
+    // Reconstruye cuál es la carta propia ya enviada para bloquearla en votación
+    // y evitar que el jugador se vote a sí mismo.
+    const ownPlayedCard =
+      this.normalizeDynamicCardCode(asRecord(currentRoundState['playedCards'])?.[this.currentUserId]) ??
+      this.normalizeDynamicCardCode(currentRoundState['playedCard']) ??
+      this.readStringFromCandidates(currentPlayerState, [
+        'submittedCardCode',
+        'selectedCardCode',
+        'playedCardCode',
+      ]) ??
+      this.normalizeDynamicCardCode(currentPlayerState['playedCard']) ??
+      this.normalizeDynamicCardCode(asRecord(currentPlayerState['selectedCard'])?.['cardId']) ??
+      this.normalizeDynamicCardCode(asRecord(currentPlayerState['selectedCard'])?.['id']) ??
+      this.normalizeDynamicCardCode(asRecord(currentPlayerState['selectedCard'])?.['code']);
+
+    return ownPlayedCard ?? '';
+  }
+
+  private normalizeDynamicCardCode(value: unknown): string | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+
+    const record = asRecord(value);
+    if (!record) {
+      return null;
+    }
+
+    return (
+      this.readStringFromCandidates(record, ['code', 'cardId', 'id']) ??
+      this.readNumber(record, ['cardId', 'id'])?.toString() ??
+      null
+    );
+  }
+
   private normalizeRevealedCards(entries: unknown[]): DixitRevealedCard[] {
+    // Normaliza estructuras de reveal ya preparadas por backend si vienen disponibles.
     return entries
       .map((entry, index) => {
         const result = asRecord(entry);
@@ -902,6 +1559,8 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private normalizeRanking(entries: unknown[]): DixitRankingRow[] {
+    // Normaliza scoreboards enviados por backend para que la tabla de puntos
+    // no dependa de un único nombre de campo.
     return entries
       .map((entry, index) => {
         const row = asRecord(entry);
@@ -993,13 +1652,28 @@ export class Dixit implements OnInit, OnDestroy {
     return /^\d+$/.test(cardCode) ? Number(cardCode) : cardCode;
   }
 
+  private markHandSubmitted(): void {
+    this.handSubmitted = true;
+    this.submittedHandRoundNumber = this.roundNumber;
+  }
+
+  private resetHandSubmissionState(): void {
+    this.selectedHandCardCode = '';
+    this.handSubmitted = false;
+    this.submittedHandRoundNumber = null;
+    this.currentPlayerPlayedCardCode = '';
+  }
+
   onHandCardSelected(card: DeckCard): void {
+    if (this.handSubmitted) {
+      return;
+    }
+
     this.selectedHandCardCode = card.code;
   }
 
   clearHandSelection(): void {
-    this.selectedHandCardCode = '';
-    this.handSubmitted = false;
+    this.resetHandSubmissionState();
   }
 
   updateClueDraft(nextClue: string): void {
@@ -1025,7 +1699,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.storySubmitted = true;
-    this.handSubmitted = true;
+    this.markHandSubmitted();
     this.errorMessage = '';
   }
 
@@ -1053,20 +1727,15 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     const cardId = this.resolveActionCardId(this.selectedHandCardCode);
-    const payload: Record<string, unknown> = {
-      cardCode: this.selectedHandCardCode,
-      cardId,
-    };
-
     try {
-      this.realtime.sendGameAction('PLAY_CARD', payload);
+      this.realtime.sendGameAction('SUBMIT_CARD', { cardId });
     } catch (error) {
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudo enviar la jugada';
       return;
     }
 
-    this.handSubmitted = true;
+    this.markHandSubmitted();
     this.errorMessage = '';
   }
 
@@ -1110,10 +1779,6 @@ export class Dixit implements OnInit, OnDestroy {
     this.isMinigame2Open = false;
   }
 
-  simulateWildcardReward(): void {
-    this.grantWildcardReward();
-  }
-
   simulateChoicePhaseOpened(): void {
     if (!this.selectedHandCardCode) {
       return;
@@ -1125,7 +1790,12 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   onChoiceCardSelected(card: DeckCard): void {
-    if (this.phase !== 'choice') {
+    if (
+      this.phase !== 'choice' ||
+      this.voteSubmitted ||
+      this.isCurrentPlayerStoryteller ||
+      card.code === this.currentPlayerPlayedCardCode
+    ) {
       return;
     }
 
@@ -1140,14 +1810,18 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   submitVoteSelection(): void {
-    if (this.phase !== 'choice' || !this.selectedChoiceCardCode) {
+    if (
+      this.phase !== 'choice' ||
+      this.isCurrentPlayerStoryteller ||
+      !this.selectedChoiceCardCode ||
+      this.selectedChoiceCardCode === this.currentPlayerPlayedCardCode
+    ) {
       return;
     }
 
     const cardId = this.resolveActionCardId(this.selectedChoiceCardCode);
     try {
-      this.realtime.sendGameAction('VOTE_CARD', {
-        cardCode: this.selectedChoiceCardCode,
+      this.realtime.sendGameAction('CAST_VOTE', {
         cardId,
       });
     } catch (error) {
@@ -1215,19 +1889,33 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRevealRankingToBoard();
   }
 
+  requestNextRound(): void {
+    if (!this.isCurrentPlayerHost || this.phase !== 'points') {
+      return;
+    }
+
+    try {
+      this.realtime.sendGameAction('NEXT_ROUND');
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo avanzar a la siguiente ronda';
+    }
+  }
+
   prepareNextRound(): void {
     if (this.phase !== 'points' || this.pointsStage !== 'ranking') {
       return;
     }
 
     this.clearRevealRankingTimer();
+    this.clearNextRoundTimer();
     this.roundNumber += 1;
     this.phase = 'hand';
     this.pointsStage = 'waiting';
-    this.selectedHandCardCode = '';
+    this.resetHandSubmissionState();
     this.selectedChoiceCardCode = '';
     this.voteSubmitted = false;
-    this.handSubmitted = false;
     this.pointsVotesReceived = 0;
     this.pointsVotesTotal = 0;
     this.pointsRevealedCards = [];
@@ -1237,6 +1925,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.currentClue = '';
     this.clueDraft = '';
     this.storySubmitted = false;
+    this.currentPlayerPlayedCardCode = '';
     this.cards = this.rotateCards(this.cards);
     this.choiceCards = [...this.cards];
   }
@@ -1250,34 +1939,40 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  useWildcard(wildcardId: string): void {
-    if (this.phase !== 'hand') {
+  closeDuelModal(): void {
+    this.activeDuelChallenge = null;
+    this.realtime.clearDuelChallenge();
+  }
+
+  resolveDuel(targetId: string): void {
+    if (!targetId.trim()) {
       return;
     }
 
-    const wildcard = this.wildcards.find((entry) => entry.id === wildcardId);
-    if (!wildcard) {
+    try {
+      this.realtime.sendGameAction('RESOLVE_DUEL', { targetId });
+      this.errorMessage = '';
+      this.closeDuelModal();
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo resolver el duelo';
+    }
+  }
+
+  claimVisibleStar(): void {
+    // El backend decide al ganador final. El cliente solo solicita la captura
+    // mientras la estrella siga visible y la conexión realtime esté viva.
+    if (!this.activeStar || this.realtime.connectionStatus() !== 'connected') {
       return;
     }
 
-    const currentPoints = this.pointsByPlayer.get(this.localCurrentPlayerId) ?? 0;
-    const updatedPoints = currentPoints + wildcard.points;
-
-    this.pointsByPlayer.set(this.localCurrentPlayerId, updatedPoints);
-    this.wildcards = this.wildcards.filter((entry) => entry.id !== wildcardId);
-    const resolvedPoints = resolveCurrentPlayerSpecialCells({
-      previousPoints: currentPoints,
-      nextPoints: updatedPoints,
-      allowWildcardReward: false,
-      wildcardCellPositions: this.wildcardCellPositions,
-      eventBackCellPositions: this.eventBackCellPositions,
-      eventForwardCellPositions: this.eventForwardCellPositions,
-      roundNumber: this.roundNumber,
-      onWildcardReward: () => this.grantWildcardReward(),
-      onPopup: (popup) => this.enqueueEffectPopup(popup),
-    });
-    this.pointsByPlayer.set(this.localCurrentPlayerId, resolvedPoints);
-    this.boardTokens = this.buildBoardTokensFromScores();
+    try {
+      this.realtime.claimStar();
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo capturar la estrella fugaz';
+    }
   }
 
   private initializePointsPhase(): void {
@@ -1296,7 +1991,10 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private scheduleRevealRanking(): void {
-    this.clearRevealRankingTimer();
+    if (this.revealRankingTimer !== null) {
+      return;
+    }
+
     this.revealRankingTimer = setTimeout(() => {
       this.applyRevealRankingToBoard();
       this.cdr.detectChanges();
@@ -1310,6 +2008,28 @@ export class Dixit implements OnInit, OnDestroy {
 
     clearTimeout(this.revealRankingTimer);
     this.revealRankingTimer = null;
+  }
+
+  private syncRealtimePhaseTimers(): void {
+    if (this.phase !== 'points') {
+      this.clearRevealRankingTimer();
+      this.clearNextRoundTimer();
+      return;
+    }
+
+    if (this.pointsStage === 'reveal') {
+      this.scheduleRevealRanking();
+      this.scheduleNextRound();
+      return;
+    }
+
+    if (this.pointsStage === 'ranking') {
+      this.clearRevealRankingTimer();
+      this.scheduleNextRound();
+      return;
+    }
+
+    this.clearNextRoundTimer();
   }
 
   private applyRevealRankingToBoard(): void {
@@ -1335,6 +2055,121 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.revealRankingTimer = null;
+  }
+
+  private scheduleNextRound(): void {
+    if (!this.isCurrentPlayerHost) {
+      this.clearNextRoundTimer();
+      return;
+    }
+
+    if (this.nextRoundTimer !== null && this.nextRoundTimerRoundNumber === this.roundNumber) {
+      return;
+    }
+
+    this.clearNextRoundTimer();
+    this.nextRoundTimerRoundNumber = this.roundNumber;
+    this.nextRoundTimer = setTimeout(() => {
+      this.nextRoundTimer = null;
+      this.nextRoundTimerRoundNumber = null;
+
+      if (
+        !this.isCurrentPlayerHost ||
+        this.phase !== 'points' ||
+        (this.pointsStage !== 'reveal' && this.pointsStage !== 'ranking')
+      ) {
+        return;
+      }
+
+      try {
+        this.realtime.sendGameAction('NEXT_ROUND');
+        this.errorMessage = '';
+      } catch (error) {
+        this.errorMessage =
+          error instanceof Error ? error.message : 'No se pudo avanzar a la siguiente ronda';
+      }
+    }, 9000);
+  }
+
+  private clearNextRoundTimer(): void {
+    if (this.nextRoundTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.nextRoundTimer);
+    this.nextRoundTimer = null;
+    this.nextRoundTimerRoundNumber = null;
+  }
+
+  private applyRealtimeStarClaim(claim: RealtimeStarClaim): void {
+    // Evita reprocesar el mismo claim si reaparece por reactividad o recuperación.
+    if (claim.receivedAt <= this.lastAppliedStarClaimReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedStarClaimReceivedAt = claim.receivedAt;
+    this.activeStar = null;
+    this.applyStarClaimScores(claim.newScores);
+    this.starWinnerLabel = this.resolvePlayerName(claim.winnerId) || 'Estrella capturada';
+    this.starClaimSequence += 1;
+    this.clearStarWinnerTimer();
+    this.starWinnerTimer = setTimeout(() => {
+      this.starWinnerLabel = '';
+      this.starWinnerTimer = null;
+      this.cdr.detectChanges();
+    }, 1800);
+  }
+
+  private applyStarClaimScores(newScores: Record<string, number>): void {
+    // El backend manda las puntuaciones completas, no un delta. Por eso aquí
+    // se sustituyen los totales del marcador y, si estamos en scoring,
+    // también se recompone la tabla de ranking visible.
+    const scoreEntries = Object.entries(newScores);
+    if (scoreEntries.length === 0) {
+      return;
+    }
+
+    for (const [playerId, totalPoints] of scoreEntries) {
+      this.pointsByPlayer.set(playerId, totalPoints);
+    }
+
+    if (this.pointsRanking.length > 0) {
+      this.pointsRanking = this.pointsRanking
+        .map((row) => {
+          const totalPoints = newScores[row.playerId];
+          if (typeof totalPoints !== 'number') {
+            return row;
+          }
+
+          return {
+            ...row,
+            totalPoints,
+            pointsEarned: totalPoints - row.pointsBefore,
+          };
+        })
+        .sort((left, right) => right.totalPoints - left.totalPoints);
+    }
+
+    this.boardTokens = this.buildBoardTokensFromScores();
+  }
+
+  private resolvePlayerName(playerId: string): string {
+    if (!playerId.trim()) {
+      return '';
+    }
+
+    return this.playerRoster.find((player) => player.id === playerId)?.name ?? playerId;
+  }
+
+  private clearStarWinnerTimer(): void {
+    // El banner de ganador es efímero. Si llega otro claim o se destruye el
+    // componente, el timer anterior debe cancelarse para no pisar el estado nuevo.
+    if (this.starWinnerTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.starWinnerTimer);
+    this.starWinnerTimer = null;
   }
 
   private resolveVoteCardCode(
@@ -1412,21 +2247,45 @@ export class Dixit implements OnInit, OnDestroy {
     ranking.sort((left, right) => right.totalPoints - left.totalPoints);
   }
 
-  private grantWildcardReward(): void {
-    const template =
-      WILDCARD_REWARDS[(this.wildcards.length + this.roundNumber - 1) % WILDCARD_REWARDS.length];
-    const reward: DixitWildcardReward = {
-      id: `wildcard-${this.roundNumber}-${this.wildcards.length + 1}`,
-      ...template,
-    };
+  private resolveCurrentPlayerSpecialCells(previousPoints: number, nextPoints: number): number {
+    if (nextPoints === previousPoints) {
+      return nextPoints;
+    }
 
-    this.wildcards = [...this.wildcards, reward];
-    this.enqueueEffectPopup({
-      id: reward.id,
-      title: 'Te ha tocado un comodin',
-      description: reward.description,
-      icon: reward.icon,
-    });
+    let resolvedPoints = nextPoints;
+    const visitedPositions = new Set<number>();
+    let safety = 0;
+
+    while (safety < 8 && !visitedPositions.has(resolvedPoints)) {
+      visitedPositions.add(resolvedPoints);
+      safety += 1;
+
+      if (this.eventBackCellPositions.includes(resolvedPoints)) {
+        resolvedPoints = Math.max(0, resolvedPoints - 1);
+        this.enqueueEffectPopup({
+          id: `event-back-${this.roundNumber}-${safety}`,
+          title: 'Casilla de evento',
+          description: 'Has caido en una casilla de evento y retrocedes 1 casilla.',
+          icon: '-1',
+        });
+        continue;
+      }
+
+      if (this.eventForwardCellPositions.includes(resolvedPoints)) {
+        resolvedPoints += 1;
+        this.enqueueEffectPopup({
+          id: `event-forward-${this.roundNumber}-${safety}`,
+          title: 'Casilla de evento',
+          description: 'Has caido en una casilla de evento y avanzas 1 casilla extra.',
+          icon: '+1',
+        });
+        continue;
+      }
+
+      break;
+    }
+
+    return resolvedPoints;
   }
 
   private enqueueEffectPopup(popup: BoardEffectPopup): void {

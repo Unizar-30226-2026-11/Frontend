@@ -8,14 +8,6 @@ export interface DixitPlayerRow {
   isCurrentPlayer: boolean;
 }
 
-export interface DixitWildcardReward {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  points: number;
-}
-
 export interface DixitChatComposer {
   draft: string;
   canSend: boolean;
