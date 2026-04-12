@@ -25,6 +25,7 @@ import { DixitMinijuego1 } from './minijuegos/minijuego-1';
 import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
+import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 import { DixitPointsPhase } from './phases/points-phase';
 import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
 
@@ -99,223 +100,7 @@ const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
     DixitMinijuego1,
     DixitMinijuego2,
   ],
-  template: `
-    <section class="dixit-table">
-      <nav class="dixit-topbar" aria-label="Barra de partida">
-        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
-
-        <div class="phase-banner">
-          <p class="eyebrow">Sala {{ id || 'demo' }}</p>
-          <div class="phase-current">
-            <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
-            <p>{{ currentPhaseInstruction }}</p>
-            <p class="storyteller-debug">{{ storytellerStatusText }}</p>
-          </div>
-          <span class="status-pill">{{ connectionStatusLabel }}</span>
-        </div>
-
-        <div class="topbar-actions">
-          <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
-          <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
-        </div>
-      </nav>
-
-      @if (loading) {
-        <article class="status-card">
-          <p>Conectando con la mesa...</p>
-        </article>
-      } @else if (errorMessage) {
-        <article class="status-card error">
-          <p>{{ errorMessage }}</p>
-        </article>
-      } @else if (phase === 'choice' && choiceCards.length === 0) {
-        <article class="status-card">
-          <p>Esperando a que el servidor envie las cartas para votar.</p>
-        </article>
-      } @else {
-        <div class="table-main">
-          @if (phase === 'choice') {
-            <app-dixit-choice-phase
-              [currentClue]="currentClue"
-              [cards]="choiceCards"
-              [selectedCardCode]="selectedChoiceCardCode"
-              [disabledCardCode]="currentPlayerPlayedCardCode"
-              [canVote]="!isCurrentPlayerStoryteller"
-              [voteSubmitted]="voteSubmitted"
-              (cardSelected)="onChoiceCardSelected($event)"
-              (voteSubmitRequested)="submitVoteSelection()"
-            />
-          } @else if (phase === 'points') {
-            <app-dixit-points-phase
-              [boardTokens]="boardTokens"
-              [waitingVotes]="pointsStage === 'waiting'"
-              [votesReceived]="pointsVotesReceived"
-              [votesTotal]="pointsVotesTotal"
-              [revealedCards]="pointsRevealedCards"
-              [ranking]="pointsRanking"
-              [showRanking]="pointsStage === 'ranking'"
-              [canAdvanceToNextRound]="isCurrentPlayerHost"
-              (skipWaitingRequested)="simulateResultsReveal()"
-              (rankingRequested)="simulateRankingShown()"
-              (nextRoundRequested)="requestNextRound()"
-            />
-          } @else {
-            <app-dixit-hand-phase
-              [currentClue]="currentClue"
-              [cards]="cards"
-              [selectedCardCode]="selectedHandCardCode"
-              [clueDraft]="clueDraft"
-              [storytellerName]="currentStorytellerName"
-              [isCurrentPlayerStoryteller]="isCurrentPlayerStoryteller"
-              [handSubmitted]="handSubmitted"
-              [isStorySubmitDisabled]="isStorySubmitDisabled"
-              [isHandSubmitDisabled]="isHandSubmitDisabled"
-              [handSubmitButtonText]="handSubmitButtonText"
-              [players]="playerRows"
-              [boardTokens]="boardTokens"
-              [eventBackCells]="eventBackCellPositions"
-              [eventForwardCells]="eventForwardCellPositions"
-              [chat]="handChatComposer"
-              (cardSelected)="onHandCardSelected($event)"
-              (clearSelectionRequested)="clearHandSelection()"
-              (storySubmitRequested)="submitStoryClue()"
-              (handSubmitRequested)="submitHandSelection()"
-              (clueDraftChanged)="updateClueDraft($event)"
-              (chatDraftChanged)="updateChatDraft($event)"
-              (chatSubmitRequested)="submitChatMessage()"
-            />
-          }
-        </div>
-
-        @if (isSimulationDrawerOpen) {
-          <button
-            type="button"
-            class="sim-drawer-backdrop"
-            aria-label="Cerrar panel de simulacion"
-            (click)="closeSimulationDrawer()"
-          ></button>
-        }
-
-        <button
-          type="button"
-          class="sim-drawer-toggle"
-          [class.open]="isSimulationDrawerOpen"
-          (click)="toggleSimulationDrawer()"
-        >
-          {{ isSimulationDrawerOpen ? 'Cerrar' : 'Estado' }}
-        </button>
-
-        <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
-          <article class="sim-card">
-            <p class="overlay-label">Estado realtime</p>
-            <h3>Socket</h3>
-
-            <p>Conexion: {{ connectionStatusLabel }}</p>
-            <p>Ultima accion: {{ lastRealtimeAction || 'Sin eventos todavia' }}</p>
-            <p>Cuenta-cuentos: {{ currentStorytellerName || 'No resuelto todavia' }}</p>
-            <p>Storyteller ID: {{ currentStorytellerId || 'No presente en state.currentRound' }}</p>
-            <p>Claves state: {{ stateDebugKeysText }}</p>
-            <p>Claves currentRound: {{ currentRoundDebugKeysText }}</p>
-            <p>Pista actual: {{ currentClue || 'Esperando pista' }}</p>
-
-            @if (chatPreview.length > 0) {
-              <div class="chat-preview">
-                @for (message of chatPreview; track message.timestamp + message.username) {
-                  <p><strong>{{ message.username }}:</strong> {{ message.text }}</p>
-                }
-              </div>
-            } @else {
-              <p>No hay mensajes de chat recibidos.</p>
-            }
-
-            @if (gameEnded) {
-              <p>La partida se ha marcado como finalizada en el servidor.</p>
-            }
-          </article>
-        </aside>
-      }
-    </section>
-
-    <app-falling-star-overlay
-      [star]="activeStar"
-      [claimEnabled]="canClaimActiveStar"
-      [winnerLabel]="starWinnerLabel"
-      [winnerSequence]="starClaimSequence"
-      (claimRequested)="claimVisibleStar()"
-    />
-
-    @if (activeEffectPopup; as popup) {
-      <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
-        <article
-          class="wildcard-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="effect-popup-title"
-          (click)="$event.stopPropagation()"
-        >
-          <p class="overlay-label">Casilla especial</p>
-          <h2 id="effect-popup-title">{{ popup.title }}</h2>
-          <div class="wildcard-popup-card">
-            <span class="wildcard-icon large" aria-hidden="true">{{ popup.icon }}</span>
-            <div class="wildcard-copy">
-              <strong>{{ popup.title }}</strong>
-              <p>{{ popup.description }}</p>
-            </div>
-          </div>
-          <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
-            Continuar
-          </button>
-        </article>
-      </div>
-    }
-
-    @if (activeDuelChallenge) {
-      <div class="wildcard-popup-backdrop" (click)="closeDuelModal()">
-        <article
-          class="wildcard-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="duel-popup-title"
-          (click)="$event.stopPropagation()"
-        >
-          <p class="overlay-label">Duelo</p>
-          <h2 id="duel-popup-title">Elige un rival</h2>
-          <p class="duel-copy">
-            Has caido en una casilla de duelo. Selecciona el jugador contra el que quieres resolverlo.
-          </p>
-
-          <div class="duel-options">
-            @for (player of duelTargetPlayers; track player.id) {
-              <button
-                type="button"
-                class="duel-option"
-                (click)="resolveDuel(player.id)"
-              >
-                <span class="player-dot" [style.background]="player.color"></span>
-                <span>{{ player.name }}</span>
-              </button>
-            }
-          </div>
-
-          @if (duelTargetPlayers.length === 0) {
-            <p class="duel-copy">No hay rivales disponibles ahora mismo.</p>
-          }
-
-          <button type="button" class="sidebar-action" (click)="closeDuelModal()">
-            Cerrar
-          </button>
-        </article>
-      </div>
-    }
-
-    @if (isMinigame1Open) {
-      <app-dixit-minijuego-1 (close)="closeMinigame1()" />
-    }
-
-    @if (isMinigame2Open) {
-      <app-dixit-minijuego-2 (close)="closeMinigame2()" />
-    }
-  `,
+  templateUrl: './dixit.html',
   styleUrl: './dixit.css',
 })
 export class Dixit implements OnInit, OnDestroy {
@@ -1867,13 +1652,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
-    const { revealedCards, ranking } = buildRevealAndRanking(
-      this.currentRoundPlayers,
-      this.choiceCards,
-      this.playerRoster,
-      this.selectedChoiceCardCode,
-      this.localCurrentPlayerId
-    );
+    const { revealedCards, ranking } = this.buildRevealAndRanking(this.currentRoundPlayers);
     this.pointsRevealedCards = revealedCards;
     this.pointsRanking = ranking;
     this.pointsStage = 'reveal';
@@ -1981,13 +1760,71 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
     this.pendingBoardTokens = null;
-    this.currentRoundPlayers = getRoundPlayers(
-      this.playerRoster,
-      this.choiceCards,
-      this.pointsByPlayer
-    );
+    this.currentRoundPlayers = this.getRoundPlayers();
     this.pointsVotesTotal = this.currentRoundPlayers.length;
     this.pointsVotesReceived = this.voteSubmitted && this.pointsVotesTotal > 0 ? 1 : 0;
+  }
+
+  private getRoundPlayers(): RoundPlayer[] {
+    const totalPlayers = Math.min(this.choiceCards.length, this.playerRoster.length);
+
+    return this.playerRoster.slice(0, totalPlayers).map((player) => ({
+      ...player,
+      pointsBefore: this.pointsByPlayer.get(player.id) ?? 0,
+    }));
+  }
+
+  private buildRevealAndRanking(roundPlayers: RoundPlayer[]): {
+    revealedCards: DixitRevealedCard[];
+    ranking: DixitRankingRow[];
+  } {
+    const cardsInRound = this.choiceCards.slice(0, roundPlayers.length);
+    if (cardsInRound.length === 0) {
+      return {
+        revealedCards: [],
+        ranking: [],
+      };
+    }
+
+    const activePlayers = roundPlayers.slice(0, cardsInRound.length);
+    const voteCounts = new Map<string, number>();
+    for (const card of cardsInRound) {
+      voteCounts.set(card.code, 0);
+    }
+
+    for (let voterIndex = 0; voterIndex < activePlayers.length; voterIndex += 1) {
+      const ownCardCode = cardsInRound[voterIndex].code;
+      const targetCode = this.resolveVoteCardCode(cardsInRound, voterIndex, ownCardCode);
+      if (!targetCode) {
+        continue;
+      }
+
+      voteCounts.set(targetCode, (voteCounts.get(targetCode) ?? 0) + 1);
+    }
+
+    const revealedCards = cardsInRound.map((card, index) => ({
+      card,
+      ownerName: activePlayers[index].name,
+      votes: voteCounts.get(card.code) ?? 0,
+    }));
+
+    const ranking = activePlayers
+      .map((player, index) => {
+        const ownerCardCode = cardsInRound[index].code;
+        const pointsEarned = voteCounts.get(ownerCardCode) ?? 0;
+        const totalPoints = player.pointsBefore + pointsEarned;
+
+        return {
+          playerId: player.id,
+          playerName: player.name,
+          pointsBefore: player.pointsBefore,
+          pointsEarned,
+          totalPoints,
+        };
+      })
+      .sort((left, right) => right.totalPoints - left.totalPoints);
+
+    return { revealedCards, ranking };
   }
 
   private scheduleRevealRanking(): void {
@@ -2226,16 +2063,10 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
-    const resolvedPoints = resolveCurrentPlayerSpecialCells({
-      previousPoints: currentPlayerPreviousPoints,
-      nextPoints: currentPlayerRow.totalPoints,
-      wildcardCellPositions: this.wildcardCellPositions,
-      eventBackCellPositions: this.eventBackCellPositions,
-      eventForwardCellPositions: this.eventForwardCellPositions,
-      roundNumber: this.roundNumber,
-      onWildcardReward: () => this.grantWildcardReward(),
-      onPopup: (popup) => this.enqueueEffectPopup(popup),
-    });
+    const resolvedPoints = this.resolveCurrentPlayerSpecialCells(
+      currentPlayerPreviousPoints,
+      currentPlayerRow.totalPoints
+    );
 
     if (resolvedPoints === currentPlayerRow.totalPoints) {
       return;

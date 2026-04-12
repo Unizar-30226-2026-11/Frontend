@@ -84,11 +84,11 @@ export class DixitStella implements OnInit, OnDestroy {
   limitFeedbackActive = false;
   inspectedCard: DeckCard | null = null;
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? 'TEST';
 
     try {
-      const cards = this.stellaCardPull.getCardsSync(30);
+      const cards = await this.stellaCardPull.getCards(30);
       const words = this.wordCardPull.getCardsSync(TOTAL_ROUNDS);
 
       if (cards.length < 30) {
