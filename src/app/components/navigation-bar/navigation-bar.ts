@@ -106,12 +106,17 @@ interface PendingFriendRequestViewModel {
 
         @if (searchOpen) {
           <div class="friend-request-form">
-            <input
-              type="text"
-              placeholder="ID del usuario (u_...)"
-              class="community-search-input"
-              [value]="friendTargetUserId"
-              (input)="updateFriendTargetUserId($event)" />
+            <div class="friend-request-field">
+              <input
+                type="text"
+                placeholder="ID del usuario (u_...)"
+                class="community-search-input"
+                [value]="friendTargetUserId"
+                (input)="updateFriendTargetUserId($event)" />
+              @if (friendRequestError) {
+                <p class="friend-request-error">{{ friendRequestError }}</p>
+              }
+            </div>
             <button
               type="button"
               class="action-placeholder"
@@ -187,6 +192,28 @@ interface PendingFriendRequestViewModel {
             }
           }
 
+          <p class="community-section">AUSENTES</p>
+          @if (awayPlayers.length === 0) {
+            <p class="community-status">No hay amigos ausentes.</p>
+          } @else {
+            @for (player of awayPlayers; track player.id) {
+              <article class="player-card">
+                <div class="avatar away">{{ player.initials }}</div>
+                <div class="player-meta">
+                  <p class="player-name">{{ player.username }}</p>
+                  <p class="player-status">{{ player.status }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="action-placeholder"
+                  [disabled]="isFriendBusy(player.id)"
+                  (click)="removeFriend(player.id)">
+                  Eliminar
+                </button>
+              </article>
+            }
+          }
+
           <p class="community-section">DESCONECTADOS</p>
           @if (disconnectedPlayers.length === 0) {
             <p class="community-status">No hay amigos desconectados.</p>
@@ -225,9 +252,11 @@ export class NavigationBar {
   friendsLoading = false;
   communityError = '';
   communityMessage = '';
+  friendRequestError = '';
   sendingFriendRequest = false;
   friendTargetUserId = '';
   connectedPlayers: CommunityFriendViewModel[] = [];
+  awayPlayers: CommunityFriendViewModel[] = [];
   disconnectedPlayers: CommunityFriendViewModel[] = [];
   pendingRequests: PendingFriendRequestViewModel[] = [];
   private hasLoadedCommunityData = false;
@@ -259,6 +288,7 @@ export class NavigationBar {
       this.searchOpen = false;
       this.communityError = '';
       this.communityMessage = '';
+      this.friendRequestError = '';
       this.cdr.detectChanges();
       return;
     }
@@ -275,6 +305,7 @@ export class NavigationBar {
     this.searchOpen = !this.searchOpen;
     this.communityError = '';
     this.communityMessage = '';
+    this.friendRequestError = '';
   }
 
   goBack(): void {
@@ -288,6 +319,9 @@ export class NavigationBar {
 
   updateFriendTargetUserId(event: Event): void {
     this.friendTargetUserId = (event.target as HTMLInputElement).value;
+    if (this.friendRequestError) {
+      this.friendRequestError = '';
+    }
   }
 
   async sendFriendRequest(): Promise<void> {
@@ -296,8 +330,8 @@ export class NavigationBar {
       return;
     }
 
-    this.communityError = '';
     this.communityMessage = '';
+    this.friendRequestError = '';
     this.sendingFriendRequest = true;
 
     try {
@@ -305,10 +339,11 @@ export class NavigationBar {
       this.friendTargetUserId = '';
       await this.loadCommunityData(true);
     } catch (error) {
-      this.communityError =
+      this.friendRequestError =
         error instanceof Error ? error.message : 'No se pudo enviar la solicitud';
     } finally {
       this.sendingFriendRequest = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -332,6 +367,7 @@ export class NavigationBar {
         error instanceof Error ? error.message : 'No se pudo procesar la solicitud';
     } finally {
       this.busyRequestIds.delete(requestId);
+      this.cdr.detectChanges();
     }
   }
 
@@ -352,6 +388,7 @@ export class NavigationBar {
         error instanceof Error ? error.message : 'No se pudo eliminar al amigo';
     } finally {
       this.busyFriendIds.delete(friendId);
+      this.cdr.detectChanges();
     }
   }
 
@@ -378,8 +415,9 @@ export class NavigationBar {
       });
       const friendViewModels = friends.map((friend) => this.toFriendViewModel(friend));
       this.connectedPlayers = friendViewModels.filter((friend) => this.isOnline(friend.status));
+      this.awayPlayers = friendViewModels.filter((friend) => this.isAway(friend.status));
       this.disconnectedPlayers = friendViewModels.filter(
-        (friend) => !this.isOnline(friend.status)
+        (friend) => !this.isOnline(friend.status) && !this.isAway(friend.status)
       );
       this.pendingRequests = pendingRequests.map((request) =>
         this.toPendingRequestViewModel(request)
@@ -389,6 +427,7 @@ export class NavigationBar {
       this.communityError =
         error instanceof Error ? error.message : 'No se pudieron cargar los amigos';
       this.connectedPlayers = [];
+      this.awayPlayers = [];
       this.disconnectedPlayers = [];
       this.pendingRequests = [];
     } finally {
@@ -432,6 +471,9 @@ export class NavigationBar {
     switch (status.toLowerCase()) {
       case 'online':
         return 'conectado';
+      case 'away':
+        return 'ausente';
+      case 'unknown':
       case 'offline':
         return 'desconectado';
       default:
@@ -441,6 +483,10 @@ export class NavigationBar {
 
   private isOnline(status: string): boolean {
     return status.toLowerCase() === 'conectado';
+  }
+
+  private isAway(status: string): boolean {
+    return status.toLowerCase() === 'ausente';
   }
 
   private formatDate(value: string): string {

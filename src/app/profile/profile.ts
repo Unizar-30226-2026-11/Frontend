@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, effect, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, effect, inject } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -19,6 +19,8 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_-]+$/;
   styleUrl: './profile.css',
 })
 export class Profile {
+  private readonly cdr = inject(ChangeDetectorRef);
+
   readonly statusOptions = PLAYER_PRESENCE_STATUSES.map((status) => ({
     value: status,
     label: this.describeStatus(status),
@@ -110,6 +112,7 @@ export class Profile {
         error instanceof Error ? error.message : 'No se pudo actualizar el nombre de usuario';
     } finally {
       this.usernameSubmitting = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -140,6 +143,7 @@ export class Profile {
         error instanceof Error ? error.message : 'No se pudo actualizar el estado del jugador';
     } finally {
       this.statusSubmitting = false;
+      this.cdr.detectChanges();
     }
   }
 

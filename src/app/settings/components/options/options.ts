@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SettingsPreferencesStore } from '../../../services/settings-preferences-store';
 import { Auth } from '../../../services/auth';
+import { PlayerStore } from '../../../services/player-store';
 
 @Component({
   selector: 'app-options',
@@ -80,6 +81,7 @@ import { Auth } from '../../../services/auth';
 export class Options {
   private readonly settingsStore = inject(SettingsPreferencesStore);
   private readonly auth = inject(Auth);
+  private readonly playerStore = inject(PlayerStore);
   private readonly router = inject(Router);
 
   saveMessage = signal<string | null>(null);
@@ -108,6 +110,7 @@ export class Options {
   }
 
   cerrarSesion(): void {
+    this.playerStore.clearPlayer();
     this.auth.logOut();
     void this.router.navigate(['/login']);
   }

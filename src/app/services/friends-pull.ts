@@ -20,6 +20,7 @@ interface PendingFriendRequestApi {
   id?: unknown;
   fromUserId?: unknown;
   fromUsername?: unknown;
+  toUserId?: unknown;
   createdAt?: unknown;
 }
 
@@ -174,16 +175,20 @@ export class FriendsPull {
     if (
       typeof request.id !== 'string' ||
       typeof request.fromUserId !== 'string' ||
-      typeof request.fromUsername !== 'string' ||
       typeof request.createdAt !== 'string'
     ) {
       throw new Error('Formato de solicitud de amistad invalido');
     }
 
+    const fromUsername =
+      typeof request.fromUsername === 'string' && request.fromUsername.trim().length > 0
+        ? request.fromUsername.trim()
+        : request.fromUserId;
+
     return {
       id: request.id,
       fromUserId: request.fromUserId,
-      fromUsername: request.fromUsername,
+      fromUsername,
       createdAt: request.createdAt,
     };
   }

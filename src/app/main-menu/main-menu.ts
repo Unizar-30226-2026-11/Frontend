@@ -17,6 +17,7 @@ import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
+const LOBBY_MIN_PLAYERS = 3;
 
 interface MenuCollectionCard {
   id: string;
@@ -683,11 +684,21 @@ export class MainMenu implements OnInit {
     } catch (error) {
       console.error('[MainMenu] Error al iniciar la partida:', error);
       this.primaryActionError =
-        error instanceof Error ? error.message : 'No se pudo iniciar la partida';
+        error instanceof Error
+          ? this.normalizePrimaryActionError(error.message)
+          : 'No se pudo iniciar la partida';
     } finally {
       this.primaryActionLoading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  private normalizePrimaryActionError(message: string): string {
+    if (message.includes('${LOBBY_MIN_PLAYERS}')) {
+      return `Se requieren al menos ${LOBBY_MIN_PLAYERS} jugadores para iniciar.`;
+    }
+
+    return message;
   }
 
   private resetPrimaryActionFeedback(): void {

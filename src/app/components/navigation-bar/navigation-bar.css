@@ -159,6 +159,22 @@
       margin: 0 0 14px;
     }
 
+    .friend-request-field {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .friend-request-field .community-search-input {
+      margin-bottom: 6px;
+    }
+
+    .friend-request-error {
+      margin: 0;
+      color: #ff8f8f;
+      font-size: 0.9rem;
+      line-height: 1.3;
+    }
+
     .community-search-input::placeholder {
       color: rgba(233, 241, 247, 0.7);
     }
@@ -215,6 +231,10 @@
 
     .avatar.offline {
       background: linear-gradient(145deg, #8897a8, #4e5867);
+    }
+
+    .avatar.away {
+      background: linear-gradient(145deg, #f0c36a, #b77c26);
     }
 
     .player-meta {
@@ -328,6 +348,10 @@
       .friend-request-form {
         flex-direction: column;
         align-items: stretch;
+      }
+
+      .friend-request-field {
+        width: 100%;
       }
 
       .card-actions {

@@ -70,6 +70,35 @@ describe('FriendsPull', () => {
     });
   });
 
+  it('falls back to fromUserId when a pending request has no fromUsername', async () => {
+    apiClientSpy.request.and.returnValues(
+      Promise.resolve({
+        friends: [],
+      }),
+      Promise.resolve({
+        pendingRequests: [
+          {
+            id: 'req_16_1',
+            fromUserId: 'u_16',
+            toUserId: 'u_1',
+            createdAt: '2026-04-13T14:22:59.215Z',
+          },
+        ],
+      })
+    );
+
+    const result = await service.getFriendsPanelData();
+
+    expect(result.pendingRequests).toEqual([
+      {
+        id: 'req_16_1',
+        fromUserId: 'u_16',
+        fromUsername: 'u_16',
+        createdAt: '2026-04-13T14:22:59.215Z',
+      },
+    ]);
+  });
+
   it('sends a friend request', async () => {
     apiClientSpy.request.and.resolveTo({
       message: 'Solicitud de amistad enviada con exito.',

@@ -160,6 +160,20 @@ describe('MainMenu', () => {
     expect(component.primaryActionMessage).toContain('Solicitud de inicio enviada');
     expect(component.primaryActionButtonText).toBe('Empezar partida');
   });
+
+  it('normalizes the minimum players placeholder error when starting the lobby', async () => {
+    realtimeSpy.connectionStatus.and.returnValue('connected');
+    realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
+    realtimeSpy.startLobby.and.callFake(() => {
+      throw new Error('Se requieren al menos ${LOBBY_MIN_PLAYERS} jugadores para iniciar.');
+    });
+
+    await component.onPrimaryAction();
+
+    expect(component.primaryActionError).toBe(
+      'Se requieren al menos 3 jugadores para iniciar.'
+    );
+  });
 });
 
 function createCollectionsFixture(): CardCollectionWithCards[] {

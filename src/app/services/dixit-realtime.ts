@@ -25,6 +25,7 @@ const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
 const SOCKET_CONNECT_TIMEOUT_MS = 5_000;
 const REALTIME_LOG_PREFIX = '[DixitRealtime]';
 const DEFAULT_ACTIVE_GAME_NOTICE = 'Tienes una partida activa.';
+const LOBBY_MIN_PLAYERS = 3;
 
 @Injectable({
   providedIn: 'root',
@@ -1091,7 +1092,16 @@ export class DixitRealtime {
   // Extrae un mensaje genérico de error enviado por backend en eventos websocket.
   private resolveServerMessage(payload: unknown): string {
     const data = asRecord(payload);
-    return readString(data, 'message') ?? 'Se produjo un error en la conexion realtime';
+    const message = readString(data, 'message');
+    if (!message) {
+      return 'Se produjo un error en la conexion realtime';
+    }
+
+    if (message.includes('${LOBBY_MIN_PLAYERS}')) {
+      return `Se requieren al menos ${LOBBY_MIN_PLAYERS} jugadores para iniciar.`;
+    }
+
+    return message;
   }
 
   // Guarda el último state público recibido ignorando eventos más viejos que el
