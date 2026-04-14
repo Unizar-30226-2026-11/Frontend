@@ -3,6 +3,7 @@ import { CanActivateFn, Router, Routes } from '@angular/router';
 import { Games } from './games/games';
 import { Home } from './home/home';
 import { Store } from './store/store';
+import { StorePack } from './store/store-pack/store-pack';
 import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
 import { Settings } from './settings/settings';
@@ -70,6 +71,11 @@ export const routes: Routes = [
         path: 'store',
         title: 'Store',
         component: Store,
+    },
+    {
+        path: 'store/packs/:id',
+        title: 'Store Pack',
+        component: StorePack,
     },
     {
         path: 'settings',

@@ -1,56 +1,139 @@
-    <section class="store-view">
+<section class="store-view">
+  <div class="store-header">
+    <div class="store-heading">
       <h1>Tienda</h1>
+      <p class="store-subtitle">Ofertas del dia para ampliar tu coleccion y personalizar la partida.</p>
+      @if (expiresAt()) {
+        <p class="store-expiry">Rotacion disponible hasta {{ formatExpiry(expiresAt()) }}.</p>
+      }
+    </div>
 
-      @if (!auth.isLoggedIn()) {
-        <p class="store-info">Inicia sesion para ver tu perfil de jugador.</p>
-      } @else if (playerStore.loading()) {
-        <p class="store-info">Cargando informacion del jugador...</p>
+    @if (auth.isLoggedIn()) {
+      @if (playerStore.loading()) {
+        <p class="store-info">Cargando tus monedas...</p>
       } @else if (playerStore.error()) {
-        <p class="store-error">{{ playerStore.error() }}</p>
-        <button type="button" (click)="reloadPlayer()">Reintentar</button>
+        <div class="player-panel">
+          <p class="store-error">{{ playerStore.error() }}</p>
+          <button type="button" (click)="reloadPlayer()">Reintentar saldo</button>
+        </div>
       } @else if (playerStore.player(); as player) {
         <article class="player-panel">
-          <h2>{{ player.username }}</h2>
-          <p>ID: {{ player.id }}</p>
+          <p class="player-panel-label">Tus monedas</p>
           <div class="balance-chip" aria-label="Balance actual">
             <span class="coin-icon" aria-hidden="true"></span>
             <span>{{ player.balance }}</span>
           </div>
-          <p>Nivel: {{ player.experienceLevel }}</p>
-          <p>Estado: {{ formatPlayerStatus(player.state) }}</p>
-          <button type="button" (click)="reloadPlayer()">Actualizar datos</button>
+          <button type="button" (click)="reloadPlayer()">Actualizar saldo</button>
         </article>
       }
+    }
+  </div>
 
-      @if (auth.isLoggedIn()) {
-        @if (purchaseMessage(); as purchaseMessageText) {
-          <p class="store-success" aria-live="polite">{{ purchaseMessageText }}</p>
-        }
+  @if (!auth.isLoggedIn()) {
+    <p class="store-info">Inicia sesion para ver la tienda y tus monedas.</p>
+  } @else {
+    @if (purchaseMessage(); as purchaseMessageText) {
+      <p class="store-success" aria-live="polite">{{ purchaseMessageText }}</p>
+    }
 
-        @if (purchaseError(); as purchaseErrorMessage) {
-          <p class="store-error">{{ purchaseErrorMessage }}</p>
-        }
+    @if (purchaseError(); as purchaseErrorMessage) {
+      <p class="store-error">{{ purchaseErrorMessage }}</p>
+    }
 
-        @if (catalogLoading()) {
-          <p class="store-info">Cargando articulos de la tienda...</p>
-        } @else if (catalogError()) {
-          <p class="store-error">{{ catalogError() }}</p>
-          <button type="button" (click)="reloadCatalog()">Reintentar tienda</button>
-        } @else {
+    @if (catalogLoading()) {
+      <p class="store-info">Cargando articulos de la tienda...</p>
+    } @else if (catalogError()) {
+      <p class="store-error">{{ catalogError() }}</p>
+      <button type="button" (click)="reloadCatalog()">Reintentar tienda</button>
+    } @else if (!hasCatalogContent()) {
+      <p class="store-info">No hay ofertas disponibles ahora mismo.</p>
+    } @else {
+      @if (cardPackOffer(); as pack) {
+        <section class="store-section">
+          <div class="section-heading">
+            <h2>Pack destacado</h2>
+            <p>Incluye varias cartas y acceso a su detalle completo.</p>
+          </div>
+          <div class="single-offer-grid">
+            <app-decks-card
+              [deckImageSrc]="pack.image"
+              [deckPrice]="pack.price"
+              [deckName]="pack.name"
+              [deckType]="pack.subtitle ?? ''"
+              [deckDescription]="pack.description ?? ''"
+              [canBuy]="canBuy(pack)"
+              [buying]="purchasingDeckId() === pack.id"
+              secondaryActionLabel="Ver pack"
+              [secondaryActionLink]="'/store/packs/' + pack.id"
+              (buy)="buyItem(pack.id)"
+            />
+          </div>
+        </section>
+      }
+
+      @if (singleCards().length > 0) {
+        <section class="store-section">
+          <div class="section-heading">
+            <h2>Cartas individuales</h2>
+            <p>Compra cartas sueltas para reforzar tu coleccion.</p>
+          </div>
           <section class="decks-grid">
-            @for (deck of decks(); track deck.id) {
+            @for (card of singleCards(); track card.id) {
               <app-decks-card
-                [deckImageSrc]="deck.image"
-                [deckPrice]="deck.price"
-                [deckName]="deck.name"
-                [deckType]="deck.type"
-                [deckOwned]="deck.owned"
-                [canBuy]="canBuy(deck)"
-                [buying]="purchasingDeckId() === deck.id"
-                (buy)="buyDeck(deck.id)"
+                [deckImageSrc]="card.image"
+                [deckPrice]="card.price"
+                [deckName]="card.name"
+                [deckType]="card.subtitle ?? ''"
+                [canBuy]="canBuy(card)"
+                [buying]="purchasingDeckId() === card.id"
+                (buy)="buyItem(card.id)"
               />
             }
           </section>
-        }
+        </section>
       }
-    </section>
+
+      @if (collectionOffer(); as collection) {
+        <section class="store-section">
+          <div class="section-heading">
+            <h2>Coleccion destacada</h2>
+            <p>Una oferta cerrada para ampliar el contenido disponible en tus partidas.</p>
+          </div>
+          <div class="single-offer-grid">
+            <app-decks-card
+              [deckImageSrc]="collection.image"
+              [deckPrice]="collection.price"
+              [deckName]="collection.name"
+              [deckType]="collection.subtitle ?? ''"
+              [deckDescription]="collection.description ?? ''"
+              [canBuy]="canBuy(collection)"
+              [buying]="purchasingDeckId() === collection.id"
+              (buy)="buyItem(collection.id)"
+            />
+          </div>
+        </section>
+      }
+
+      @if (boardOffer(); as board) {
+        <section class="store-section">
+          <div class="section-heading">
+            <h2>Tablero destacado</h2>
+            <p>Personaliza la mesa con un tablero exclusivo.</p>
+          </div>
+          <div class="single-offer-grid">
+            <app-decks-card
+              [deckImageSrc]="board.image"
+              [deckPrice]="board.price"
+              [deckName]="board.name"
+              [deckType]="board.subtitle ?? ''"
+              [deckDescription]="board.description ?? ''"
+              [canBuy]="canBuy(board)"
+              [buying]="purchasingDeckId() === board.id"
+              (buy)="buyItem(board.id)"
+            />
+          </div>
+        </section>
+      }
+    }
+  }
+</section>

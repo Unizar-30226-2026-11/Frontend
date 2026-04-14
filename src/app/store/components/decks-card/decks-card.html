@@ -3,31 +3,39 @@
         <img [src]="deckImageSrc" [alt]="deckName || 'Item de tienda'" />
         <div class="deck-copy">
           <h3>{{ deckName }}</h3>
-          <p>{{ deckType }}</p>
+          @if (deckType) {
+            <p class="deck-type">{{ deckType }}</p>
+          }
+          @if (deckDescription) {
+            <p class="deck-description">{{ deckDescription }}</p>
+          }
         </div>
       </div>
-      <div class="deck-footer" [class.deck-footer-owned]="deckOwned">
-        <button
-          type="button"
-          class="deck-button"
-          [disabled]="deckOwned || buying || !canBuy"
-          (click)="onBuyClick()"
-        >
-          @if (buying) {
-            Comprando...
-          } @else if (deckOwned) {
-            Ya adquirido
-          } @else if (!canBuy) {
-            Sin saldo
-          } @else {
-            Comprar
-          }
-        </button>
-        @if (!deckOwned) {
+      <div class="deck-footer">
+        @if (secondaryActionLabel && secondaryActionLink) {
+          <a class="deck-secondary-action" [routerLink]="secondaryActionLink">
+            {{ secondaryActionLabel }}
+          </a>
+        }
+        <div class="deck-controls">
+          <button
+            type="button"
+            class="deck-button"
+            [disabled]="buying || !canBuy"
+            (click)="onBuyClick()"
+          >
+            @if (buying) {
+              Comprando...
+            } @else if (!canBuy) {
+              Sin saldo
+            } @else {
+              {{ actionLabel }}
+            }
+          </button>
           <div class="deck-price">
             <span class="coin-icon" aria-hidden="true"></span>
             <span>{{ deckPrice }}</span>
           </div>
-        }
+        </div>
       </div>
     </article>

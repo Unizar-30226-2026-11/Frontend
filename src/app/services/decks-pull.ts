@@ -1,11 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { UserInventoryResponse } from '../interfaces/player-info';
 import {
   BuyItemResponse,
-  ShopItemApi,
   ShopItemsResponse,
   StoreCatalogResponse,
   StoreItem,
+  StorePackCard,
+  StorePackOffer,
 } from '../interfaces/store-item';
 import { Auth } from './auth';
 import { ApiClient } from './api-client';
@@ -23,29 +23,29 @@ export class DecksPull {
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(Auth);
   private readonly defaultImage = '/assets/Tablero.png';
-  private readonly blockedStoreKeywords = ['comodin', 'wildcard', 'joker'];
 
   getStoreCatalog(options: { forceRefresh?: boolean } = {}): Promise<StoreCatalogResponse> {
     const token = this.requireToken();
 
-    return Promise.all([
-      this.apiClient.request<ShopItemsResponse>('/shop/items', {
+    return this.apiClient
+      .request<ShopItemsResponse>('/shop/items', {
         token,
         ttlMs: 60_000,
         forceRefresh: options.forceRefresh,
-      }),
-      this.apiClient.request<UserInventoryResponse>('/users/inventory', {
-        token,
-        ttlMs: 20_000,
-        forceRefresh: options.forceRefresh,
-      }).catch(() => this.buildEmptyInventory()),
-    ]).then(([shopResponse, inventoryResponse]) => ({
-      items: this.toStoreItems(shopResponse.items, inventoryResponse),
-      inventory: inventoryResponse,
-    }));
+      })
+      .then((shopResponse) => this.toStoreCatalog(shopResponse));
   }
 
-  async buyDeck(itemId: string): Promise<BuyDeckResponse> {
+  getPackOffer(
+    packId: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<StorePackOffer | null> {
+    return this.getStoreCatalog(options).then((catalog) =>
+      catalog.cardPackOffer?.id === packId ? catalog.cardPackOffer : null
+    );
+  }
+
+  async buyItem(itemId: string): Promise<BuyDeckResponse> {
     const token = this.requireToken();
     const response = await this.apiClient.request<BuyItemResponse>('/shop/buy', {
       method: 'POST',
@@ -54,7 +54,7 @@ export class DecksPull {
       useCache: false,
     });
 
-    this.apiClient.invalidateCache('/users/inventory');
+    this.apiClient.invalidateCache('/shop/items');
     this.apiClient.invalidateCache('/users/balance');
     this.apiClient.invalidateCache('/collections');
 
@@ -65,71 +65,80 @@ export class DecksPull {
     };
   }
 
-  private toStoreItems(items: ShopItemApi[], inventory: UserInventoryResponse): StoreItem[] {
-    const ownedIds = this.extractOwnedIds(inventory);
-
-    return items
-      .filter((item) => !this.isBlockedStoreItem(item))
-      .map((item) => ({
-        id: item.id,
-        type: item.type,
-        name: item.name,
-        price: item.price,
-        image: this.resolveItemImage(item),
-        owned: ownedIds.has(item.id),
-      }));
+  async buyDeck(itemId: string): Promise<BuyDeckResponse> {
+    return this.buyItem(itemId);
   }
 
-  private extractOwnedIds(inventory: UserInventoryResponse): Set<string> {
-    const rawInventory = inventory.inventory.inventory;
-    const ownedIds = new Set<string>();
+  private toStoreCatalog(response: ShopItemsResponse): StoreCatalogResponse {
+    const singleCards = response.items.singleCards ?? [];
+    const packOffer = response.items.cardPackOffer;
+    const collectionOffer = response.items.collectionOffer;
+    const boardOffer = response.items.boardOffer;
 
-    for (const entry of rawInventory) {
-      if (typeof entry === 'string') {
-        ownedIds.add(entry);
-        continue;
-      }
-
-      if (typeof entry.itemId === 'string') {
-        ownedIds.add(entry.itemId);
-        continue;
-      }
-
-      if (typeof entry.id === 'string') {
-        ownedIds.add(entry.id);
-      }
-    }
-
-    return ownedIds;
+    return {
+      singleCards: singleCards.map((card) => ({
+        id: card.id_card,
+        type: 'singleCard',
+        name: card.title,
+        price: card.price,
+        image: this.resolveImage(card.url_image),
+        subtitle: this.formatRarity(card.rarity),
+      })),
+      cardPackOffer: packOffer
+        ? {
+            id: packOffer.id_pack,
+            type: 'cardPack',
+            name: packOffer.name,
+            price: packOffer.price,
+            image: this.resolveImage(packOffer.cards[0]?.url_image),
+            description: packOffer.description,
+            subtitle: `${packOffer.cards.length} cartas`,
+            cards: packOffer.cards.map((card) => this.toPackCard(card)),
+          }
+        : null,
+      collectionOffer: collectionOffer
+        ? {
+            id: collectionOffer.id_collection,
+            type: 'collection',
+            name: collectionOffer.name,
+            price: collectionOffer.price,
+            image: this.defaultImage,
+            subtitle: 'Coleccion destacada',
+          }
+        : null,
+      boardOffer: boardOffer
+        ? {
+            id: boardOffer.id_board,
+            type: 'board',
+            name: boardOffer.name,
+            price: boardOffer.price,
+            image: this.resolveImage(boardOffer.url_image),
+            subtitle: 'Tablero exclusivo',
+            description: boardOffer.description,
+          }
+        : null,
+      expiresAt: response.items.expiresAt ?? null,
+    };
   }
 
-  private resolveItemImage(item: ShopItemApi): string {
-    if (item.type === 'cosmetic') {
-      return '/assets/Tablero.png';
+  private toPackCard(card: { id_card: string; title: string; url_image: string }): StorePackCard {
+    return {
+      id: card.id_card,
+      title: card.title,
+      image: this.resolveImage(card.url_image),
+    };
+  }
+
+  private resolveImage(imageUrl?: string | null): string {
+    if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
+      return imageUrl;
     }
 
     return this.defaultImage;
   }
 
-  private buildEmptyInventory(): UserInventoryResponse {
-    return {
-      inventory: {
-        inventory: [],
-      },
-    };
-  }
-
-  private isBlockedStoreItem(item: ShopItemApi): boolean {
-    const searchableValue = this.normalizeStoreValue(`${item.id} ${item.type} ${item.name}`);
-    return this.blockedStoreKeywords.some((keyword) => searchableValue.includes(keyword));
-  }
-
-  private normalizeStoreValue(value: string): string {
-    return value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase();
+  private formatRarity(rarity: string): string {
+    return rarity.trim().toLowerCase();
   }
 
   private requireToken(): string {

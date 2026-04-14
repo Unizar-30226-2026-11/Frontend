@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { Auth } from '../services/auth';
 import { PlayerStore } from '../services/player-store';
@@ -45,23 +46,31 @@ describe('Store', () => {
       balance: 800,
     };
 
-    decksPullSpy = jasmine.createSpyObj<DecksPull>('DecksPull', ['getStoreCatalog', 'buyDeck']);
+    decksPullSpy = jasmine.createSpyObj<DecksPull>('DecksPull', ['getStoreCatalog', 'buyItem']);
     decksPullSpy.getStoreCatalog.and.resolveTo({
-      items: [
+      singleCards: [
         {
-          id: 'item_deck_001',
-          type: 'card',
-          name: 'Mazo Aurora',
+          id: 'c_48',
+          type: 'singleCard',
+          name: 'Carta 4-12',
           price: 300,
           image: '/assets/Tablero.png',
-          owned: false,
+          subtitle: 'legendary',
         },
       ],
-      inventory: {
-        inventory: {
-          inventory: [],
-        },
+      cardPackOffer: {
+        id: 'pack_daily',
+        type: 'cardPack',
+        name: 'Sobre Diario',
+        price: 1350,
+        image: '/assets/Tablero.png',
+        description: '5 cartas con 25% de descuento',
+        subtitle: '5 cartas',
+        cards: [],
       },
+      collectionOffer: null,
+      boardOffer: null,
+      expiresAt: '2026-04-15T00:00:00.000Z',
     });
 
     playerStoreMock = {
@@ -83,6 +92,7 @@ describe('Store', () => {
     await TestBed.configureTestingModule({
       imports: [Store],
       providers: [
+        provideRouter([]),
         {
           provide: Auth,
           useValue: {
@@ -101,31 +111,29 @@ describe('Store', () => {
   });
 
   it('shows purchase success feedback and updates the balance', async () => {
-    decksPullSpy.buyDeck.and.resolveTo({
-      itemId: 'item_deck_001',
-      message: "Has comprado 'Mazo Aurora' exitosamente.",
+    decksPullSpy.buyItem.and.resolveTo({
+      itemId: 'c_48',
+      message: "Has comprado 'Carta 4-12' exitosamente.",
       remainingCoins: 500,
     });
 
-    await component.buyDeck('item_deck_001');
+    await component.buyItem('c_48');
     fixture.detectChanges();
 
-    expect(component.purchaseMessage()).toBe("Has comprado 'Mazo Aurora' exitosamente.");
+    expect(component.purchaseMessage()).toBe("Has comprado 'Carta 4-12' exitosamente.");
     expect(component.purchaseError()).toBeNull();
-    expect(component.decks()[0].owned).toBeTrue();
     expect(playerStoreMock.updateBalance).toHaveBeenCalledWith(500);
-    expect(fixture.nativeElement.textContent).toContain("Has comprado 'Mazo Aurora' exitosamente.");
+    expect(fixture.nativeElement.textContent).toContain("Has comprado 'Carta 4-12' exitosamente.");
   });
 
   it('shows purchase error feedback when the API rejects the transaction', async () => {
-    decksPullSpy.buyDeck.and.rejectWith(new Error('Saldo insuficiente.'));
+    decksPullSpy.buyItem.and.rejectWith(new Error('Saldo insuficiente.'));
 
-    await component.buyDeck('item_deck_001');
+    await component.buyItem('c_48');
     fixture.detectChanges();
 
     expect(component.purchaseMessage()).toBeNull();
     expect(component.purchaseError()).toBe('Saldo insuficiente.');
-    expect(component.decks()[0].owned).toBeFalse();
     expect(playerStoreMock.updateBalance).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Saldo insuficiente.');
   });

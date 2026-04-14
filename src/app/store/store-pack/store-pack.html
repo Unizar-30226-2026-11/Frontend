@@ -1,0 +1,78 @@
+<section class="store-pack-view">
+  <a class="back-link" routerLink="/store">Volver a la tienda</a>
+
+  @if (!auth.isLoggedIn()) {
+    <p class="store-info">Inicia sesion para consultar el pack.</p>
+  } @else if (loading()) {
+    <p class="store-info">Cargando pack...</p>
+  } @else if (error()) {
+    <p class="store-error">{{ error() }}</p>
+    <button type="button" (click)="reloadPack()">Reintentar</button>
+  } @else if (pack(); as pack) {
+    <header class="pack-header">
+      <div class="pack-copy">
+        <p class="pack-label">Pack destacado</p>
+        <h1>{{ pack.name }}</h1>
+        @if (pack.description) {
+          <p class="pack-description">{{ pack.description }}</p>
+        }
+        <div class="pack-meta">
+          <div class="price-chip">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ pack.price }}</span>
+          </div>
+          @if (playerStore.player(); as player) {
+            <div class="balance-chip" aria-label="Tus monedas">
+              <span class="coin-icon" aria-hidden="true"></span>
+              <span>{{ player.balance }}</span>
+            </div>
+          }
+        </div>
+        <div class="pack-actions">
+          <button type="button" [disabled]="purchasing() || !canBuy(pack.price)" (click)="buyPack()">
+            @if (purchasing()) {
+              Comprando...
+            } @else if (!canBuy(pack.price)) {
+              Sin saldo
+            } @else {
+              Comprar pack
+            }
+          </button>
+          <button type="button" class="secondary-button" (click)="reloadPlayer()">
+            Actualizar saldo
+          </button>
+        </div>
+      </div>
+      <div class="pack-preview">
+        <img [src]="pack.image" [alt]="pack.name" />
+      </div>
+    </header>
+
+    @if (purchaseMessage()) {
+      <p class="store-success">{{ purchaseMessage() }}</p>
+    }
+
+    @if (purchaseError()) {
+      <p class="store-error">{{ purchaseError() }}</p>
+    }
+
+    <section class="cards-section">
+      <div class="cards-heading">
+        <h2>Cartas del pack</h2>
+        <p>{{ pack.cards.length }} cartas incluidas en esta oferta.</p>
+      </div>
+
+      <div class="cards-grid">
+        @for (card of pack.cards; track card.id) {
+          <article class="pack-card">
+            <img [src]="card.image" [alt]="card.title" />
+            <div class="pack-card-copy">
+              <h3>{{ card.title }}</h3>
+              <p>{{ card.id }}</p>
+            </div>
+          </article>
+        }
+      </div>
+    </section>
+  }
+</section>
