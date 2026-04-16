@@ -82,6 +82,7 @@ export class DecksPull {
         name: card.title,
         price: card.price,
         image: this.resolveImage(card.url_image),
+        isPurchased: card.isPurchased ?? false,
         subtitle: this.formatRarity(card.rarity),
       })),
       cardPackOffer: packOffer
@@ -91,6 +92,7 @@ export class DecksPull {
             name: packOffer.name,
             price: packOffer.price,
             image: this.resolveImage(packOffer.cards[0]?.url_image),
+            isPurchased: packOffer.isPurchased ?? false,
             description: packOffer.description,
             subtitle: `${packOffer.cards.length} cartas`,
             cards: packOffer.cards.map((card) => this.toPackCard(card)),
@@ -103,6 +105,7 @@ export class DecksPull {
             name: collectionOffer.name,
             price: collectionOffer.price,
             image: this.defaultImage,
+            isPurchased: collectionOffer.isPurchased ?? false,
             subtitle: 'Coleccion destacada',
           }
         : null,
@@ -113,6 +116,7 @@ export class DecksPull {
             name: boardOffer.name,
             price: boardOffer.price,
             image: this.resolveImage(boardOffer.url_image),
+            isPurchased: boardOffer.isPurchased ?? false,
             subtitle: 'Tablero exclusivo',
             description: boardOffer.description,
           }

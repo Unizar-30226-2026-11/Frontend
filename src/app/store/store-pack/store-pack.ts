@@ -32,7 +32,8 @@ export class StorePack {
   }
 
   canBuy(price: number): boolean {
-    return this.playerStore.canAfford(price);
+    const pack = this.pack();
+    return pack !== null && !pack.isPurchased && this.playerStore.canAfford(price);
   }
 
   reloadPlayer(): void {
@@ -57,6 +58,12 @@ export class StorePack {
       return;
     }
 
+    if (pack.isPurchased) {
+      this.purchaseMessage.set(null);
+      this.purchaseError.set('Ya tienes este pack');
+      return;
+    }
+
     if (!this.playerStore.canAfford(pack.price)) {
       this.purchaseMessage.set(null);
       this.purchaseError.set('No tienes monedas suficientes para este pack');
@@ -70,6 +77,9 @@ export class StorePack {
     try {
       const result = await this.decksPull.buyItem(pack.id);
       this.purchaseMessage.set(result.message);
+      this.pack.update((currentPack) =>
+        currentPack ? { ...currentPack, isPurchased: true } : currentPack
+      );
 
       if (typeof result.remainingCoins === 'number') {
         this.playerStore.updateBalance(result.remainingCoins);

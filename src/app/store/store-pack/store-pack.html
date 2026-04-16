@@ -29,9 +29,16 @@
           }
         </div>
         <div class="pack-actions">
-          <button type="button" [disabled]="purchasing() || !canBuy(pack.price)" (click)="buyPack()">
+          <button
+            type="button"
+            [class.purchase-owned]="pack.isPurchased"
+            [disabled]="purchasing() || pack.isPurchased || !canBuy(pack.price)"
+            (click)="buyPack()"
+          >
             @if (purchasing()) {
               Comprando...
+            } @else if (pack.isPurchased) {
+              Ya lo tienes
             } @else if (!canBuy(pack.price)) {
               Sin saldo
             } @else {

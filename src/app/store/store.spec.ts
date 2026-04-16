@@ -55,6 +55,7 @@ describe('Store', () => {
           name: 'Carta 4-12',
           price: 300,
           image: '/assets/Tablero.png',
+          isPurchased: false,
           subtitle: 'legendary',
         },
       ],
@@ -64,6 +65,7 @@ describe('Store', () => {
         name: 'Sobre Diario',
         price: 1350,
         image: '/assets/Tablero.png',
+        isPurchased: false,
         description: '5 cartas con 25% de descuento',
         subtitle: '5 cartas',
         cards: [],
@@ -124,6 +126,37 @@ describe('Store', () => {
     expect(component.purchaseError()).toBeNull();
     expect(playerStoreMock.updateBalance).toHaveBeenCalledWith(500);
     expect(fixture.nativeElement.textContent).toContain("Has comprado 'Carta 4-12' exitosamente.");
+  });
+
+  it('blocks purchases for items that are already owned', async () => {
+    decksPullSpy.getStoreCatalog.and.resolveTo({
+      singleCards: [
+        {
+          id: 'c_48',
+          type: 'singleCard',
+          name: 'Carta 4-12',
+          price: 300,
+          image: '/assets/Tablero.png',
+          isPurchased: true,
+          subtitle: 'legendary',
+        },
+      ],
+      cardPackOffer: null,
+      collectionOffer: null,
+      boardOffer: null,
+      expiresAt: '2026-04-15T00:00:00.000Z',
+    });
+
+    fixture = TestBed.createComponent(Store);
+    component = fixture.componentInstance;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    await component.buyItem('c_48');
+
+    expect(component.purchaseMessage()).toBeNull();
+    expect(component.purchaseError()).toBe('Ya tienes este articulo');
+    expect(decksPullSpy.buyItem).not.toHaveBeenCalled();
   });
 
   it('shows purchase error feedback when the API rejects the transaction', async () => {

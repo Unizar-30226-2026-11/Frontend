@@ -129,6 +129,20 @@
       cursor: not-allowed;
     }
 
+.deck-button--owned {
+  border-color: #c85c3a;
+  background: linear-gradient(180deg, #ffd7bd 0%, #f6b28b 100%);
+  color: #5b2410;
+  box-shadow: 0 8px 18px rgba(200, 92, 58, 0.2);
+}
+
+.deck-button.deck-button--owned:disabled {
+  background: linear-gradient(180deg, #ffd7bd 0%, #f6b28b 100%);
+  color: #5b2410;
+  cursor: default;
+  opacity: 1;
+}
+
     .deck-price {
       background: rgba(35, 35, 40, 0.92);
       color: #f4f6fb;

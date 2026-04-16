@@ -33,7 +33,7 @@ export class PlayerInfoPull {
         forceRefresh: options.forceRefresh,
       }),
     ]).then(([profileResponse, balanceResponse]) =>
-      this.normalizePlayer(profileResponse.profile, balanceResponse.balance.balance)
+      this.normalizePlayer(profileResponse.profile, this.extractBalance(balanceResponse))
     );
   }
 
@@ -92,9 +92,7 @@ export class PlayerInfoPull {
     this.apiClient.setCache<UserBalanceResponse>(
       this.apiClient.buildCacheKey('/users/balance', 'GET', token),
       {
-        balance: {
-          balance: playerInfo.balance,
-        },
+        balance: playerInfo.balance,
       },
       15_000
     );
@@ -117,6 +115,19 @@ export class PlayerInfoPull {
       personalState: profile.personal_state,
       balance,
     };
+  }
+
+  private extractBalance(response: UserBalanceResponse): number {
+    const nextBalance =
+      typeof response.balance === 'number'
+        ? response.balance
+        : response.balance.coins ?? response.balance.balance;
+
+    if (typeof nextBalance !== 'number' || Number.isNaN(nextBalance)) {
+      throw new Error('No se pudo interpretar el balance del jugador');
+    }
+
+    return nextBalance;
   }
 
   private extractMutationMessage(response: unknown, fallback: string): string {

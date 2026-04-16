@@ -16,6 +16,7 @@ export class DecksCard {
   @Input() deckDescription = '';
   @Input() actionLabel = 'Comprar';
   @Input() canBuy = true;
+  @Input() purchased = false;
   @Input() buying = false;
   @Input() secondaryActionLabel = '';
   @Input() secondaryActionLink: string | null = null;
@@ -23,7 +24,7 @@ export class DecksCard {
   @Output() buy = new EventEmitter<void>();
 
   onBuyClick(): void {
-    if (this.buying || !this.canBuy) {
+    if (this.buying || this.purchased || !this.canBuy) {
       return;
     }
 

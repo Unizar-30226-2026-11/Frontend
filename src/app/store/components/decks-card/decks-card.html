@@ -21,11 +21,14 @@
           <button
             type="button"
             class="deck-button"
-            [disabled]="buying || !canBuy"
+            [class.deck-button--owned]="purchased"
+            [disabled]="buying || purchased || !canBuy"
             (click)="onBuyClick()"
           >
             @if (buying) {
               Comprando...
+            } @else if (purchased) {
+              Ya lo tienes
             } @else if (!canBuy) {
               Sin saldo
             } @else {

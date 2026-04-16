@@ -89,7 +89,7 @@ export class Store {
   }
 
   canBuy(item: StoreItem | StorePackOffer): boolean {
-    return this.playerStore.canAfford(item.price);
+    return !item.isPurchased && this.playerStore.canAfford(item.price);
   }
 
   async buyItem(itemId: string): Promise<void> {
@@ -108,6 +108,12 @@ export class Store {
       return;
     }
 
+    if (item.isPurchased) {
+      this.purchaseMessage.set(null);
+      this.purchaseError.set('Ya tienes este articulo');
+      return;
+    }
+
     if (!this.playerStore.canAfford(item.price)) {
       this.purchaseMessage.set(null);
       this.purchaseError.set('No tienes monedas suficientes para este articulo');
@@ -121,6 +127,7 @@ export class Store {
     try {
       const purchaseResult = await this.decksPull.buyItem(item.id);
       this.purchaseMessage.set(purchaseResult.message);
+      this.markItemAsPurchased(item.id);
 
       if (typeof purchaseResult.remainingCoins === 'number') {
         this.playerStore.updateBalance(purchaseResult.remainingCoins);
@@ -161,6 +168,16 @@ export class Store {
       .finally(() => {
         this.catalogLoading.set(false);
       });
+  }
+
+  private markItemAsPurchased(itemId: string): void {
+    this.singleCards.update((items) =>
+      items.map((item) => (item.id === itemId ? { ...item, isPurchased: true } : item))
+    );
+
+    this.cardPackOffer.update((item) => (item?.id === itemId ? { ...item, isPurchased: true } : item));
+    this.collectionOffer.update((item) => (item?.id === itemId ? { ...item, isPurchased: true } : item));
+    this.boardOffer.update((item) => (item?.id === itemId ? { ...item, isPurchased: true } : item));
   }
 
   private findItemById(itemId: string): StoreItem | StorePackOffer | null {

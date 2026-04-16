@@ -71,11 +71,18 @@
   text-transform: uppercase;
 }
 
+.player-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .balance-chip {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 10px 14px;
   border-radius: 999px;
   background: rgba(240, 196, 78, 0.22);

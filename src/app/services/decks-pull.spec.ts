@@ -156,6 +156,7 @@ describe('DecksPull', () => {
             rarity: 'LEGENDARY',
             price: 3000,
             url_image: 'https://ejemplo.com/legendary.jpg',
+            isPurchased: true,
           },
         ],
         cardPackOffer: {
@@ -171,11 +172,13 @@ describe('DecksPull', () => {
           card_ids: [32],
           description: '5 cartas con 25% de descuento',
           price: 1350,
+          isPurchased: false,
         },
         collectionOffer: {
           id_collection: 'col_3',
           name: 'Coleccion 3',
           price: 6000,
+          isPurchased: true,
         },
         boardOffer: {
           id_board: 'b_2',
@@ -183,6 +186,7 @@ describe('DecksPull', () => {
           price: 2000,
           description: 'Un estilo futurista con luces vibrantes y efectos ciberpunk.',
           url_image: 'https://midominio.com/boards/stellar.png',
+          isPurchased: false,
         },
         expiresAt: '2026-04-15T00:00:00.000Z',
       },
@@ -197,6 +201,7 @@ describe('DecksPull', () => {
         name: 'Carta 4-12',
         price: 3000,
         image: 'https://ejemplo.com/legendary.jpg',
+        isPurchased: true,
         subtitle: 'legendary',
       },
     ]);
@@ -206,6 +211,7 @@ describe('DecksPull', () => {
       name: 'Sobre Diario',
       price: 1350,
       image: 'https://ejemplo.com/card-32.jpg',
+      isPurchased: false,
       description: '5 cartas con 25% de descuento',
       subtitle: '1 cartas',
       cards: [
@@ -222,6 +228,7 @@ describe('DecksPull', () => {
       name: 'Coleccion 3',
       price: 6000,
       image: '/assets/Tablero.png',
+      isPurchased: true,
       subtitle: 'Coleccion destacada',
     });
     expect(result.boardOffer).toEqual({
@@ -230,6 +237,7 @@ describe('DecksPull', () => {
       name: 'NEON',
       price: 2000,
       image: 'https://midominio.com/boards/stellar.png',
+      isPurchased: false,
       subtitle: 'Tablero exclusivo',
       description: 'Un estilo futurista con luces vibrantes y efectos ciberpunk.',
     });
@@ -253,6 +261,7 @@ describe('DecksPull', () => {
           card_ids: [32],
           description: '5 cartas con 25% de descuento',
           price: 1350,
+          isPurchased: true,
         },
       },
     });
@@ -260,6 +269,7 @@ describe('DecksPull', () => {
     const result = await service.getPackOffer('pack_daily');
 
     expect(result?.id).toBe('pack_daily');
+    expect(result?.isPurchased).toBeTrue();
     expect(result?.cards).toEqual([
       {
         id: 'c_32',

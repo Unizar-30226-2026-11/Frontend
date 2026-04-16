@@ -19,11 +19,13 @@
       } @else if (playerStore.player(); as player) {
         <article class="player-panel">
           <p class="player-panel-label">Tus monedas</p>
-          <div class="balance-chip" aria-label="Balance actual">
-            <span class="coin-icon" aria-hidden="true"></span>
-            <span>{{ player.balance }}</span>
+          <div class="player-panel-actions">
+            <div class="balance-chip" aria-label="Balance actual">
+              <span class="coin-icon" aria-hidden="true"></span>
+              <span>{{ player.balance }}</span>
+            </div>
+            <button type="button" (click)="reloadPlayer()">Actualizar saldo</button>
           </div>
-          <button type="button" (click)="reloadPlayer()">Actualizar saldo</button>
         </article>
       }
     }
@@ -62,6 +64,7 @@
               [deckType]="pack.subtitle ?? ''"
               [deckDescription]="pack.description ?? ''"
               [canBuy]="canBuy(pack)"
+              [purchased]="pack.isPurchased"
               [buying]="purchasingDeckId() === pack.id"
               secondaryActionLabel="Ver pack"
               [secondaryActionLink]="'/store/packs/' + pack.id"
@@ -85,6 +88,7 @@
                 [deckName]="card.name"
                 [deckType]="card.subtitle ?? ''"
                 [canBuy]="canBuy(card)"
+                [purchased]="card.isPurchased"
                 [buying]="purchasingDeckId() === card.id"
                 (buy)="buyItem(card.id)"
               />
@@ -107,6 +111,7 @@
               [deckType]="collection.subtitle ?? ''"
               [deckDescription]="collection.description ?? ''"
               [canBuy]="canBuy(collection)"
+              [purchased]="collection.isPurchased"
               [buying]="purchasingDeckId() === collection.id"
               (buy)="buyItem(collection.id)"
             />
@@ -128,6 +133,7 @@
               [deckType]="board.subtitle ?? ''"
               [deckDescription]="board.description ?? ''"
               [canBuy]="canBuy(board)"
+              [purchased]="board.isPurchased"
               [buying]="purchasingDeckId() === board.id"
               (buy)="buyItem(board.id)"
             />

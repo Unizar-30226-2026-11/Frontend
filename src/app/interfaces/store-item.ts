@@ -4,6 +4,7 @@ export interface ShopSingleCardApi {
   rarity: string;
   price: number;
   url_image: string;
+  isPurchased?: boolean;
 }
 
 export interface ShopPackCardApi {
@@ -19,12 +20,14 @@ export interface ShopCardPackOfferApi {
   card_ids: number[];
   description: string;
   price: number;
+  isPurchased?: boolean;
 }
 
 export interface ShopCollectionOfferApi {
   id_collection: string;
   name: string;
   price: number;
+  isPurchased?: boolean;
 }
 
 export interface ShopBoardOfferApi {
@@ -33,6 +36,7 @@ export interface ShopBoardOfferApi {
   price: number;
   description: string;
   url_image?: string;
+  isPurchased?: boolean;
 }
 
 export interface ShopItemsApi {
@@ -62,6 +66,7 @@ export interface StoreItem {
   name: string;
   price: number;
   image: string;
+  isPurchased: boolean;
   subtitle?: string;
   description?: string;
 }

@@ -18,9 +18,7 @@ export interface UserProfileResponse {
 }
 
 export interface UserBalanceResponse {
-  balance: {
-    balance: number;
-  };
+  balance: number | { coins?: number; balance?: number };
 }
 
 export interface UpdateUsernamePayload {

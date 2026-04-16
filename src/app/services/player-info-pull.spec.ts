@@ -47,9 +47,7 @@ describe('PlayerInfoPull', () => {
         },
       }),
       Promise.resolve({
-        balance: {
-          balance: 250,
-        },
+        balance: 250,
       })
     );
 
@@ -63,6 +61,74 @@ describe('PlayerInfoPull', () => {
       state: 'ONLINE',
       personalState: 'ready',
       balance: 250,
+    });
+  });
+
+  it('accepts the legacy cached balance shape while migrating to coins', async () => {
+    apiClientSpy.request.and.returnValues(
+      Promise.resolve({
+        profile: {
+          id_user: 12,
+          username: 'tester',
+          email: 'tester@example.com',
+          exp_level: 7,
+          progress_level: 45,
+          state: 'online',
+          personal_state: 'ready',
+          id: 'u_12',
+        },
+      }),
+      Promise.resolve({
+        balance: {
+          coins: 125,
+        },
+      })
+    );
+
+    await expectAsync(service.getPlayerInfo()).toBeResolvedTo({
+      id: 'u_12',
+      legacyUserId: 12,
+      username: 'tester',
+      email: 'tester@example.com',
+      experienceLevel: 7,
+      progressLevel: 45,
+      state: 'ONLINE',
+      personalState: 'ready',
+      balance: 125,
+    });
+  });
+
+  it('accepts the older nested balance field while migrating cached responses', async () => {
+    apiClientSpy.request.and.returnValues(
+      Promise.resolve({
+        profile: {
+          id_user: 12,
+          username: 'tester',
+          email: 'tester@example.com',
+          exp_level: 7,
+          progress_level: 45,
+          state: 'online',
+          personal_state: 'ready',
+          id: 'u_12',
+        },
+      }),
+      Promise.resolve({
+        balance: {
+          balance: 80,
+        },
+      })
+    );
+
+    await expectAsync(service.getPlayerInfo()).toBeResolvedTo({
+      id: 'u_12',
+      legacyUserId: 12,
+      username: 'tester',
+      email: 'tester@example.com',
+      experienceLevel: 7,
+      progressLevel: 45,
+      state: 'ONLINE',
+      personalState: 'ready',
+      balance: 80,
     });
   });
 
