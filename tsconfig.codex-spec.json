@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/codex-spec",
+    "types": ["jasmine"]
+  },
+  "include": [
+    "src/app/dixit/dixit.spec.ts",
+    "src/app/services/dixit-realtime.spec.ts",
+    "src/**/*.d.ts"
+  ]
+}

@@ -1,5 +1,6 @@
-import { fakeAsync, ComponentFixture, TestBed, tick } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { vi } from 'vitest';
 
 import { Dixit } from './dixit';
 import { Auth } from '../services/auth';
@@ -11,16 +12,29 @@ describe('Dixit', () => {
   let fixture: ComponentFixture<Dixit>;
   let cardPullSpy: jasmine.SpyObj<CardPull>;
   let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
     cardPullSpy.getCards.and.resolveTo(createCardsFixture());
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    routerSpy.navigate.and.resolveTo(true);
     realtimeSpy = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
       'ensureLobbyConnection',
       'sendGameAction',
+      'endGame',
+      'disconnect',
       'lobbyState',
       'gameState',
+      'gameEndedResult',
+      'walletUpdated',
       'privateHand',
+      'duelChallenge',
+      'activeMinigame',
+      'activeStar',
+      'starClaim',
+      'clearStarClaim',
+      'clearGameEndedResult',
       'activeLobbyCode',
       'lastError',
       'connectionStatus',
@@ -29,7 +43,13 @@ describe('Dixit', () => {
     realtimeSpy.ensureLobbyConnection.and.resolveTo();
     realtimeSpy.lobbyState.and.returnValue(null);
     realtimeSpy.gameState.and.returnValue(null);
+    realtimeSpy.gameEndedResult.and.returnValue(null);
+    realtimeSpy.walletUpdated.and.returnValue(null);
     realtimeSpy.privateHand.and.returnValue(null);
+    realtimeSpy.duelChallenge.and.returnValue(null);
+    realtimeSpy.activeMinigame.and.returnValue(null);
+    realtimeSpy.activeStar.and.returnValue(null);
+    realtimeSpy.starClaim.and.returnValue(null);
     realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
     realtimeSpy.lastError.and.returnValue('');
     realtimeSpy.connectionStatus.and.returnValue('connected');
@@ -40,6 +60,7 @@ describe('Dixit', () => {
       providers: [
         { provide: CardPull, useValue: cardPullSpy },
         { provide: DixitRealtime, useValue: realtimeSpy },
+        { provide: Router, useValue: routerSpy },
         {
           provide: Auth,
           useValue: {
@@ -62,19 +83,21 @@ describe('Dixit', () => {
     component = fixture.componentInstance;
   });
 
-  it('should create and load the room id', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('should create and load the room id', async () => {
+    await initializeComponent(fixture);
 
     expect(component).toBeTruthy();
     expect(component.id).toBe('A1B2');
     expect(component.phase).toBe('hand');
     expect(realtimeSpy.ensureLobbyConnection).toHaveBeenCalledOnceWith('A1B2');
-  }));
+  });
 
-  it('updates the phase from state.phase when the server switches to voting', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('updates the phase from state.phase when the server switches to voting', async () => {
+    await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
       state: {
@@ -88,11 +111,10 @@ describe('Dixit', () => {
 
     expect(component.phase).toBe('choice');
     expect(component.pointsStage).toBe('waiting');
-  }));
+  });
 
-  it('updates the points stage from state.phase when the server switches to ranking', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('updates the points stage from state.phase when the server switches to ranking', async () => {
+    await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
       state: {
@@ -103,11 +125,87 @@ describe('Dixit', () => {
 
     expect(component.phase).toBe('points');
     expect(component.pointsStage).toBe('ranking');
-  }));
+  });
 
-  it('uses currentRound.boardCards during voting and renders the vote view even without a hand', fakeAsync(() => {
+  it('requests game end when the server marks the match as finished', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'FINISHED',
+      },
+      receivedAt: Date.now(),
+    });
+
+    expect(component.phase).toBe('finished');
+    expect(realtimeSpy.endGame).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the final overlay data after server:game:ended and wallet update', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameEnded']({
+      ranking: [
+        { playerId: 'cpu_1', points: 16, place: 1, coinsEarned: 50 },
+        { playerId: 'u_self', points: 14, place: 2, coinsEarned: 35 },
+      ],
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimeWalletUpdated']({
+      balance: 285,
+      receivedAt: Date.now(),
+    });
     fixture.detectChanges();
-    tick();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(component.phase).toBe('finished');
+    expect(component.finalOverlayTitle).toContain('2');
+    expect(text).toContain('+35');
+    expect(text).toContain('Saldo total actualizado: 285 monedas.');
+  });
+
+  it('opens the mapped minigame overlay when a realtime minigame starts', async () => {
+    await initializeComponent(fixture);
+
+    component.activeDuelChallenge = {
+      challengerId: 'cpu_1',
+      receivedAt: Date.now(),
+    };
+
+    component['applyRealtimeMinigame']({
+      type: 0,
+      isDuel: false,
+      durationSeconds: 15,
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    expect(component.activeDuelChallenge).toBeNull();
+    expect(component.isMinigame1Open).toBeTrue();
+    expect(component.isMinigame2Open).toBeFalse();
+    expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
+  });
+
+  it('closes the minigame overlay when the active conflict is cancelled', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeMinigame']({
+      type: 1,
+      isDuel: true,
+      durationSeconds: 15,
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    component['applyRealtimeMinigame'](null);
+    fixture.detectChanges();
+
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(component.isMinigame2Open).toBeFalse();
+  });
+
+  it('uses currentRound.boardCards during voting and renders the vote view even without a hand', async () => {
+    await initializeComponent(fixture);
 
     component.cards = [];
     component['applyRealtimeGameState']({
@@ -133,11 +231,10 @@ describe('Dixit', () => {
     expect(text).toContain('Votacion');
     expect(text).toContain('Tu carta');
     expect(text).not.toContain('Esperando a que el servidor envie tu mano.');
-  }));
+  });
 
-  it('does not allow selecting your own board card during voting', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('does not allow selecting your own board card during voting', async () => {
+    await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
       state: {
@@ -155,11 +252,10 @@ describe('Dixit', () => {
     component.onChoiceCardSelected(component.choiceCards[1]);
 
     expect(component.selectedChoiceCardCode).toBe('');
-  }));
+  });
 
-  it('does not send a vote for the current player own card', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('does not send a vote for the current player own card', async () => {
+    await initializeComponent(fixture);
 
     component.phase = 'choice';
     component.currentPlayerPlayedCardCode = 'c_101';
@@ -169,23 +265,21 @@ describe('Dixit', () => {
 
     expect(realtimeSpy.sendGameAction).not.toHaveBeenCalled();
     expect(component.voteSubmitted).toBeFalse();
-  }));
+  });
 
-  it('selects a hand card when dropped into the board zone', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('selects a hand card and reflects it in the UI', async () => {
+    await initializeComponent(fixture);
 
-    component.onHandCardDragStart(component.cards[1]);
-    component.onDropZoneDrop(createDragDropEvent('c_102'));
+    component.onHandCardSelected(component.cards[1]);
 
     expect(component.selectedHandCardCode).toBe('c_102');
 
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Seleccionada: c_102');
-  }));
+  });
 
-  it('reads the storyteller from currentRound and submits the clue separately', fakeAsync(() => {
+  it('reads the storyteller from currentRound and submits the clue separately', async () => {
     realtimeSpy.gameState.and.returnValue({
       state: {
         currentRound: {
@@ -195,8 +289,7 @@ describe('Dixit', () => {
       receivedAt: Date.now(),
     });
 
-    fixture.detectChanges();
-    tick();
+    await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
     component.updateClueDraft('Una pista real');
@@ -208,21 +301,19 @@ describe('Dixit', () => {
       clue: 'Una pista real',
     });
     expect(component.handSubmitted).toBeTrue();
-  }));
+  });
 
-  it('does not allow sending cards until a clue exists', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('does not allow sending cards until a clue exists', async () => {
+    await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
 
     expect(component.currentClue).toBe('');
     expect(component.isHandSubmitDisabled).toBeTrue();
-  }));
+  });
 
-  it('submits the selected vote through the realtime service', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('submits the selected vote through the realtime service', async () => {
+    await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
     component.simulateChoicePhaseOpened();
@@ -234,11 +325,10 @@ describe('Dixit', () => {
       cardId: 'c_102',
     });
     expect(component.voteSubmitted).toBeTrue();
-  }));
+  });
 
-  it('uses scoring phase data to reveal cards and ranking instead of waiting for votes', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('uses scoring phase data to reveal cards and ranking instead of waiting for votes', async () => {
+    await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
       state: {
@@ -269,9 +359,10 @@ describe('Dixit', () => {
     expect(component.pointsStage).toBe('reveal');
     expect(component.pointsRevealedCards.length).toBe(3);
     expect(component.pointsRanking[0].playerId).toBe('cpu_1');
-  }));
+  });
 
-  it('asks the host to advance automatically after scoring', fakeAsync(() => {
+  it('asks the host to advance automatically after scoring', async () => {
+    vi.useFakeTimers();
     realtimeSpy.lobbyState.and.returnValue({
       id: 'lobby-1',
       code: 'A1B2',
@@ -279,8 +370,7 @@ describe('Dixit', () => {
       players: [],
     });
 
-    fixture.detectChanges();
-    tick();
+    await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
       state: {
@@ -300,14 +390,13 @@ describe('Dixit', () => {
       receivedAt: Date.now(),
     });
 
-    tick(5000);
+    await vi.advanceTimersByTimeAsync(9000);
 
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('NEXT_ROUND');
-  }));
+  });
 
-  it('clears scoring presentation when a recovered hand state for the next round arrives', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('clears scoring presentation when a recovered hand state for the next round arrives', async () => {
+    await initializeComponent(fixture);
 
     component.pointsStage = 'reveal';
     component.pointsVotesReceived = 2;
@@ -353,9 +442,9 @@ describe('Dixit', () => {
     expect(component.pointsRanking).toEqual([]);
     expect(component.selectedChoiceCardCode).toBe('');
     expect(component.voteSubmitted).toBeFalse();
-  }));
+  });
 
-  it('returns to the first storytelling step after scoring when the next hand has no clue yet', fakeAsync(() => {
+  it('returns to the first storytelling step after scoring when the next hand has no clue yet', async () => {
     realtimeSpy.gameState.and.returnValue({
       state: {
         currentRound: {
@@ -366,8 +455,7 @@ describe('Dixit', () => {
       receivedAt: Date.now() - 1,
     });
 
-    fixture.detectChanges();
-    tick();
+    await initializeComponent(fixture);
 
     component.phase = 'points';
     component.pointsStage = 'reveal';
@@ -396,11 +484,11 @@ describe('Dixit', () => {
     expect(component.handSubmitted).toBeFalse();
     expect(component.selectedHandCardCode).toBe('');
     expect(component.clueDraft).toBe('');
-  }));
+  });
 
-  it('advances automatically from reveal to ranking after 3 seconds', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('advances automatically from reveal to ranking after 3 seconds', async () => {
+    vi.useFakeTimers();
+    await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
     component.simulateChoicePhaseOpened();
@@ -415,15 +503,14 @@ describe('Dixit', () => {
 
     expect(component.pointsStage).toBe('reveal');
 
-    tick(3000);
+    await vi.advanceTimersByTimeAsync(3000);
 
     expect(component.pointsStage).toBe('ranking');
     expect(component.boardTokens.map((token) => token.position)).not.toEqual(positionsBeforeReveal);
-  }));
+  });
 
-  it('prepares the next round from the ranking state', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('prepares the next round from the ranking state', async () => {
+    await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
     component.simulateChoicePhaseOpened();
@@ -441,19 +528,25 @@ describe('Dixit', () => {
     expect(component.selectedHandCardCode).toBe('');
     expect(component.selectedChoiceCardCode).toBe('');
     expect(component.voteSubmitted).toBeFalse();
-  }));
+  });
 
-  it('shows the minigame simulation button in the simulation drawer', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('shows the realtime state panel in the simulation drawer', async () => {
+    await initializeComponent(fixture);
 
     component.isSimulationDrawerOpen = true;
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Simular minijuego 1');
-  }));
+    expect(text).toContain('Estado realtime');
+    expect(text).toContain('Socket');
+  });
 });
+
+async function initializeComponent(fixture: ComponentFixture<Dixit>): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  fixture.detectChanges();
+}
 
 function createCardsFixture(): DeckCard[] {
   return [
@@ -478,11 +571,3 @@ function createCardsFixture(): DeckCard[] {
   ];
 }
 
-function createDragDropEvent(cardCode: string): DragEvent {
-  return {
-    preventDefault: () => undefined,
-    dataTransfer: {
-      getData: () => cardCode,
-    },
-  } as unknown as DragEvent;
-}

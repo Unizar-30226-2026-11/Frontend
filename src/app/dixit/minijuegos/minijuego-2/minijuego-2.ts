@@ -26,7 +26,7 @@ interface MemoryCard {
           <div class="memory-copy">
             <p class="eyebrow">Minijuego 2</p>
             <h2 id="minigame-2-title">Buscar parejas</h2>
-            <p>Tienes 20 segundos para descubrir todas las parejas con las cartas de Dixit.</p>
+            <p>Tienes 15 segundos para descubrir todas las parejas con las cartas de Dixit.</p>
           </div>
 
           <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
@@ -106,7 +106,7 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
   cards: MemoryCard[] = [];
   loading = true;
   errorMessage = '';
-  timeLeft = 20;
+  timeLeft = 15;
   matchedPairs = 0;
   attempts = 0;
   isResolvingPair = false;
@@ -190,7 +190,7 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
     this.clearTimers();
     this.loading = true;
     this.errorMessage = '';
-    this.timeLeft = 20;
+    this.timeLeft = 15;
     this.matchedPairs = 0;
     this.attempts = 0;
     this.isResolvingPair = false;

@@ -53,6 +53,24 @@ export interface RealtimeGameStarted {
   receivedAt: number;
 }
 
+export interface RealtimeGameEndedRankingEntry {
+  playerId: string;
+  points: number;
+  place: number;
+  coinsEarned: number;
+}
+
+export interface RealtimeGameEnded {
+  ranking: RealtimeGameEndedRankingEntry[];
+  error?: string;
+  receivedAt: number;
+}
+
+export interface RealtimeWalletUpdated {
+  balance: number;
+  receivedAt: number;
+}
+
 export interface RealtimePrivateHand {
   lobbyCode: string;
   hand: Array<number | string>;
@@ -108,5 +126,12 @@ export interface RealtimeStarSpawn {
 export interface RealtimeStarClaim {
   winnerId: string;
   newScores: Record<string, number>;
+  receivedAt: number;
+}
+
+export interface RealtimeMinigameStart {
+  type: number;
+  isDuel: boolean;
+  durationSeconds: number;
   receivedAt: number;
 }

@@ -4,21 +4,26 @@ import {
   DixitGameActionType,
   LobbyJoinResponse,
   RealtimeChatMessage,
+  RealtimeGameEnded,
+  RealtimeGameEndedRankingEntry,
   RealtimeGameStarted,
   RealtimeGameStateUpdate,
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
   RealtimePrivateHand,
   RealtimeDuelChallenge,
+  RealtimeMinigameStart,
   RealtimeStarClaim,
   RealtimeStarSpawn,
   RealtimeSession,
   RealtimeToast,
+  RealtimeWalletUpdated,
 } from '../interfaces/dixit-realtime';
 import type { SocketIoClient } from '../../socket-io-client';
 import { ApiClient } from './api-client';
 import { Auth } from './auth';
 import { isApiRequestErrorStatus } from '../interfaces/api';
+import { PlayerStore } from './player-store';
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
@@ -33,8 +38,9 @@ const LOBBY_MIN_PLAYERS = 3;
 export class DixitRealtime {
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(Auth);
+  private readonly playerStore = inject(PlayerStore);
   // Se restaura una sola vez para no leer/parsing localStorage dos veces
-  // durante la construcción del servicio.
+  // durante la construccion del servicio.
   private readonly restoredSession = this.restoreSession();
 
   private socket: SocketIoClient | null = null;
@@ -43,43 +49,69 @@ export class DixitRealtime {
   private toastSequence = 0;
   private lastGameStateReceivedAt = 0;
 
+  // --- Estado base de sesion y conexion ---
   private readonly sessionState = signal<RealtimeSession | null>(this.restoredSession);
   private readonly connectionStatusState = signal<DixitConnectionStatus>('idle');
+
+  // --- Estado de lobby y flujo principal de ronda ---
   private readonly lobbyStateSignal = signal<RealtimeLobbyState | null>(null);
   private readonly gameStateSignal = signal<RealtimeGameStateUpdate | null>(
     this.restoreGameState(this.restoredSession?.lobbyCode ?? null)
   );
   private readonly gameStartedSignal = signal<RealtimeGameStarted | null>(null);
   private readonly privateHandSignal = signal<RealtimePrivateHand | null>(null);
+
+  // --- Estado de conflictos 1 vs 1 ---
   private readonly duelChallengeSignal = signal<RealtimeDuelChallenge | null>(null);
-  // Estado efímero de efectos visuales del tablero.
-  // activeStar representa una estrella aún disponible para capturar.
+  private readonly activeMinigameSignal = signal<RealtimeMinigameStart | null>(null);
+  // --- Estado de eventos especiales del tablero ---
   private readonly activeStarSignal = signal<RealtimeStarSpawn | null>(null);
-  // starClaim conserva el último resultado de captura para que la UI pueda
-  // mostrar el banner de ganador y actualizar puntuaciones sin depender de otro evento.
+  // Resultado de la ultima captura de estrella para que la UI pueda
+  // mostrar el banner y actualizar puntuaciones sin depender de otro evento.
   private readonly starClaimSignal = signal<RealtimeStarClaim | null>(null);
+  // --- Estado de cierre de partida y economia ---
+  private readonly gameEndedSignal = signal<RealtimeGameEnded | null>(null);
+  private readonly walletUpdatedSignal = signal<RealtimeWalletUpdated | null>(null);
+  // --- Estado auxiliar de UX ---
   private readonly chatMessagesSignal = signal<RealtimeChatMessage[]>([]);
   private readonly lastErrorSignal = signal('');
   private readonly activeGameNoticeSignal = signal('');
   private readonly toastSignal = signal<RealtimeToast | null>(null);
 
+  // --- Computed base de sesion y conexion ---
   readonly session = computed(() => this.sessionState());
   readonly activeLobbyCode = computed(() => this.sessionState()?.lobbyCode ?? '');
   readonly connectionStatus = computed(() => this.connectionStatusState());
+
+  // --- Computed de lobby y flujo principal de ronda ---
   readonly lobbyState = computed(() => this.lobbyStateSignal());
   readonly gameState = computed(() => this.gameStateSignal());
   readonly gameStarted = computed(() => this.gameStartedSignal());
   readonly privateHand = computed(() => this.privateHandSignal());
+
+  // --- Computed de conflictos 1 vs 1 ---
   readonly duelChallenge = computed(() => this.duelChallengeSignal());
+  readonly activeMinigame = computed(() => this.activeMinigameSignal());
+
+  // --- Computed de eventos especiales del tablero ---
   readonly activeStar = computed(() => this.activeStarSignal());
   readonly starClaim = computed(() => this.starClaimSignal());
+
+  // --- Computed de cierre de partida y economia ---
+  readonly gameEndedResult = computed(() => this.gameEndedSignal());
+  readonly walletUpdated = computed(() => this.walletUpdatedSignal());
+
+  // --- Computed auxiliares de UX ---
   readonly chatMessages = computed(() => this.chatMessagesSignal());
   readonly lastError = computed(() => this.lastErrorSignal());
   readonly activeGameNotice = computed(() => this.activeGameNoticeSignal());
   readonly toast = computed(() => this.toastSignal());
 
-  // Pide al backend un ticket/socket URL válidos para una lobby y deja preparada
-  // la sesión local antes de abrir el websocket.
+  // === Ciclo de conexion y sesion de lobby ===
+
+  // Pide al backend un ticket/socket URL validos para una lobby y deja preparada
+  // la sesion local antes de abrir el websocket.
+
   async joinLobby(lobbyCode: string): Promise<void> {
     const normalizedLobbyCode = this.normalizeLobbyCode(lobbyCode);
     const activeSession = this.sessionState();
@@ -95,6 +127,9 @@ export class DixitRealtime {
 
     this.connectionStatusState.set('joining');
     this.lastErrorSignal.set('');
+    this.gameEndedSignal.set(null);
+    this.walletUpdatedSignal.set(null);
+    this.activeMinigameSignal.set(null);
 
     let response: LobbyJoinResponse;
     try {
@@ -118,7 +153,7 @@ export class DixitRealtime {
     await this.connectWithSession(nextSession);
   }
 
-  // Reutiliza una conexión existente o una sesión restaurada si siguen siendo
+  // Reutiliza una conexión existente o una sesion restaurada si siguen siendo
   // válidas; si no, vuelve a ejecutar el flujo completo de join.
   async ensureLobbyConnection(lobbyCode: string): Promise<void> {
     const normalizedLobbyCode = this.normalizeLobbyCode(lobbyCode);
@@ -172,6 +207,8 @@ export class DixitRealtime {
 
   // Solicita el inicio de partida desde la sala. No toca estado local: espera
   // a que el servidor confirme con los eventos correspondientes.
+  // === Acciones que la UI puede emitir durante la partida ===
+
   startLobby(useDynamicPool?: boolean): void {
     const payload =
       typeof useDynamicPool === 'boolean' ? { useDynamicPool } : {};
@@ -195,6 +232,14 @@ export class DixitRealtime {
     this.emit('client:game:claim_star', {
       lobbyCode: this.requireSession().lobbyCode,
     });
+  }
+
+  // Permite que la UI solicite el cierre cuando detecta phase === FINISHED.
+  // El backend es idempotente y calcula el ranking una unica vez.
+  endGame(): void {
+    const lobbyCode = this.requireSession().lobbyCode;
+    this.debug('emit client:game:end', { lobbyCode });
+    this.emit('client:game:end', { lobbyCode });
   }
 
   // Canal unificado de acciones de juego. Encapsula lobbyCode y payload para que
@@ -224,6 +269,8 @@ export class DixitRealtime {
   }
 
   // Notifica al servidor la salida voluntaria de la lobby y limpia la conexión local.
+  // === Limpieza de estado efÃ­mero y desconexiÃ³n ===
+
   leaveLobby(): void {
     if (this.socket !== null) {
       this.debug('emit client:lobby:leave');
@@ -249,7 +296,11 @@ export class DixitRealtime {
     this.starClaimSignal.set(null);
   }
 
-  // Desconecta el websocket y, opcionalmente, destruye por completo la sesión
+  clearGameEndedResult(): void {
+    this.gameEndedSignal.set(null);
+  }
+
+  // Desconecta el websocket y, opcionalmente, destruye por completo la sesion
   // recuperable guardada en memoria/localStorage.
   disconnect(preserveSession = true): void {
     this.socket?.disconnect();
@@ -271,8 +322,11 @@ export class DixitRealtime {
     this.gameStartedSignal.set(null);
     this.privateHandSignal.set(null);
     this.duelChallengeSignal.set(null);
+    this.activeMinigameSignal.set(null);
     this.activeStarSignal.set(null);
     this.starClaimSignal.set(null);
+    this.gameEndedSignal.set(null);
+    this.walletUpdatedSignal.set(null);
     this.chatMessagesSignal.set([]);
     this.lastErrorSignal.set('');
     this.activeGameNoticeSignal.set('');
@@ -282,7 +336,7 @@ export class DixitRealtime {
     localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
   }
 
-  // Evita abrir conexiones duplicadas para la misma sesión y serializa los intentos
+  // Evita abrir conexiones duplicadas para la misma sesion y serializa los intentos
   // de conexión concurrentes detrás de una única promesa.
   private connectWithSession(session: RealtimeSession): Promise<void> {
     const sessionKey = this.buildSessionKey(session);
@@ -354,6 +408,7 @@ export class DixitRealtime {
   // Registra todos los listeners websocket y traduce cada evento del backend al
   // estado reactivo que consume el frontend.
   private attachSocketListeners(socket: SocketIoClient, session: RealtimeSession): void {
+    // --- Estado de conexion del socket ---
     socket.on('connect', () => {
       if (this.socket !== socket) {
         return;
@@ -409,6 +464,7 @@ export class DixitRealtime {
       this.debug('event server:error', payload);
     });
 
+    // --- Estado de lobby y recuperacion de sesion ---
     socket.on('server:lobby:state_updated', (payload: unknown) => {
       const nextLobbyState = this.normalizeLobbyState(payload, session.lobbyCode);
       if (!nextLobbyState) {
@@ -441,6 +497,7 @@ export class DixitRealtime {
       });
     });
 
+    // --- Flujo principal de ronda y chat ---
     const handlePrivateHand = (payload: unknown): void => {
       this.handlePrivateHand(payload, session.lobbyCode);
     };
@@ -456,6 +513,7 @@ export class DixitRealtime {
       this.debug('event server:game:special_event', payload);
     });
 
+    // --- Conflictos 1 vs 1: duelo disponible y minijuego activo ---
     socket.on('server:game:duel_available', (payload: unknown) => {
       const challengerId = readString(asRecord(payload), 'challengerId');
       this.duelChallengeSignal.set({
@@ -468,6 +526,45 @@ export class DixitRealtime {
           : 'Duelo disponible. Elige un rival.'
       );
       this.debug('event server:game:duel_available', payload);
+    });
+
+    const handleMinigameStart = (payload: unknown, eventName: string): void => {
+      const minigame = this.normalizeMinigameStart(payload);
+      if (!minigame) {
+        return;
+      }
+
+      this.activeMinigameSignal.set(minigame);
+      this.duelChallengeSignal.set(null);
+      this.pushToast(
+        minigame.isDuel
+          ? `Duelo iniciado. Minijuego ${minigame.type}.`
+          : `Minijuego ${minigame.type} iniciado.`
+      );
+      this.debug(`event ${eventName}`, minigame);
+    };
+
+    const handleConflictCancelled = (payload: unknown, eventName: string): void => {
+      this.activeMinigameSignal.set(null);
+      this.duelChallengeSignal.set(null);
+      this.pushToast(this.resolveConflictCancelledMessage(payload));
+      this.debug(`event ${eventName}`, payload);
+    };
+
+    socket.on('server:game:minigame_start', (payload: unknown) => {
+      handleMinigameStart(payload, 'server:game:minigame_start');
+    });
+
+    socket.on('minigame_start', (payload: unknown) => {
+      handleMinigameStart(payload, 'minigame_start');
+    });
+
+    socket.on('server:game:conflict_cancelled', (payload: unknown) => {
+      handleConflictCancelled(payload, 'server:game:conflict_cancelled');
+    });
+
+    socket.on('CONFLICT_CANCELLED', (payload: unknown) => {
+      handleConflictCancelled(payload, 'CONFLICT_CANCELLED');
     });
 
     socket.on('server:game:deck_reshuffled', (payload: unknown) => {
@@ -483,6 +580,10 @@ export class DixitRealtime {
       this.handleGameEnded(payload);
     });
 
+    socket.on('server:economy:wallet_updated', (payload: unknown) => {
+      this.handleWalletUpdated(payload);
+    });
+
     socket.on('server:chat:message_received', (payload: unknown) => {
       const normalizedMessage = this.normalizeChatMessage(payload);
       if (!normalizedMessage) {
@@ -495,6 +596,7 @@ export class DixitRealtime {
       this.debug('event server:chat:message_received', normalizedMessage);
     });
 
+    // --- Inicio y recuperacion de partida ---
     socket.on('game:started', (payload: unknown) => {
       this.handleGameStarted(payload, 'game:started');
     });
@@ -515,6 +617,7 @@ export class DixitRealtime {
       this.handleLobbyRecovered(payload, session.lobbyCode);
     });
 
+    // --- Eventos transversales de sesion ---
     socket.on('server:force_disconnect', (payload: unknown) => {
       const message = this.resolveServerMessage(payload);
       this.lastErrorSignal.set(message);
@@ -543,8 +646,7 @@ export class DixitRealtime {
       this.debug('event opponent_disconnected', payload);
     });
 
-    // El backend puede emitir la estrella con o sin prefijo server:game:.
-    // Ambos caminos alimentan el mismo estado normalizado.
+    // --- Eventos especiales del tablero: estrella fugaz ---
     const handleStarSpawned = (payload: unknown, eventName: string): void => {
       const star = this.normalizeStarSpawn(payload);
       if (!star) {
@@ -593,7 +695,7 @@ export class DixitRealtime {
   }
 
   // Espera a que el socket confirme la conexión o falle por timeout/connect_error
-  // antes de dar por establecida la sesión realtime.
+  // antes de dar por establecida la sesion realtime.
   private waitForSocketConnection(socket: SocketIoClient): Promise<void> {
     if (socket.connected) {
       this.connectionStatusState.set('connected');
@@ -633,7 +735,7 @@ export class DixitRealtime {
     this.socket.emit(event, payload);
   }
 
-  // Convierte la respuesta REST de join en una sesión websocket lista para usar.
+  // Convierte la respuesta REST de join en una sesion websocket lista para usar.
   private buildSession(
     lobbyCode: string,
     response: LobbyJoinResponse
@@ -700,7 +802,7 @@ export class DixitRealtime {
     return session.ticket?.trim() || session.authToken?.trim() || '';
   }
 
-  // Si el join devuelve 404, asume que la sesión recuperada era obsoleta y limpia
+  // Si el join devuelve 404, asume que la sesion recuperada era obsoleta y limpia
   // el rastro local para no dejar al usuario atrapado en una partida inexistente.
   private handleJoinLobbyError(lobbyCode: string, error: unknown): void {
     if (!isApiRequestErrorStatus(error, 404)) {
@@ -915,6 +1017,8 @@ export class DixitRealtime {
     }
   }
 
+  // === Traduccion de eventos del servidor a estado frontend ===
+
   // Traduce el evento de inicio de partida a estado persistente y marca la sala
   // como juego activo dentro de Auth.
   private handleGameStarted(payload: unknown, eventName: string): void {
@@ -939,6 +1043,8 @@ export class DixitRealtime {
       });
     }
 
+    this.gameEndedSignal.set(null);
+    this.activeMinigameSignal.set(null);
     this.auth.setActiveGameId(lobbyCode);
     this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
     this.gameStartedSignal.set({
@@ -952,21 +1058,31 @@ export class DixitRealtime {
     });
   }
 
-  // Resuelve el fin de partida: emite mensaje final, limpia activeGameId y cierra
-  // la sesión realtime local.
+  // === Cierre de partida y economia ===
+
+  // Resuelve el fin de partida: conserva el ranking final, limpia la partida
+  // activa y deja la conexion viva el tiempo necesario para recibir el wallet.
+
   private handleGameEnded(payload: unknown): void {
+    const endedResult = this.normalizeGameEnded(payload);
     const message = this.resolveGameEndedMessage(payload);
 
-    this.gameStateSignal.update((currentState) => ({
-      state: currentState?.state ?? {},
+    this.gameEndedSignal.set(endedResult);
+    this.activeMinigameSignal.set(null);
+    this.duelChallengeSignal.set(null);
+    this.setGameState({
+      state: {
+        ...(this.gameStateSignal()?.state ?? {}),
+        phase: 'FINISHED',
+      },
       lastAction: 'GAME_ENDED',
       receivedAt: Date.now(),
-    }));
+    });
     this.auth.setActiveGameId(null);
     this.activeGameNoticeSignal.set('');
+    localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
     this.pushToast(message);
     this.debug('event game ended', payload);
-    this.disconnect(false);
   }
 
   // Construye un mensaje legible de fin de partida a partir del payload del servidor.
@@ -989,8 +1105,105 @@ export class DixitRealtime {
     return 'La partida ha terminado.';
   }
 
-  // Convierte los payloads heterogéneos de casillas/eventos especiales a un texto
-  // breve para el sistema de toast global.
+  // Aplica el saldo total enviado por el backend y lo replica en PlayerStore
+  // para mantener el widget global sincronizado.
+  private handleWalletUpdated(payload: unknown): void {
+    const wallet = this.normalizeWalletUpdated(payload);
+    if (!wallet) {
+      return;
+    }
+
+    this.walletUpdatedSignal.set(wallet);
+    this.playerStore.updateBalance(wallet.balance);
+    this.debug('event server:economy:wallet_updated', wallet);
+  }
+
+  // === Conflictos 1 vs 1 y minijuegos ===
+
+  private normalizeMinigameStart(payload: unknown): RealtimeMinigameStart | null {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    const type =
+      readNumber(wrappedData, 'type') ??
+      readNumber(wrappedData, 'minigameType') ??
+      readNumber(wrappedData, 'gameType');
+
+    if (type === null) {
+      return null;
+    }
+
+    return {
+      type,
+      isDuel:
+        readBoolean(wrappedData, 'isDuel') ??
+        readBoolean(wrappedData, 'duel') ??
+        false,
+      durationSeconds:
+        readNumber(wrappedData, 'durationSeconds') ??
+        readNumber(wrappedData, 'duration') ??
+        15,
+      receivedAt: Date.now(),
+    };
+  }
+
+  private resolveConflictCancelledMessage(payload: unknown): string {
+    const serverMessage = this.resolveServerMessage(payload);
+    if (serverMessage !== 'Se produjo un error en la conexion realtime') {
+      return serverMessage;
+    }
+
+    return 'El minijuego se ha cancelado.';
+  }
+
+  // === Normalizacion de cierre de partida ===
+
+  private normalizeGameEnded(payload: unknown): RealtimeGameEnded {
+    const data = asRecord(payload);
+    const rankingEntries = Array.isArray(data?.['ranking']) ? data['ranking'] : [];
+    const ranking = rankingEntries
+      .map((entry) => this.normalizeGameEndedRankingEntry(entry))
+      .filter((entry): entry is RealtimeGameEndedRankingEntry => entry !== null)
+      .sort((left, right) => left.place - right.place);
+
+    return {
+      ranking,
+      error: readString(data, 'error') ?? undefined,
+      receivedAt: Date.now(),
+    };
+  }
+
+  private normalizeGameEndedRankingEntry(entry: unknown): RealtimeGameEndedRankingEntry | null {
+    const data = asRecord(entry);
+    const playerId = readString(data, 'playerId');
+    const points = readNumber(data, 'points');
+    const place = readNumber(data, 'place');
+    const coinsEarned = readNumber(data, 'coinsEarned');
+
+    if (!playerId || points === null || place === null || coinsEarned === null) {
+      return null;
+    }
+
+    return {
+      playerId,
+      points,
+      place,
+      coinsEarned,
+    };
+  }
+
+  private normalizeWalletUpdated(payload: unknown): RealtimeWalletUpdated | null {
+    const data = asRecord(payload);
+    const balance = readNumber(data, 'balance');
+    if (balance === null) {
+      return null;
+    }
+
+    return {
+      balance,
+      receivedAt: Date.now(),
+    };
+  }
+
   private resolveSpecialEventMessage(payload: unknown): string {
     const data = asRecord(payload);
     const effect = readString(data, 'effect');
@@ -1038,7 +1251,7 @@ export class DixitRealtime {
     });
   }
 
-  // Garantiza que las llamadas REST previas al websocket tengan token de sesión.
+  // Garantiza que las llamadas REST previas al websocket tengan token de sesion.
   private requireToken(): string {
     const token = this.auth.token();
     if (!token) {
@@ -1048,7 +1261,7 @@ export class DixitRealtime {
     return token;
   }
 
-  // Garantiza que existe una sesión realtime antes de emitir acciones por socket.
+  // Garantiza que existe una sesion realtime antes de emitir acciones por socket.
   private requireSession(): RealtimeSession {
     const session = this.sessionState();
     if (!session) {
@@ -1068,7 +1281,7 @@ export class DixitRealtime {
     return normalizedLobbyCode;
   }
 
-  // Genera una huella de sesión para saber cuándo dos intentos de conexión apuntan
+  // Genera una huella de sesion para saber cuándo dos intentos de conexión apuntan
   // exactamente al mismo contexto websocket.
   private buildSessionKey(session: RealtimeSession): string {
     return [
@@ -1180,7 +1393,7 @@ export class DixitRealtime {
 
   private normalizeStarClaim(payload: unknown): RealtimeStarClaim | null {
     // newScores llega como diccionario abierto. Filtramos solo números finitos
-    // para no contaminar el marcador local con valores inválidos.
+    // para no contaminar el marcador local con valores invalidos.
     const data = asRecord(payload);
     if (!data) {
       return null;
@@ -1221,7 +1434,7 @@ export class DixitRealtime {
     return Math.max(0, Math.min(100, value));
   }
 
-  // Restaura una sesión websocket persistida en localStorage si sigue teniendo
+  // Restaura una sesion websocket persistida en localStorage si sigue teniendo
   // la estructura mínima necesaria para reconectar.
   private restoreSession(): RealtimeSession | null {
     try {
@@ -1302,7 +1515,7 @@ export class DixitRealtime {
     }
   }
 
-  // Persiste solo la parte de sesión que sirve para reconectar en futuros refresh.
+  // Persiste solo la parte de sesion que sirve para reconectar en futuros refresh.
   private persistSession(session: RealtimeSession): void {
     if (!session.ticket) {
       localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
@@ -1387,3 +1600,18 @@ function readNumber(
   const value = source[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
+
+function readBoolean(
+  source: Record<string, unknown> | null | undefined,
+  key: string
+): boolean | null {
+  if (!source) {
+    return null;
+  }
+
+  const value = source[key];
+  return typeof value === 'boolean' ? value : null;
+}
+
+
+

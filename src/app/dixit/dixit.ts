@@ -10,10 +10,14 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   RealtimeDuelChallenge,
+  RealtimeGameEnded,
+  RealtimeGameEndedRankingEntry,
   RealtimeGameStateUpdate,
   RealtimeLobbyState,
+  RealtimeMinigameStart,
   RealtimeStarClaim,
   RealtimeStarSpawn,
+  RealtimeWalletUpdated,
 } from '../interfaces/dixit-realtime';
 import { Auth } from '../services/auth';
 import { CardPull } from '../services/card-pull';
@@ -29,7 +33,7 @@ import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 import { DixitPointsPhase } from './phases/points-phase';
 import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
 
-type DixitPhase = 'hand' | 'choice' | 'points';
+type DixitPhase = 'hand' | 'choice' | 'points' | 'finished';
 type PointsStage = 'waiting' | 'reveal' | 'ranking';
 
 interface PhaseStep {
@@ -65,6 +69,11 @@ interface RoundVoteEntry {
   targetCardCode: string;
 }
 
+interface FinalRankingRow extends RealtimeGameEndedRankingEntry {
+  playerName: string;
+  isCurrentPlayer: boolean;
+}
+
 const PHASE_STEPS: readonly PhaseStep[] = [
   {
     id: 'hand',
@@ -80,6 +89,11 @@ const PHASE_STEPS: readonly PhaseStep[] = [
     id: 'points',
     title: 'Puntuacion',
     description: 'Espera el resultado del servidor y revisa la resolucion de la ronda.',
+  },
+  {
+    id: 'finished',
+    title: 'Fin de partida',
+    description: 'Consulta tu posicion final, las monedas ganadas y la clasificacion.',
   },
 ];
 
@@ -144,8 +158,13 @@ export class Dixit implements OnInit, OnDestroy {
   storySubmitted = false;
   currentPlayerPlayedCardCode = '';
   activeDuelChallenge: RealtimeDuelChallenge | null = null;
+  activeMinigame: RealtimeMinigameStart | null = null;
   activeStar: RealtimeStarSpawn | null = null;
   starWinnerLabel = '';
+  finalRanking: FinalRankingRow[] = [];
+  finalResultsError = '';
+  finalWalletBalance: number | null = null;
+  showFinalRanking = false;
 
   pointsVotesReceived = 0;
   pointsVotesTotal = 0;
@@ -163,6 +182,9 @@ export class Dixit implements OnInit, OnDestroy {
   private nextRoundTimerRoundNumber: number | null = null;
   private lastAppliedGameStateReceivedAt = 0;
   private lastAppliedStarClaimReceivedAt = 0;
+  private lastAppliedGameEndedReceivedAt = 0;
+  private lastAppliedWalletUpdatedAt = 0;
+  private gameEndRequested = false;
   starClaimSequence = 0;
 
   constructor() {
@@ -249,6 +271,22 @@ export class Dixit implements OnInit, OnDestroy {
     effect(
       () => {
         const activeLobbyCode = this.realtime.activeLobbyCode();
+        const activeMinigame = this.realtime.activeMinigame();
+        if (activeLobbyCode !== this.id) {
+          this.applyRealtimeMinigame(null);
+          this.cdr.detectChanges();
+          return;
+        }
+
+        this.applyRealtimeMinigame(activeMinigame);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
         const activeStar = this.realtime.activeStar();
         // La estrella es un efecto volátil de sala. Solo se pinta si corresponde
         // a la lobby activa que el componente está mostrando.
@@ -280,6 +318,34 @@ export class Dixit implements OnInit, OnDestroy {
       },
       { injector: this.injector }
     );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const gameEndedResult = this.realtime.gameEndedResult();
+        if (!gameEndedResult || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeGameEnded(gameEndedResult);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const walletUpdated = this.realtime.walletUpdated();
+        if (!walletUpdated || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeWalletUpdated(walletUpdated);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
   }
 
   async ngOnInit(): Promise<void> {
@@ -302,6 +368,21 @@ export class Dixit implements OnInit, OnDestroy {
       const currentActiveStar = this.realtime.activeStar();
       if (currentActiveStar && this.realtime.activeLobbyCode() === this.id) {
         this.activeStar = currentActiveStar;
+      }
+
+      const currentActiveMinigame = this.realtime.activeMinigame();
+      if (this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeMinigame(currentActiveMinigame);
+      }
+
+      const currentGameEnded = this.realtime.gameEndedResult();
+      if (currentGameEnded && this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeGameEnded(currentGameEnded);
+      }
+
+      const currentWalletUpdated = this.realtime.walletUpdated();
+      if (currentWalletUpdated && this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeWalletUpdated(currentWalletUpdated);
       }
 
       this.ownedCards = await this.cardPull.getCards(this.maxPlayersPerMatch);
@@ -346,6 +427,10 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   get currentPhaseInstruction(): string {
+    if (this.phase === 'finished') {
+      return 'La partida ha terminado. Revisa tu posicion final y tus monedas.';
+    }
+
     if (this.phase === 'hand') {
       if (!this.currentClue.trim()) {
         return this.isCurrentPlayerStoryteller
@@ -505,6 +590,22 @@ export class Dixit implements OnInit, OnDestroy {
     return !!this.activeStar && this.realtime.connectionStatus() === 'connected';
   }
 
+  get currentPlayerFinalResult(): FinalRankingRow | null {
+    return this.finalRanking.find((entry) => entry.playerId === this.currentUserId) ?? null;
+  }
+
+  get hasFinalRanking(): boolean {
+    return this.finalRanking.length > 0;
+  }
+
+  get finalOverlayTitle(): string {
+    if (this.currentPlayerFinalResult) {
+      return `${this.formatPlace(this.currentPlayerFinalResult.place)} puesto`;
+    }
+
+    return 'Partida finalizada';
+  }
+
   private bootstrapFallbackRoster(): void {
     const fallbackPlayers: RosterPlayer[] = [
       {
@@ -553,6 +654,13 @@ export class Dixit implements OnInit, OnDestroy {
       }
     }
 
+    if (this.finalRanking.length > 0) {
+      this.finalRanking = this.finalRanking.map((entry) => ({
+        ...entry,
+        playerName: this.resolvePlayerName(entry.playerId),
+      }));
+    }
+
     this.boardTokens = this.buildBoardTokensFromScores();
   }
 
@@ -585,6 +693,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.roundNumber = nextRoundNumber;
     this.lastAppliedGameStateReceivedAt = update.receivedAt;
     this.resetPhasePresentationState(previousPhase, previousRoundNumber);
+    this.syncFinishedPresentationState();
     this.currentClue =
       this.readStringFromCandidates(currentRoundState, ['currentClue', 'clue', 'story', 'hint']) ??
       this.readStringFromCandidates(state, ['currentClue', 'clue', 'story', 'hint']) ??
@@ -605,6 +714,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
     this.logStorytellerResolution(state, currentRoundState, update.lastAction);
     this.syncRealtimePhaseTimers();
+    this.requestGameEndIfNeeded();
 
     this.loading = false;
     this.errorMessage = '';
@@ -655,6 +765,41 @@ export class Dixit implements OnInit, OnDestroy {
     this.selectedChoiceCardCode = '';
     this.voteSubmitted = false;
     this.currentPlayerPlayedCardCode = '';
+  }
+
+  private syncFinishedPresentationState(): void {
+    if (this.phase === 'finished') {
+      this.showFinalRanking = false;
+      return;
+    }
+
+    this.gameEndRequested = false;
+    this.finalRanking = [];
+    this.finalResultsError = '';
+    this.finalWalletBalance = null;
+    this.showFinalRanking = false;
+    this.lastAppliedGameEndedReceivedAt = 0;
+    this.lastAppliedWalletUpdatedAt = 0;
+    this.realtime.clearGameEndedResult();
+  }
+
+  private requestGameEndIfNeeded(): void {
+    if (
+      this.phase !== 'finished' ||
+      this.gameEndRequested ||
+      this.gameEnded ||
+      this.realtime.connectionStatus() !== 'connected'
+    ) {
+      return;
+    }
+
+    try {
+      this.realtime.endGame();
+      this.gameEndRequested = true;
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo solicitar el cierre de la partida';
+    }
   }
 
   private applyRealtimePlayers(state: Record<string, unknown>): void {
@@ -816,6 +961,30 @@ export class Dixit implements OnInit, OnDestroy {
     previousPointsByPlayer: Map<string, number>
   ): void {
     // Rehidrata la fase de scoring usando la verdad del backend: votos, reveal y scores.
+    const ranking = this.normalizeRanking(
+      this.readArrayFromCandidates(state, ['ranking', 'scoreboard'])
+    );
+    const scoresRanking =
+      ranking.length > 0
+        ? ranking
+        : this.buildRankingFromScores(state, previousPointsByPlayer);
+
+    if (this.phase !== 'points') {
+      this.pointsVotesReceived = 0;
+      this.pointsVotesTotal = 0;
+      this.pointsRevealedCards = [];
+      this.pointsRanking = [];
+
+      if (scoresRanking.length > 0) {
+        for (const row of scoresRanking) {
+          this.pointsByPlayer.set(row.playerId, row.totalPoints);
+        }
+        this.boardTokens = this.buildBoardTokensFromScores();
+      }
+
+      return;
+    }
+
     const roundVotes = this.normalizeRoundVotes(currentRoundState);
     this.pointsVotesReceived =
       roundVotes.length > 0
@@ -836,14 +1005,6 @@ export class Dixit implements OnInit, OnDestroy {
     if (roundRevealCards.length > 0) {
       this.pointsRevealedCards = roundRevealCards;
     }
-
-    const ranking = this.normalizeRanking(
-      this.readArrayFromCandidates(state, ['ranking', 'scoreboard'])
-    );
-    const scoresRanking =
-      ranking.length > 0
-        ? ranking
-        : this.buildRankingFromScores(state, previousPointsByPlayer);
     if (scoresRanking.length > 0) {
       this.pointsRanking = scoresRanking;
       if (this.pointsStage === 'ranking') {
@@ -978,6 +1139,10 @@ export class Dixit implements OnInit, OnDestroy {
       return resolvedPhaseFromState;
     }
 
+    if (normalizedAction.includes('ended') || normalizedAction.includes('finish')) {
+      return { phase: 'finished', pointsStage: 'ranking' };
+    }
+
     if (
       normalizedAction.includes('vote')
     ) {
@@ -1011,6 +1176,10 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (this.phaseMatches(normalizedPhase, ['ranking', 'rank'])) {
       return { phase: 'points', pointsStage: 'ranking' };
+    }
+
+    if (this.phaseMatches(normalizedPhase, ['finished', 'finish', 'ended', 'end'])) {
+      return { phase: 'finished', pointsStage: 'ranking' };
     }
 
     if (
@@ -1528,6 +1697,19 @@ export class Dixit implements OnInit, OnDestroy {
     void this.router.navigate(['/games']);
   }
 
+  toggleFinalRanking(): void {
+    if (!this.hasFinalRanking) {
+      return;
+    }
+
+    this.showFinalRanking = !this.showFinalRanking;
+  }
+
+  returnToGames(): void {
+    this.realtime.disconnect(false);
+    void this.router.navigate(['/games']);
+  }
+
   goToProfile(): void {
     void this.router.navigate(['/profile']);
   }
@@ -1544,6 +1726,40 @@ export class Dixit implements OnInit, OnDestroy {
     this.isSimulationDrawerOpen = false;
   }
 
+  private applyRealtimeMinigame(minigame: RealtimeMinigameStart | null): void {
+    this.activeMinigame = minigame;
+
+    if (!minigame) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      return;
+    }
+
+    this.activeDuelChallenge = null;
+    switch (this.resolveMinigameView(minigame.type)) {
+      case 2:
+        this.isMinigame2Open = true;
+        this.isMinigame1Open = false;
+        break;
+      case 1:
+      default:
+        this.isMinigame1Open = true;
+        this.isMinigame2Open = false;
+        break;
+    }
+  }
+
+  private resolveMinigameView(minigameType: number): 1 | 2 {
+    switch (minigameType) {
+      case 1:
+        return 2;
+      case 0:
+      case 2:
+      default:
+        return 1;
+    }
+  }
+
   openMinigame1(): void {
     this.isMinigame1Open = true;
     this.isMinigame2Open = false;
@@ -1551,6 +1767,10 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   closeMinigame1(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
     this.isMinigame1Open = false;
   }
 
@@ -1561,6 +1781,10 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   closeMinigame2(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
     this.isMinigame2Open = false;
   }
 
@@ -1990,12 +2214,51 @@ export class Dixit implements OnInit, OnDestroy {
     this.boardTokens = this.buildBoardTokensFromScores();
   }
 
+  private applyRealtimeGameEnded(gameEndedResult: RealtimeGameEnded): void {
+    if (gameEndedResult.receivedAt <= this.lastAppliedGameEndedReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedGameEndedReceivedAt = gameEndedResult.receivedAt;
+    this.phase = 'finished';
+    this.gameEnded = true;
+    this.gameEndRequested = true;
+    this.finalRanking = gameEndedResult.ranking.map((entry) => ({
+      ...entry,
+      playerName: this.resolvePlayerName(entry.playerId),
+      isCurrentPlayer: entry.playerId === this.currentUserId,
+    }));
+    this.finalResultsError = gameEndedResult.error ?? '';
+    this.showFinalRanking = false;
+  }
+
+  private applyRealtimeWalletUpdated(walletUpdated: RealtimeWalletUpdated): void {
+    if (walletUpdated.receivedAt <= this.lastAppliedWalletUpdatedAt) {
+      return;
+    }
+
+    this.lastAppliedWalletUpdatedAt = walletUpdated.receivedAt;
+    this.finalWalletBalance = walletUpdated.balance;
+  }
+
   private resolvePlayerName(playerId: string): string {
     if (!playerId.trim()) {
       return '';
     }
 
     return this.playerRoster.find((player) => player.id === playerId)?.name ?? playerId;
+  }
+
+  formatPlace(place: number): string {
+    if (place === 1) {
+      return '1er';
+    }
+
+    if (place === 3) {
+      return '3er';
+    }
+
+    return `${place}º`;
   }
 
   private clearStarWinnerTimer(): void {

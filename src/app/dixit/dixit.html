@@ -57,7 +57,7 @@
               (rankingRequested)="simulateRankingShown()"
               (nextRoundRequested)="requestNextRound()"
             />
-          } @else {
+          } @else if (phase === 'hand') {
             <app-dixit-hand-phase
               [currentClue]="currentClue"
               [cards]="cards"
@@ -82,6 +82,10 @@
               (chatDraftChanged)="updateChatDraft($event)"
               (chatSubmitRequested)="submitChatMessage()"
             />
+          } @else {
+            <article class="status-card">
+              <p>La partida ha terminado. Abre el resumen final para revisar tu resultado.</p>
+            </article>
           }
         </div>
 
@@ -163,6 +167,80 @@
           <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
             Continuar
           </button>
+        </article>
+      </div>
+    }
+
+    @if (phase === 'finished') {
+      <div class="final-results-backdrop">
+        <article
+          class="final-results-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="final-results-title"
+        >
+          <p class="overlay-label">Fin de partida</p>
+          <h2 id="final-results-title">{{ finalOverlayTitle }}</h2>
+
+          @if (currentPlayerFinalResult; as result) {
+            <div class="final-results-hero">
+              <div class="final-results-stat">
+                <span class="final-results-stat-label">Puesto</span>
+                <strong>{{ formatPlace(result.place) }}</strong>
+              </div>
+              <div class="final-results-stat">
+                <span class="final-results-stat-label">Monedas ganadas</span>
+                <strong>+{{ result.coinsEarned }}</strong>
+              </div>
+              <div class="final-results-stat muted">
+                <span class="final-results-stat-label">Puntos</span>
+                <strong>{{ result.points }}</strong>
+              </div>
+            </div>
+          } @else {
+            <p class="final-results-copy">
+              Esperando a que el servidor termine de publicar tu resultado final.
+            </p>
+          }
+
+          @if (finalWalletBalance !== null) {
+            <p class="final-results-wallet">Saldo total actualizado: {{ finalWalletBalance }} monedas.</p>
+          }
+
+          @if (finalResultsError) {
+            <p class="final-results-error">
+              Se termino la partida, pero hubo un problema al guardar las estadisticas: {{ finalResultsError }}
+            </p>
+          }
+
+          <div class="final-results-actions">
+            <button
+              type="button"
+              class="secondary-action"
+              [disabled]="!hasFinalRanking"
+              (click)="toggleFinalRanking()"
+            >
+              {{ showFinalRanking ? 'Ocultar clasificacion' : 'Ver clasificacion' }}
+            </button>
+            <button type="button" class="sidebar-action" (click)="returnToGames()">
+              Ir al inicio
+            </button>
+          </div>
+
+          @if (showFinalRanking) {
+            <div class="final-ranking-list" aria-label="Clasificacion final">
+              @for (entry of finalRanking; track entry.playerId) {
+                <article class="final-ranking-row" [class.current-player]="entry.isCurrentPlayer">
+                  <div class="final-ranking-place">{{ formatPlace(entry.place) }}</div>
+                  <div class="final-ranking-main">
+                    <strong>{{ entry.playerName }}</strong>
+                    <span>{{ entry.points }} puntos</span>
+                  </div>
+                  <div class="final-ranking-coins">+{{ entry.coinsEarned }}</div>
+                </article>
+              }
+            </div>
+          }
         </article>
       </div>
     }

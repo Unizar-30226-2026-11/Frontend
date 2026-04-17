@@ -23,7 +23,7 @@ type MoleVariant = 'normal' | 'gold';
           <div class="minigame-copy">
             <p class="eyebrow">Minijuego 1</p>
             <h2 id="minigame-1-title">Golpea al topo</h2>
-            <p>Tienes 30 segundos. Cada topo acertado suma 1 punto.</p>
+            <p>Tienes 15 segundos. Cada topo acertado suma 1 punto.</p>
           </div>
 
           <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
