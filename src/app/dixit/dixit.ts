@@ -805,6 +805,8 @@ export class Dixit implements OnInit, OnDestroy {
   private applyRealtimePlayers(state: Record<string, unknown>): void {
     // Algunos payloads repiten datos de jugadores dentro del state público.
     // Si existen, se priorizan para mantener nombres/ids coherentes con backend.
+    const shouldApplyRealtimeScores =
+      this.phase !== 'points' || this.pointsStage === 'ranking';
     const playerEntries = this.readArrayFromCandidates(state, ['players', 'participants']);
     if (!playerEntries.length) {
       this.boardTokens = this.buildBoardTokensFromScores();
@@ -833,7 +835,11 @@ export class Dixit implements OnInit, OnDestroy {
         this.readNumber(entry, ['score', 'points', 'totalPoints']) ??
         this.readNumber(asRecord(entry['stats']) ?? {}, ['score', 'points', 'totalPoints']);
 
-      this.pointsByPlayer.set(playerId, score ?? this.pointsByPlayer.get(playerId) ?? 0);
+      if (shouldApplyRealtimeScores) {
+        this.pointsByPlayer.set(playerId, score ?? this.pointsByPlayer.get(playerId) ?? 0);
+      } else if (!this.pointsByPlayer.has(playerId)) {
+        this.pointsByPlayer.set(playerId, score ?? 0);
+      }
     }
 
     if (resolvedRoster.length > 0) {

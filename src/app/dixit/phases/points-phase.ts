@@ -31,7 +31,7 @@ export interface DixitRankingRow {
       />
 
       @if (waitingVotes) {
-        <div class="waiting-block">
+        <div class="waiting-block stage-panel">
           <h3>Esperando votos...</h3>
           <p>{{ votesReceived }} / {{ votesTotal }} jugadores han votado</p>
           <progress [value]="votesReceived" [max]="votesTotal || 1"></progress>
@@ -40,11 +40,11 @@ export interface DixitRankingRow {
           </div>
         </div>
       } @else if (!showRanking) {
-        <div class="reveal-block">
+        <div class="reveal-block stage-panel">
           <h3>Cartas reveladas</h3>
           <div class="reveal-grid">
-            @for (result of revealedCards; track result.card.code) {
-              <article class="reveal-card">
+            @for (result of revealedCards; track result.card.code; let cardIndex = $index) {
+              <article class="reveal-card" [style.--reveal-index]="cardIndex">
                 <img
                   draggable="false"
                   [src]="result.card.image"
@@ -58,7 +58,7 @@ export interface DixitRankingRow {
           <button type="button" (click)="rankingRequested.emit()">Ver clasificacion</button>
         </div>
       } @else {
-        <div class="ranking-block">
+        <div class="ranking-block stage-panel">
           <h3>Clasificacion</h3>
           <table>
             <thead>
@@ -118,6 +118,11 @@ export interface DixitRankingRow {
       box-sizing: border-box;
     }
 
+    .stage-panel {
+      animation: stage-panel-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      transform-origin: top center;
+    }
+
     h3 {
       margin-top: 0;
       margin-bottom: 10px;
@@ -141,10 +146,15 @@ export interface DixitRankingRow {
     }
 
     .reveal-card {
+      --reveal-index: 0;
       background: rgba(0, 0, 0, 0.18);
       border-radius: 10px;
       padding: 8px;
       text-align: center;
+      opacity: 0;
+      transform: translateY(14px) scale(0.98);
+      animation: reveal-card-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      animation-delay: calc(var(--reveal-index) * 70ms);
     }
 
     .reveal-card img {
@@ -192,6 +202,30 @@ export interface DixitRankingRow {
 
     tbody tr:last-child td {
       border-bottom: 0;
+    }
+
+    @keyframes stage-panel-enter {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.985);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes reveal-card-enter {
+      from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.98);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
   `,
 })

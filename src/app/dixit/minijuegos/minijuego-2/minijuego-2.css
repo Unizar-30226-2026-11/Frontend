@@ -9,6 +9,7 @@
   position: absolute;
   inset: 0;
   display: grid;
+  overflow: auto;
   place-items: center;
   padding: 24px;
   background: rgba(8, 12, 20, 0.68);

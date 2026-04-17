@@ -162,6 +162,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
               maxlength="255"
               [value]="chat.draft"
               (input)="onChatDraftChanged($event)"
+              (keydown)="onChatComposerKeydown($event)"
               placeholder="Escribe al lobby"
             />
             <button
@@ -317,6 +318,10 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       color: #1d2430;
     }
 
+    p {
+      user-select: none;
+    }
+  
     .clue-copy {
       display: grid;
       gap: 12px;
@@ -556,11 +561,15 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
     .cards-column {
       display: flex;
+      width: 100%;
+      flex: 1 1 auto;
       height: var(--support-panel-height);
       min-height: 0;
     }
 
     .cards-panel {
+      width: 100%;
+      flex: 1 1 auto;
       height: 100%;
       min-height: 0;
       box-sizing: border-box;
@@ -603,10 +612,12 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
     }
 
     .hand-cards {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(94px, 1fr));
       gap: 12px;
-      overflow-x: auto;
+      width: 100%;
       padding-bottom: 6px;
+      align-items: start;
     }
 
     .hand-empty-state {
@@ -628,8 +639,9 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
     }
 
     .hand-card {
-      width: clamp(94px, 10vw, 120px);
-      flex: 0 0 auto;
+      width: 100%;
+      max-width: 120px;
+      justify-self: center;
       appearance: none;
       background: transparent;
       border: 0;
@@ -734,6 +746,10 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
         grid-template-columns: 1fr;
       }
 
+      .hand-cards {
+        grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+      }
+
       .board-overlay-shell {
         width: 100%;
       }
@@ -805,6 +821,20 @@ export class DixitHandPhase {
     }
 
     this.chatDraftChanged.emit(target.value.slice(0, 255));
+  }
+
+  onChatComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.code !== 'Enter' && event.code !== 'NumpadEnter') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.chat.canSend) {
+      return;
+    }
+
+    this.chatSubmitRequested.emit();
   }
 
   onHandCardDragStart(card: DeckCard, event?: DragEvent): void {

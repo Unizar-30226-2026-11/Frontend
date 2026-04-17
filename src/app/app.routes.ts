@@ -11,6 +11,7 @@ import { Dixit } from './dixit/dixit';
 import { DixitStella } from './dixit-stella/dixit-stella';
 import { Login } from './login/login';
 import { Profile } from './profile/profile';
+import { DixitTestShell } from './test/dixit/dixit-test-shell';
 import { StarTest } from './test/star/star-test';
 import { Auth } from './services/auth';
 
@@ -112,6 +113,16 @@ export const routes: Routes = [
         path: 'profile',
         title: 'Profile',
         component: Profile,
+    },
+    {
+        path: 'test/dixit',
+        pathMatch: 'full',
+        redirectTo: 'test/dixit/TEST-DIXIT',
+    },
+    {
+        path: 'test/dixit/:id',
+        title: 'Dixit Test',
+        component: DixitTestShell,
     },
     {
         path: 'test/star',

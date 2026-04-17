@@ -42,6 +42,7 @@
             [style.top.%]="anchor.y"
             [style.--offset-x.px]="anchor.offsetX"
             [style.--offset-y.px]="anchor.offsetY"
+            [style.--move-duration.ms]="token.transitionDurationMs"
             (click)="onTokenSelected(token.id)"
           >
             <img draggable="false" [src]="token.image" [alt]="'Ficha ' + token.name" />

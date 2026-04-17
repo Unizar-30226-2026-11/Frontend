@@ -43,6 +43,7 @@ interface TokenAnchor {
 
 interface InternalTrackToken extends TrackBoardToken {
   image: string;
+  transitionDurationMs: number;
 }
 
 export interface TrackBoardToken {
@@ -72,6 +73,9 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
   ];
   private readonly moveTimers: ReturnType<typeof setTimeout>[] = [];
   private readonly movingTokenIds = new Set<string>();
+  private readonly manualMoveDurationMs = 240;
+  private readonly externalMoveStepDurationMs = 460;
+  private readonly externalMoveStepIntervalMs = 520;
 
   boardCells: TrackCell[] = [];
   internalTokens: InternalTrackToken[] = [];
@@ -95,7 +99,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     }
 
     if (changes['tokens'] || changes['cellPath']) {
-      this.internalTokens = this.buildInternalTokens(this.tokens);
+      this.syncTokensFromInputs(this.tokens);
       if (!this.internalTokens.some((token) => token.id === this.selectedTokenId)) {
         this.selectedTokenId = this.internalTokens[0]?.id ?? '';
       }
@@ -188,6 +192,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
         return {
           ...entry,
           position: (entry.position + 1) % this.boardCells.length,
+          transitionDurationMs: this.manualMoveDurationMs,
         };
       });
 
@@ -219,8 +224,8 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     );
   }
 
-  private buildInternalTokens(tokens: TrackBoardToken[]): InternalTrackToken[] {
-    return tokens.map((token) => {
+  private syncTokensFromInputs(tokens: TrackBoardToken[]): void {
+    const nextTokens = tokens.map((token) => {
       const tokenImage = token.image && token.image.trim().length > 0
         ? token.image
         : this.buildTokenImage(token.color, token.name.charAt(0).toUpperCase());
@@ -229,8 +234,99 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
         ...token,
         position: this.normalizePosition(token.position),
         image: tokenImage,
+        transitionDurationMs: this.manualMoveDurationMs,
       };
     });
+
+    if (this.internalTokens.length === 0 || this.boardCells.length === 0) {
+      this.internalTokens = nextTokens;
+      return;
+    }
+
+    const currentTokenIds = new Set(this.internalTokens.map((token) => token.id));
+    const nextTokenIds = new Set(nextTokens.map((token) => token.id));
+    const sameTokenSet =
+      currentTokenIds.size === nextTokenIds.size &&
+      Array.from(currentTokenIds).every((tokenId) => nextTokenIds.has(tokenId));
+
+    if (!sameTokenSet) {
+      this.internalTokens = nextTokens;
+      return;
+    }
+
+    const currentPositions = new Map(
+      this.internalTokens.map((token) => [token.id, token.position])
+    );
+    this.internalTokens = nextTokens.map((token) => ({
+      ...token,
+      position: currentPositions.get(token.id) ?? token.position,
+    }));
+
+    for (const token of nextTokens) {
+      const currentPosition = currentPositions.get(token.id);
+      if (
+        typeof currentPosition !== 'number' ||
+        currentPosition === token.position ||
+        this.movingTokenIds.has(token.id)
+      ) {
+        continue;
+      }
+
+      this.animateTokenToPosition(token.id, token.position, false);
+    }
+  }
+
+  private animateTokenToPosition(
+    tokenId: string,
+    targetPosition: number,
+    emitChanges: boolean
+  ): void {
+    if (this.boardCells.length === 0) {
+      return;
+    }
+
+    const token = this.internalTokens.find((entry) => entry.id === tokenId);
+    if (!token || token.position === targetPosition) {
+      return;
+    }
+
+    this.movingTokenIds.add(tokenId);
+    this.cdr.markForCheck();
+
+    const walk = (): void => {
+      const activeToken = this.internalTokens.find((entry) => entry.id === tokenId);
+      if (!activeToken) {
+        this.movingTokenIds.delete(tokenId);
+        return;
+      }
+
+      if (activeToken.position === targetPosition) {
+        this.movingTokenIds.delete(tokenId);
+        if (emitChanges) {
+          this.emitTokensChanged();
+        }
+        this.cdr.markForCheck();
+        return;
+      }
+
+      this.internalTokens = this.internalTokens.map((entry) => {
+        if (entry.id !== tokenId) {
+          return entry;
+        }
+
+        return {
+          ...entry,
+          position: (entry.position + 1) % this.boardCells.length,
+          transitionDurationMs: this.externalMoveStepDurationMs,
+        };
+      });
+      this.cdr.markForCheck();
+
+      const timer = setTimeout(walk, this.externalMoveStepIntervalMs);
+      this.moveTimers.push(timer);
+    };
+
+    walk();
   }
 
   private normalizePosition(position: number): number {

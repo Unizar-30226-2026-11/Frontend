@@ -45,6 +45,7 @@ export class App {
 
     if (
       currentPath.startsWith('/dixit/') ||
+      currentPath.startsWith('/test/dixit') ||
       currentPath.startsWith('/dixit-stella/') ||
       currentPath === '/stella-test'
     ) {
@@ -59,7 +60,7 @@ export class App {
       return false;
     }
 
-    return !this.currentPath().startsWith('/dixit/');
+    return !this.currentPath().startsWith('/dixit/') && !this.currentPath().startsWith('/test/dixit');
   }
 
   activeGameBannerMessage(): string {
