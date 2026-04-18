@@ -11,15 +11,16 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Game } from '../interfaces/game';
 import { RealtimeLobbyPlayer, RealtimeLobbyState } from '../interfaces/dixit-realtime';
-import { CardCollectionWithCards, CollectionsPull } from '../services/collections-pull';
 import { Auth } from '../services/auth';
+import { CardPull } from '../services/card-pull';
+import type { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 const LOBBY_MIN_PLAYERS = 3;
 
-interface MenuCollectionCard {
+interface MenuUserCard {
   id: string;
   title: string;
   imageUrl: string;
@@ -31,7 +32,7 @@ interface MenuCardCollection {
   name: string;
   total: number;
   collected: number;
-  cards: MenuCollectionCard[];
+  cards: MenuUserCard[];
   expanded: boolean;
 }
 
@@ -62,7 +63,7 @@ interface RoomSlot {
 
         <div class="cards-scroll">
           @if (cardsLoading) {
-            <p class="cards-status">Cargando colecciones...</p>
+            <p class="cards-status">Cargando cartas...</p>
           } @else if (cardsError) {
             <p class="cards-status">{{ cardsError }}</p>
           } @else if (collections.length === 0) {
@@ -270,7 +271,7 @@ export class MainMenu implements OnInit {
   ];
 
   constructor(
-    private readonly collectionsPull: CollectionsPull,
+    private readonly cardPull: CardPull,
     private readonly cdr: ChangeDetectorRef
   ) {
     effect(
@@ -449,7 +450,7 @@ export class MainMenu implements OnInit {
         void this.loadLobby(lobbyCode);
       });
 
-    await this.loadCollections();
+    await this.loadCards();
   }
 
   get currentCommunityCard(): CommunityCard {
@@ -481,25 +482,19 @@ export class MainMenu implements OnInit {
     this.toggleReadyState();
   }
 
-  private async loadCollections(): Promise<void> {
+  private async loadCards(): Promise<void> {
     this.cardsLoading = true;
     this.cardsError = '';
 
     try {
-      const collections = await this.collectionsPull.getCollectionsWithCards();
-      this.collections = this.toMenuCollections(collections);
-      this.collectedCards = this.collections.reduce(
-        (total, collection) => total + collection.collected,
-        0
-      );
-      this.totalCards = this.collections.reduce(
-        (total, collection) => total + collection.total,
-        0
-      );
+      const cards = await this.cardPull.getCards(undefined, { forceRefresh: true });
+      this.collections = this.toMenuCollections(cards);
+      this.collectedCards = cards.length;
+      this.totalCards = cards.length;
     } catch (error) {
-      console.error('[MainMenu] Error al cargar colecciones:', error);
+      console.error('[MainMenu] Error al cargar cartas:', error);
       this.cardsError =
-        error instanceof Error ? error.message : 'No se pudieron cargar las colecciones';
+        error instanceof Error ? error.message : 'No se pudieron cargar las cartas';
       this.collections = [];
       this.collectedCards = 0;
       this.totalCards = 0;
@@ -617,22 +612,28 @@ export class MainMenu implements OnInit {
     return [...occupiedSlots, ...freeSlots];
   }
 
-  private toMenuCollections(
-    collections: CardCollectionWithCards[]
-  ): MenuCardCollection[] {
-    return collections.map((collection) => ({
-      id: collection.id,
-      name: collection.name,
-      total: collection.totalCards > 0 ? collection.totalCards : collection.cards.length,
-      collected: collection.cards.length,
-      cards: collection.cards.map((card) => ({
-        id: card.idCard,
-        title: card.title,
-        imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
-        locked: false,
-      })),
-      expanded: collection.cards.length > 0,
+  private toMenuCollections(cards: DeckCard[]): MenuCardCollection[] {
+    const resolvedCards: MenuUserCard[] = cards.map((card) => ({
+      id: card.code,
+      title: card.value,
+      imageUrl: card.image || DEFAULT_CARD_IMAGE,
+      locked: false,
     }));
+
+    if (resolvedCards.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        id: 'user-cards',
+        name: 'Tus cartas',
+        total: resolvedCards.length,
+        collected: resolvedCards.length,
+        cards: resolvedCards,
+        expanded: true,
+      },
+    ];
   }
 
   toggleCollection(collectionId: string): void {

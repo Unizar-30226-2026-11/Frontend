@@ -29,7 +29,7 @@ describe('CardPull', () => {
     apiClientSpy.request.and.resolveTo({
       cards: [
         { cardId: 'c_101', name: 'Dragon de Fuego' },
-        { cardId: 'c_102', name: 'Bosque Invertido', imageUrl: '/cards/c_102.png' },
+        { cardId: 'c_102', name: 'Bosque Invertido', url_image: '/cards/c_102.png' },
       ],
     });
 
@@ -54,6 +54,29 @@ describe('CardPull', () => {
         suit: 'DIXIT',
       },
     ]);
+  });
+
+  it('uses url_image from the backend when present', async () => {
+    apiClientSpy.request.and.resolveTo({
+      cards: [
+        {
+          cardId: 'c_85',
+          name: 'Deseos',
+          url_image:
+            'https://hmepdoxdbgqlodszvzkk.supabase.co/storage/v1/object/public/game-assets/cards/Mundos-Interiores/Deseos/Gemini_Generated_Image_4cteoi4cteoi4cte.png',
+        },
+      ],
+    });
+
+    const cards = await service.getCards();
+
+    expect(cards[0]).toEqual({
+      code: 'c_85',
+      image:
+        'https://hmepdoxdbgqlodszvzkk.supabase.co/storage/v1/object/public/game-assets/cards/Mundos-Interiores/Deseos/Gemini_Generated_Image_4cteoi4cteoi4cte.png',
+      value: 'Deseos',
+      suit: 'DIXIT',
+    });
   });
 
   it('limits API cards when a count is provided', async () => {

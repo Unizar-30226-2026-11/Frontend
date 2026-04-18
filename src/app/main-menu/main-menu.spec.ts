@@ -4,18 +4,15 @@ import { of } from 'rxjs';
 
 import { MainMenu } from './main-menu';
 import { Game } from '../interfaces/game';
-import {
-  CardCollectionWithCards,
-  CollectionsPull,
-} from '../services/collections-pull';
 import { Auth } from '../services/auth';
+import { CardPull } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 
 describe('MainMenu', () => {
   let component: MainMenu;
   let fixture: ComponentFixture<MainMenu>;
-  let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
+  let cardPullSpy: jasmine.SpyObj<CardPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
   let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
   let routerSpy: jasmine.SpyObj<Router>;
@@ -25,10 +22,8 @@ describe('MainMenu', () => {
   };
 
   beforeEach(async () => {
-    collectionsPullSpy = jasmine.createSpyObj<CollectionsPull>('CollectionsPull', [
-      'getCollectionsWithCards',
-    ]);
-    collectionsPullSpy.getCollectionsWithCards.and.resolveTo(createCollectionsFixture());
+    cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
+    cardPullSpy.getCards.and.resolveTo(createCardsFixture());
     gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', [
       'getGameDetails',
       'startLobby',
@@ -67,7 +62,7 @@ describe('MainMenu', () => {
     await TestBed.configureTestingModule({
       imports: [MainMenu],
       providers: [
-        { provide: CollectionsPull, useValue: collectionsPullSpy },
+        { provide: CardPull, useValue: cardPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
         { provide: DixitRealtime, useValue: realtimeSpy },
         { provide: Router, useValue: routerSpy },
@@ -91,19 +86,20 @@ describe('MainMenu', () => {
     expect(component).toBeTruthy();
   });
 
-  it('loads collections on init', () => {
-    expect(collectionsPullSpy.getCollectionsWithCards).toHaveBeenCalledTimes(1);
-    expect(component.collections.length).toBe(2);
+  it('loads user cards on init', () => {
+    expect(cardPullSpy.getCards).toHaveBeenCalledOnceWith(undefined, {
+      forceRefresh: true,
+    });
+    expect(component.collections.length).toBe(1);
     expect(component.collectedCards).toBe(3);
-    expect(component.totalCards).toBe(12);
+    expect(component.totalCards).toBe(3);
     expect(component.collections.every((collection) => collection.expanded)).toBeTrue();
   });
 
   it('toggles a collection accordion without affecting the others', () => {
-    component.toggleCollection('col_set1');
+    component.toggleCollection('user-cards');
 
     expect(component.collections[0].expanded).toBeFalse();
-    expect(component.collections[1].expanded).toBeTrue();
   });
 
   it('loads lobby players from the route id', () => {
@@ -184,46 +180,25 @@ describe('MainMenu', () => {
   });
 });
 
-function createCollectionsFixture(): CardCollectionWithCards[] {
+function createCardsFixture() {
   return [
     {
-      id: 'col_set1',
-      name: 'Set Inicial',
-      description: 'Coleccion base',
-      releaseDate: '2026-03-12',
-      totalCards: 10,
-      cards: [
-        {
-          idCard: 'col_set1_card_001',
-          idCollection: 'col_set1',
-          rarity: 'Rara',
-          title: 'Dragon de Fuego',
-          imageUrl: 'https://ejemplo.com/dragon-fuego.jpg',
-        },
-        {
-          idCard: 'col_set1_card_002',
-          idCollection: 'col_set1',
-          rarity: 'Comun',
-          title: 'Guardian del Lago',
-          imageUrl: 'https://ejemplo.com/guardian-lago.jpg',
-        },
-      ],
+      code: 'col_set1_card_001',
+      image: 'https://ejemplo.com/dragon-fuego.jpg',
+      value: 'Dragon de Fuego',
+      suit: 'DIXIT',
     },
     {
-      id: 'col_set2',
-      name: 'Set Avanzado',
-      description: 'Coleccion avanzada',
-      releaseDate: '2026-03-13',
-      totalCards: 2,
-      cards: [
-        {
-          idCard: 'col_set2_card_001',
-          idCollection: 'col_set2',
-          rarity: 'Epica',
-          title: 'Espectro Lunar',
-          imageUrl: 'https://ejemplo.com/espectro-lunar.jpg',
-        },
-      ],
+      code: 'col_set1_card_002',
+      image: 'https://ejemplo.com/guardian-lago.jpg',
+      value: 'Guardian del Lago',
+      suit: 'DIXIT',
+    },
+    {
+      code: 'col_set2_card_001',
+      image: 'https://ejemplo.com/espectro-lunar.jpg',
+      value: 'Espectro Lunar',
+      suit: 'DIXIT',
     },
   ];
 }

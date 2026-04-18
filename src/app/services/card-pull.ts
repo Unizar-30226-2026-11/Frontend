@@ -21,6 +21,7 @@ interface CardRecordApi {
   idCard?: unknown;
   id_card?: unknown;
   image?: unknown;
+  url_image?: unknown;
   image_url?: unknown;
   imageUrl?: unknown;
   name?: unknown;
@@ -89,7 +90,9 @@ export class CardPull {
 
     return {
       code,
-      image: this.readString(card, ['image', 'imageUrl', 'image_url', 'url']) ?? DEFAULT_CARD_IMAGE,
+      image:
+        this.readString(card, ['image', 'imageUrl', 'image_url', 'url_image', 'url']) ??
+        DEFAULT_CARD_IMAGE,
       value: this.readString(card, ['name', 'title', 'value']) ?? code,
       suit: this.readString(card, ['suit', 'collection']) ?? 'DIXIT',
     };
