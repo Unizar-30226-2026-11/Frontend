@@ -10,6 +10,7 @@ import {
   RealtimeGameStateUpdate,
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
+  RealtimePrivateHandEntry,
   RealtimePrivateHand,
   RealtimeDuelChallenge,
   RealtimeMinigameStart,
@@ -928,8 +929,8 @@ export class DixitRealtime {
     const data = asRecord(payload);
     const rawHand = data ? readArray(data, 'hand') : [];
     const hand = rawHand
-      .map((cardId) => this.normalizeCardId(cardId))
-      .filter((cardId): cardId is number | string => cardId !== null);
+      .map((entry) => this.normalizePrivateHandEntry(entry))
+      .filter((entry): entry is RealtimePrivateHandEntry => entry !== null);
 
     if (hand.length === 0) {
       return;
@@ -955,6 +956,32 @@ export class DixitRealtime {
     }
 
     return null;
+  }
+
+  private normalizePrivateHandEntry(value: unknown): RealtimePrivateHandEntry | null {
+    const normalizedCardId = this.normalizeCardId(value);
+    if (normalizedCardId !== null) {
+      return normalizedCardId;
+    }
+
+    const card = asRecord(value);
+    if (!card) {
+      return null;
+    }
+
+    const id =
+      this.normalizeCardId(card['id']) ??
+      this.normalizeCardId(card['cardId']) ??
+      this.normalizeCardId(card['card_id']) ??
+      this.normalizeCardId(card['code']);
+    if (id === null) {
+      return null;
+    }
+
+    return {
+      ...card,
+      id,
+    };
   }
 
   // Recupera el estado de partida incluido en session_recovered/server:session:recovered

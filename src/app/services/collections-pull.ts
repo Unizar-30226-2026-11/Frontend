@@ -21,10 +21,15 @@ interface CollectionRecordApi {
 }
 
 interface CardRecordApi {
+  id?: unknown;
   id_card?: unknown;
+  cardId?: unknown;
   id_collection?: unknown;
+  collection?: unknown;
   rarity?: unknown;
+  name?: unknown;
   title?: unknown;
+  url_image?: unknown;
 }
 
 export interface CardCollection {
@@ -40,6 +45,7 @@ export interface CollectionCard {
   idCollection: string;
   rarity: string;
   title: string;
+  imageUrl: string;
 }
 
 export interface CardCollectionWithCards extends CardCollection {
@@ -52,6 +58,7 @@ export interface CardCollectionWithCards extends CardCollection {
 export class CollectionsPull {
   private readonly apiClient = inject(ApiClient);
   private readonly auth = inject(Auth);
+  private readonly defaultImage = '/assets/Tablero.png';
 
   async getCollectionsWithCards(
     options: { forceRefresh?: boolean } = {}
@@ -120,7 +127,7 @@ export class CollectionsPull {
     const candidate = response.cards;
 
     if (Array.isArray(candidate)) {
-      return candidate as CardRecordApi[];
+      return this.flattenCardCandidates(candidate);
     }
 
     if (
@@ -128,10 +135,33 @@ export class CollectionsPull {
       candidate !== null &&
       Array.isArray((candidate as { cards?: unknown }).cards)
     ) {
-      return (candidate as { cards: CardRecordApi[] }).cards;
+      return this.flattenCardCandidates((candidate as { cards: unknown[] }).cards);
     }
 
     throw new Error('Formato de respuesta invalido para las cartas de la coleccion');
+  }
+
+  private flattenCardCandidates(cards: unknown[]): CardRecordApi[] {
+    const flattenedCards: CardRecordApi[] = [];
+
+    for (const entry of cards) {
+      if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        Array.isArray((entry as { cards?: unknown }).cards)
+      ) {
+        flattenedCards.push(
+          ...this.flattenCardCandidates((entry as { cards: unknown[] }).cards)
+        );
+        continue;
+      }
+
+      if (this.isCardRecord(entry)) {
+        flattenedCards.push(entry);
+      }
+    }
+
+    return flattenedCards;
   }
 
   private normalizeCollection(collection: CollectionRecordApi): CardCollection {
@@ -163,21 +193,59 @@ export class CollectionsPull {
   }
 
   private normalizeCard(card: CardRecordApi): CollectionCard {
+    const idCard =
+      typeof card.id_card === 'string'
+        ? card.id_card
+        : typeof card.cardId === 'string'
+          ? card.cardId
+          : typeof card.id === 'string'
+            ? card.id
+            : null;
+    const title =
+      typeof card.title === 'string'
+        ? card.title
+        : typeof card.name === 'string'
+          ? card.name
+          : null;
+    const idCollection =
+      typeof card.id_collection === 'string'
+        ? card.id_collection
+        : this.readCollectionId(card.collection);
+
     if (
-      typeof card.id_card !== 'string' ||
-      typeof card.id_collection !== 'string' ||
+      idCard === null ||
+      idCollection === null ||
       typeof card.rarity !== 'string' ||
-      typeof card.title !== 'string'
+      title === null
     ) {
       throw new Error('Formato de carta invalido');
     }
 
     return {
-      idCard: card.id_card,
-      idCollection: card.id_collection,
+      idCard,
+      idCollection,
       rarity: card.rarity,
-      title: card.title,
+      title,
+      imageUrl:
+        typeof card.url_image === 'string' && card.url_image.trim().length > 0
+          ? card.url_image
+          : this.defaultImage,
     };
+  }
+
+  private isCardRecord(value: unknown): value is CardRecordApi {
+    return typeof value === 'object' && value !== null;
+  }
+
+  private readCollectionId(value: unknown): string | null {
+    if (typeof value !== 'object' || value === null) {
+      return null;
+    }
+
+    const collection = value as { id?: unknown };
+    return typeof collection.id === 'string' && collection.id.trim().length > 0
+      ? collection.id
+      : null;
   }
 
   private requireToken(): string {

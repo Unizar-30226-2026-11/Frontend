@@ -38,20 +38,26 @@ describe('CollectionsPull', () => {
         },
       }),
       Promise.resolve({
-        cards: {
-          collection: {
-            id: 'col_set1',
-            name: 'Set Inicial',
-          },
-          cards: [
-            {
-              id_card: 'col_set1_card_001',
-              id_collection: 'col_set1',
-              rarity: 'Rara',
-              title: 'Dragon de Fuego',
-            },
-          ],
+        collection: {
+          id: 'col_set1',
+          name: 'Set Inicial',
         },
+        cards: [
+          {
+            collection: {
+              id: 'col_set1',
+              name: 'Set Inicial',
+            },
+            cards: [
+              {
+                id: 'c_1',
+                name: 'Dragon de Fuego',
+                rarity: 'Rara',
+                url_image: 'https://ejemplo.com/dragon.jpg',
+              },
+            ],
+          },
+        ],
       })
     );
 
@@ -67,10 +73,11 @@ describe('CollectionsPull', () => {
         totalCards: 100,
         cards: [
           {
-            idCard: 'col_set1_card_001',
+            idCard: 'c_1',
             idCollection: 'col_set1',
             rarity: 'Rara',
             title: 'Dragon de Fuego',
+            imageUrl: 'https://ejemplo.com/dragon.jpg',
           },
         ],
       },

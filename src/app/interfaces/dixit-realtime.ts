@@ -73,9 +73,28 @@ export interface RealtimeWalletUpdated {
 
 export interface RealtimePrivateHand {
   lobbyCode: string;
-  hand: Array<number | string>;
+  hand: RealtimePrivateHandEntry[];
   receivedAt: number;
 }
+
+export type RealtimePrivateHandEntry =
+  | number
+  | string
+  | {
+      id?: unknown;
+      cardId?: unknown;
+      card_id?: unknown;
+      code?: unknown;
+      url_image?: unknown;
+      image?: unknown;
+      imageUrl?: unknown;
+      image_url?: unknown;
+      title?: unknown;
+      name?: unknown;
+      value?: unknown;
+      suit?: unknown;
+      collection?: unknown;
+    };
 
 export interface RealtimeChatMessage {
   username: string;

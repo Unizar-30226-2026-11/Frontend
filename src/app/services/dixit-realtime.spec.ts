@@ -222,12 +222,14 @@ describe('DixitRealtime', () => {
     socket.trigger('connect');
     await connectionPromise;
 
-    socket.trigger('server:game:private_hand', { hand: [1, '2', null, ''] });
+    socket.trigger('server:game:private_hand', {
+      hand: [1, '2', { id: 3, url_image: 'https://cdn.example.com/card-3.webp' }, null, ''],
+    });
 
     expect(service.privateHand()).toEqual(
       jasmine.objectContaining({
         lobbyCode: 'A1B2',
-        hand: [1, '2'],
+        hand: [1, '2', jasmine.objectContaining({ id: 3, url_image: 'https://cdn.example.com/card-3.webp' })],
       })
     );
   });

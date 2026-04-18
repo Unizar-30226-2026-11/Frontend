@@ -606,7 +606,7 @@ export class MainMenu implements OnInit {
       cards: collection.cards.map((card) => ({
         id: card.idCard,
         title: card.title,
-        imageUrl: DEFAULT_CARD_IMAGE,
+        imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
         locked: false,
       })),
     }));

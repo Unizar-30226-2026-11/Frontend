@@ -15,6 +15,7 @@ import {
   RealtimeGameStateUpdate,
   RealtimeLobbyState,
   RealtimeMinigameStart,
+  RealtimePrivateHandEntry,
   RealtimeStarClaim,
   RealtimeStarSpawn,
   RealtimeWalletUpdated,
@@ -134,7 +135,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   private currentRoundPlayers: RoundPlayer[] = [];
   private ownedCards: DeckCard[] = [];
-  private latestPrivateHand: Array<number | string> = [];
+  private latestPrivateHand: RealtimePrivateHandEntry[] = [];
   private submittedHandRoundNumber: number | null = null;
 
   id = '';
@@ -915,7 +916,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  private applyRealtimePrivateHand(hand: Array<number | string>): void {
+  private applyRealtimePrivateHand(hand: RealtimePrivateHandEntry[]): void {
     // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
     this.latestPrivateHand = [...hand];
     const handCards = this.buildPrivateHandCards(hand);
@@ -1313,11 +1314,11 @@ export class Dixit implements OnInit, OnDestroy {
       .filter((entry): entry is DeckCard => entry !== null);
   }
 
-  private buildPrivateHandCards(hand: Array<number | string>): DeckCard[] {
+  private buildPrivateHandCards(hand: RealtimePrivateHandEntry[]): DeckCard[] {
     const usedOwnedCardIndexes = new Set<number>();
     return hand
-      .map((cardId, index) => {
-        const code = this.normalizePrivateHandCardCode(cardId);
+      .map((cardEntry, index) => {
+        const code = this.normalizePrivateHandCardCode(cardEntry);
         if (!code) {
           return null;
         }
@@ -1325,18 +1326,21 @@ export class Dixit implements OnInit, OnDestroy {
         const ownedCardIndex = this.findOwnedCardIndexForPrivateHand(code, index, usedOwnedCardIndexes);
         if (ownedCardIndex >= 0) {
           usedOwnedCardIndexes.add(ownedCardIndex);
+          const ownedCard = this.ownedCards[ownedCardIndex];
+          const normalizedRealtimeCard = this.normalizeCard(cardEntry, index);
           return {
-            ...this.ownedCards[ownedCardIndex],
+            ...ownedCard,
+            ...(normalizedRealtimeCard ?? {}),
             code,
           };
         }
 
-        return this.normalizeCard(code, index);
+        return this.normalizeCard(cardEntry, index);
       })
       .filter((entry): entry is DeckCard => entry !== null);
   }
 
-  private normalizePrivateHandCardCode(cardId: number | string): string {
+  private normalizePrivateHandCardCode(cardId: RealtimePrivateHandEntry): string {
     if (typeof cardId === 'number' && Number.isFinite(cardId)) {
       return String(cardId);
     }
@@ -1345,7 +1349,17 @@ export class Dixit implements OnInit, OnDestroy {
       return cardId.trim();
     }
 
-    return '';
+    const card = asRecord(cardId);
+    if (!card) {
+      return '';
+    }
+
+    return (
+      this.readStringFromCandidates(card, ['id', 'cardId', 'card_id', 'code']) ??
+      this.readNumber(card, ['id', 'cardId', 'card_id'])?.toString() ??
+      ''
+    );
+
   }
 
   private findOwnedCardIndexForPrivateHand(
@@ -1398,9 +1412,12 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     const code =
-      this.readStringFromCandidates(card, ['code', 'cardId', 'id']) ?? `card-${index + 1}`;
+      this.readStringFromCandidates(card, ['code', 'cardId', 'card_id', 'id']) ??
+      this.readNumber(card, ['cardId', 'card_id', 'id'])?.toString() ??
+      `card-${index + 1}`;
     const image =
-      this.readStringFromCandidates(card, ['image', 'imageUrl', 'url']) ?? DEFAULT_CARD_IMAGE;
+      this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+      DEFAULT_CARD_IMAGE;
     const value =
       this.readStringFromCandidates(card, ['title', 'name', 'value']) ?? code;
     const suit = this.readStringFromCandidates(card, ['suit', 'collection']) ?? 'DIXIT';
