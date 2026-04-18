@@ -96,6 +96,14 @@ describe('MainMenu', () => {
     expect(component.collections.length).toBe(2);
     expect(component.collectedCards).toBe(3);
     expect(component.totalCards).toBe(12);
+    expect(component.collections.every((collection) => collection.expanded)).toBeTrue();
+  });
+
+  it('toggles a collection accordion without affecting the others', () => {
+    component.toggleCollection('col_set1');
+
+    expect(component.collections[0].expanded).toBeFalse();
+    expect(component.collections[1].expanded).toBeTrue();
   });
 
   it('loads lobby players from the route id', () => {

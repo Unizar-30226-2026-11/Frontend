@@ -7,6 +7,7 @@ interface CollectionsResponseDirect {
 }
 
 interface CollectionCardsResponseDirect {
+  collection?: unknown;
   cards?: unknown;
 }
 
@@ -102,7 +103,9 @@ export class CollectionsPull {
     );
 
     const rawCards = this.extractCards(response);
-    return rawCards.map((card) => this.normalizeCard(card));
+    return rawCards
+      .map((card) => this.normalizeCard(card))
+      .filter((card): card is CollectionCard => card !== null);
   }
 
   private extractCollections(response: CollectionsResponseDirect): CollectionRecordApi[] {
@@ -124,10 +127,11 @@ export class CollectionsPull {
   }
 
   private extractCards(response: CollectionCardsResponseDirect): CardRecordApi[] {
+    const inheritedCollection = this.asCollectionRef(response.collection);
     const candidate = response.cards;
 
     if (Array.isArray(candidate)) {
-      return this.flattenCardCandidates(candidate);
+      return this.flattenCardCandidates(candidate, inheritedCollection);
     }
 
     if (
@@ -135,13 +139,20 @@ export class CollectionsPull {
       candidate !== null &&
       Array.isArray((candidate as { cards?: unknown }).cards)
     ) {
-      return this.flattenCardCandidates((candidate as { cards: unknown[] }).cards);
+      const nestedCandidate = candidate as { collection?: unknown; cards: unknown[] };
+      return this.flattenCardCandidates(
+        nestedCandidate.cards,
+        this.asCollectionRef(nestedCandidate.collection) ?? inheritedCollection
+      );
     }
 
     throw new Error('Formato de respuesta invalido para las cartas de la coleccion');
   }
 
-  private flattenCardCandidates(cards: unknown[]): CardRecordApi[] {
+  private flattenCardCandidates(
+    cards: unknown[],
+    inheritedCollection: { id: string } | null = null
+  ): CardRecordApi[] {
     const flattenedCards: CardRecordApi[] = [];
 
     for (const entry of cards) {
@@ -150,14 +161,23 @@ export class CollectionsPull {
         entry !== null &&
         Array.isArray((entry as { cards?: unknown }).cards)
       ) {
+        const nestedEntry = entry as { collection?: unknown; cards: unknown[] };
         flattenedCards.push(
-          ...this.flattenCardCandidates((entry as { cards: unknown[] }).cards)
+          ...this.flattenCardCandidates(
+            nestedEntry.cards,
+            this.asCollectionRef(nestedEntry.collection) ?? inheritedCollection
+          )
         );
         continue;
       }
 
       if (this.isCardRecord(entry)) {
-        flattenedCards.push(entry);
+        if (this.looksLikeCardRecord(entry)) {
+          flattenedCards.push({
+            ...entry,
+            collection: entry.collection ?? inheritedCollection ?? undefined,
+          });
+        }
       }
     }
 
@@ -192,7 +212,7 @@ export class CollectionsPull {
     };
   }
 
-  private normalizeCard(card: CardRecordApi): CollectionCard {
+  private normalizeCard(card: CardRecordApi): CollectionCard | null {
     const idCard =
       typeof card.id_card === 'string'
         ? card.id_card
@@ -218,7 +238,7 @@ export class CollectionsPull {
       typeof card.rarity !== 'string' ||
       title === null
     ) {
-      throw new Error('Formato de carta invalido');
+      return null;
     }
 
     return {
@@ -237,6 +257,17 @@ export class CollectionsPull {
     return typeof value === 'object' && value !== null;
   }
 
+  private looksLikeCardRecord(card: CardRecordApi): boolean {
+    return (
+      typeof card.id_card === 'string' ||
+      typeof card.cardId === 'string' ||
+      typeof card.id === 'string' ||
+      typeof card.title === 'string' ||
+      typeof card.name === 'string' ||
+      typeof card.rarity === 'string'
+    );
+  }
+
   private readCollectionId(value: unknown): string | null {
     if (typeof value !== 'object' || value === null) {
       return null;
@@ -246,6 +277,11 @@ export class CollectionsPull {
     return typeof collection.id === 'string' && collection.id.trim().length > 0
       ? collection.id
       : null;
+  }
+
+  private asCollectionRef(value: unknown): { id: string } | null {
+    const id = this.readCollectionId(value);
+    return id ? { id } : null;
   }
 
   private requireToken(): string {

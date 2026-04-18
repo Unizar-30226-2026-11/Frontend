@@ -32,6 +32,7 @@ interface MenuCardCollection {
   total: number;
   collected: number;
   cards: MenuCollectionCard[];
+  expanded: boolean;
 }
 
 interface CommunityCard {
@@ -68,13 +69,32 @@ interface RoomSlot {
             <p class="cards-status">No hay cartas disponibles.</p>
           } @else {
             @for (collection of collections; track collection.id) {
-              <section>
-                <header class="collection-header">
-                  <h3 class="collection-title">{{ collection.name }}</h3>
-                  <span class="badge small">{{ collection.collected }}/{{ collection.total }}</span>
-                </header>
+              <section class="collection-panel" [class.expanded]="collection.expanded">
+                <button
+                  type="button"
+                  class="collection-toggle"
+                  (click)="toggleCollection(collection.id)"
+                  [attr.aria-expanded]="collection.expanded"
+                >
+                  <span class="collection-toggle-copy">
+                    <span class="collection-title">{{ collection.name }}</span>
+                    <span class="collection-meta">
+                      {{ collection.collected }}/{{ collection.total }}
+                      @if (collection.cards.length === 0) {
+                        <span class="collection-empty-pill">Sin cartas</span>
+                      }
+                    </span>
+                  </span>
+                  <span class="collection-chevron" aria-hidden="true">
+                    {{ collection.expanded ? '-' : '+' }}
+                  </span>
+                </button>
 
-                <div class="cards-grid">
+                @if (collection.expanded) {
+                  @if (collection.cards.length === 0) {
+                    <p class="collection-empty-copy">Esta coleccion todavia no tiene cartas disponibles.</p>
+                  } @else {
+                    <div class="cards-grid">
                   @for (card of collection.cards; track card.id) {
                     <article class="card-tile" [attr.title]="card.title">
                       <img [src]="card.imageUrl" [alt]="card.title" loading="lazy" />
@@ -84,7 +104,9 @@ interface RoomSlot {
                       <span class="card-id">{{ card.title }}</span>
                     </article>
                   }
-                </div>
+                    </div>
+                  }
+                }
               </section>
             }
           }
@@ -609,7 +631,16 @@ export class MainMenu implements OnInit {
         imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
         locked: false,
       })),
+      expanded: collection.cards.length > 0,
     }));
+  }
+
+  toggleCollection(collectionId: string): void {
+    this.collections = this.collections.map((collection) =>
+      collection.id === collectionId
+        ? { ...collection, expanded: !collection.expanded }
+        : collection
+    );
   }
 
   private get currentPlayerId(): string {
