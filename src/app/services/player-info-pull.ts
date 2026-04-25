@@ -143,15 +143,18 @@ export class PlayerInfoPull {
 
   private normalizePresenceStatus(status: string): PlayerPresenceStatus {
     switch (status.trim().toUpperCase()) {
-      case 'AWAY':
-        return 'AWAY';
-      case 'BUSY':
-        return 'BUSY';
+      case 'DISCONNECTED':
+      case 'OFFLINE':
       case 'INVISIBLE':
-        return 'INVISIBLE';
+        return 'DISCONNECTED';
+      case 'UNKNOWN':
+        return 'UNKNOWN';
+      case 'CONNECTED':
       case 'ONLINE':
+      case 'AWAY':
+      case 'BUSY':
       default:
-        return 'ONLINE';
+        return 'CONNECTED';
     }
   }
 

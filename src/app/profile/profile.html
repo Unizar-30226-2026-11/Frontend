@@ -132,7 +132,8 @@
           <article class="profile-card">
             <h3>Estado del jugador</h3>
             <p class="card-copy">
-              Elige si apareces disponible, ausente, ocupado o invisible en la capa social.
+              Elige si apareces conectado o desconectado. Si el backend devuelve
+              <strong>UNKNOWN</strong>, podras corregirlo desde aqui.
             </p>
 
             <form class="settings-form" [formGroup]="statusForm" (ngSubmit)="saveStatus()">

@@ -56,25 +56,22 @@ describe('NavigationBar', () => {
 
     expect(friendsPullSpy.getFriendsPanelData).toHaveBeenCalledTimes(1);
     expect(component.connectedPlayers.length).toBe(1);
-    expect(component.awayPlayers.length).toBe(0);
     expect(component.disconnectedPlayers.length).toBe(1);
     expect(component.pendingRequests.length).toBe(1);
   });
 
-  it('shows AWAY friends in the absent section', async () => {
+  it('treats CONNECTED friends as connected', async () => {
     friendsPullSpy.getFriendsPanelData.and.resolveTo({
-      friends: [{ id: 'u_7', username: 'Jugador7', status: 'AWAY' }],
+      friends: [{ id: 'u_7', username: 'Jugador7', status: 'CONNECTED' }],
       pendingRequests: [],
     });
 
     component.switchCommunityPanel();
     await fixture.whenStable();
 
-    expect(component.connectedPlayers.length).toBe(0);
-    expect(component.awayPlayers.length).toBe(1);
+    expect(component.connectedPlayers.length).toBe(1);
     expect(component.disconnectedPlayers.length).toBe(0);
-    expect(component.awayPlayers[0]?.username).toBe('Jugador7');
-    expect(component.awayPlayers[0]?.status).toBe('ausente');
+    expect(component.connectedPlayers[0]?.username).toBe('Jugador7');
   });
 
   it('treats UNKNOWN friends as disconnected', async () => {
@@ -89,7 +86,20 @@ describe('NavigationBar', () => {
     expect(component.connectedPlayers.length).toBe(0);
     expect(component.disconnectedPlayers.length).toBe(1);
     expect(component.disconnectedPlayers[0]?.username).toBe('Jugador2');
-    expect(component.disconnectedPlayers[0]?.status).toBe('desconectado');
+  });
+
+  it('does not render the friend status text inside each card', async () => {
+    friendsPullSpy.getFriendsPanelData.and.resolveTo({
+      friends: [{ id: 'u_7', username: 'Jugador7', status: 'CONNECTED' }],
+      pendingRequests: [],
+    });
+
+    component.switchCommunityPanel();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const friendStatuses = fixture.nativeElement.querySelectorAll('.player-card .player-status');
+    expect(friendStatuses.length).toBe(0);
   });
 
   it('shows the API error below the user id input when sending a request fails', async () => {

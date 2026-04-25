@@ -62,7 +62,7 @@ describe('Profile', () => {
       email: 'tester@example.com',
       experienceLevel: 7,
       progressLevel: 45,
-      state: 'ONLINE',
+      state: 'CONNECTED',
       personalState: 'ready',
       balance: 250,
     });
@@ -74,7 +74,7 @@ describe('Profile', () => {
     expect(text).toContain('USER_ID');
     expect(text).toContain('12');
     expect(text).toContain('tester@example.com');
-    expect(text).toContain('Online');
+    expect(text).toContain('Conectado');
   });
 
   it('submits the updated username from the profile page', async () => {
@@ -104,7 +104,7 @@ describe('Profile', () => {
     await fixture.whenStable();
 
     const select: HTMLSelectElement = fixture.nativeElement.querySelector('#profile-status');
-    select.value = 'BUSY';
+    select.value = 'DISCONNECTED';
     select.dispatchEvent(new Event('change'));
 
     fixture.detectChanges();
@@ -113,12 +113,30 @@ describe('Profile', () => {
     await component.saveStatus();
     fixture.detectChanges();
 
-    expect(playerStoreMock.updateStatus).toHaveBeenCalledOnceWith('BUSY');
+    expect(playerStoreMock.updateStatus).toHaveBeenCalledOnceWith('DISCONNECTED');
     expect(fixture.nativeElement.textContent as string).toContain('Estado actualizado');
+  });
+
+  it('allows changing the status when the profile starts in UNKNOWN', async () => {
+    playerStoreMock.player.set(createPlayer('UNKNOWN'));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector('#profile-status');
+    select.value = 'CONNECTED';
+    select.dispatchEvent(new Event('change'));
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    await component.saveStatus();
+
+    expect(playerStoreMock.updateStatus).toHaveBeenCalledOnceWith('CONNECTED');
   });
 });
 
-function createPlayer(state: PlayerPresenceStatus = 'ONLINE'): PlayerInfo {
+function createPlayer(state: PlayerPresenceStatus = 'CONNECTED'): PlayerInfo {
   return {
     id: 'u_12',
     legacyUserId: 12,

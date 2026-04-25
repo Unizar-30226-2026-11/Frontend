@@ -21,7 +21,9 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_-]+$/;
 export class Profile {
   private readonly cdr = inject(ChangeDetectorRef);
 
-  readonly statusOptions = PLAYER_PRESENCE_STATUSES.map((status) => ({
+  readonly statusOptions = PLAYER_PRESENCE_STATUSES.filter(
+    (status) => status !== 'UNKNOWN'
+  ).map((status) => ({
     value: status,
     label: this.describeStatus(status),
   }));
@@ -42,7 +44,7 @@ export class Profile {
   });
 
   readonly statusForm = new FormGroup({
-    status: new FormControl<PlayerPresenceStatus>('ONLINE', {
+    status: new FormControl<PlayerPresenceStatus>('CONNECTED', {
       nonNullable: true,
       validators: [Validators.required],
     }),
@@ -192,27 +194,23 @@ export class Profile {
 
   describeStatus(status: PlayerPresenceStatus): string {
     switch (status) {
-      case 'AWAY':
-        return 'Ausente';
-      case 'BUSY':
-        return 'Ocupado';
-      case 'INVISIBLE':
-        return 'Invisible';
-      case 'ONLINE':
+      case 'DISCONNECTED':
+        return 'Desconectado';
+      case 'UNKNOWN':
+        return 'Desconocido';
+      case 'CONNECTED':
       default:
-        return 'Online';
+        return 'Conectado';
     }
   }
 
   describeStatusSelection(status: PlayerPresenceStatus): string {
     switch (status) {
-      case 'AWAY':
-        return 'Indica que no estas disponible en este momento.';
-      case 'BUSY':
-        return 'Muestra que estas ocupado y no quieres interrupciones.';
-      case 'INVISIBLE':
-        return 'Apareceras como desconectado para jugar con mas privacidad.';
-      case 'ONLINE':
+      case 'DISCONNECTED':
+        return 'Tu perfil aparecera como desconectado para el resto de jugadores.';
+      case 'UNKNOWN':
+        return 'El servidor todavia no definio una presencia concreta para tu cuenta.';
+      case 'CONNECTED':
       default:
         return 'Tu perfil sera visible para tus amigos como conectado.';
     }

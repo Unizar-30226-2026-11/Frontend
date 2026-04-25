@@ -11,8 +11,8 @@ import {
 interface CommunityFriendViewModel {
   id: string;
   username: string;
-  status: string;
   initials: string;
+  isConnected: boolean;
 }
 
 interface PendingFriendRequestViewModel {
@@ -179,29 +179,6 @@ interface PendingFriendRequestViewModel {
                 <div class="avatar">{{ player.initials }}</div>
                 <div class="player-meta">
                   <p class="player-name">{{ player.username }}</p>
-                  <p class="player-status">{{ player.status }}</p>
-                </div>
-                <button
-                  type="button"
-                  class="action-placeholder"
-                  [disabled]="isFriendBusy(player.id)"
-                  (click)="removeFriend(player.id)">
-                  Eliminar
-                </button>
-              </article>
-            }
-          }
-
-          <p class="community-section">AUSENTES</p>
-          @if (awayPlayers.length === 0) {
-            <p class="community-status">No hay amigos ausentes.</p>
-          } @else {
-            @for (player of awayPlayers; track player.id) {
-              <article class="player-card">
-                <div class="avatar away">{{ player.initials }}</div>
-                <div class="player-meta">
-                  <p class="player-name">{{ player.username }}</p>
-                  <p class="player-status">{{ player.status }}</p>
                 </div>
                 <button
                   type="button"
@@ -223,7 +200,6 @@ interface PendingFriendRequestViewModel {
                 <div class="avatar offline">{{ player.initials }}</div>
                 <div class="player-meta">
                   <p class="player-name">{{ player.username }}</p>
-                  <p class="player-status">{{ player.status }}</p>
                 </div>
                 <button
                   type="button"
@@ -256,10 +232,8 @@ export class NavigationBar {
   sendingFriendRequest = false;
   friendTargetUserId = '';
   connectedPlayers: CommunityFriendViewModel[] = [];
-  awayPlayers: CommunityFriendViewModel[] = [];
   disconnectedPlayers: CommunityFriendViewModel[] = [];
   pendingRequests: PendingFriendRequestViewModel[] = [];
-  private hasLoadedCommunityData = false;
   private readonly busyRequestIds = new Set<string>();
   private readonly busyFriendIds = new Set<string>();
 
@@ -293,12 +267,10 @@ export class NavigationBar {
       return;
     }
 
-    if (!this.hasLoadedCommunityData) {
-      this.cdr.detectChanges();
-      setTimeout(() => {
-        void this.loadCommunityData();
-      }, 0);
-    }
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      void this.loadCommunityData(true);
+    }, 0);
   }
 
   switchSearchBox(): void {
@@ -414,20 +386,15 @@ export class NavigationBar {
         forceRefresh,
       });
       const friendViewModels = friends.map((friend) => this.toFriendViewModel(friend));
-      this.connectedPlayers = friendViewModels.filter((friend) => this.isOnline(friend.status));
-      this.awayPlayers = friendViewModels.filter((friend) => this.isAway(friend.status));
-      this.disconnectedPlayers = friendViewModels.filter(
-        (friend) => !this.isOnline(friend.status) && !this.isAway(friend.status)
-      );
+      this.connectedPlayers = friendViewModels.filter((friend) => friend.isConnected);
+      this.disconnectedPlayers = friendViewModels.filter((friend) => !friend.isConnected);
       this.pendingRequests = pendingRequests.map((request) =>
         this.toPendingRequestViewModel(request)
       );
-      this.hasLoadedCommunityData = true;
     } catch (error) {
       this.communityError =
         error instanceof Error ? error.message : 'No se pudieron cargar los amigos';
       this.connectedPlayers = [];
-      this.awayPlayers = [];
       this.disconnectedPlayers = [];
       this.pendingRequests = [];
     } finally {
@@ -440,8 +407,8 @@ export class NavigationBar {
     return {
       id: friend.id,
       username: friend.username,
-      status: this.translateStatus(friend.status),
       initials: this.buildInitials(friend.username),
+      isConnected: this.isConnectedStatus(friend.status),
     };
   }
 
@@ -467,26 +434,19 @@ export class NavigationBar {
     return compact.slice(0, 2).toUpperCase();
   }
 
-  private translateStatus(status: string): string {
-    switch (status.toLowerCase()) {
-      case 'online':
-        return 'conectado';
-      case 'away':
-        return 'ausente';
-      case 'unknown':
-      case 'offline':
-        return 'desconectado';
+  private isConnectedStatus(status: string): boolean {
+    switch (status.trim().toUpperCase()) {
+      case 'CONNECTED':
+      case 'ONLINE':
+      case 'AWAY':
+      case 'BUSY':
+        return true;
+      case 'DISCONNECTED':
+      case 'UNKNOWN':
+      case 'OFFLINE':
       default:
-        return status;
+        return false;
     }
-  }
-
-  private isOnline(status: string): boolean {
-    return status.toLowerCase() === 'conectado';
-  }
-
-  private isAway(status: string): boolean {
-    return status.toLowerCase() === 'ausente';
   }
 
   private formatDate(value: string): string {

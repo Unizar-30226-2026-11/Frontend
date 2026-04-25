@@ -1,4 +1,4 @@
-export const PLAYER_PRESENCE_STATUSES = ['ONLINE', 'AWAY', 'BUSY', 'INVISIBLE'] as const;
+export const PLAYER_PRESENCE_STATUSES = ['CONNECTED', 'DISCONNECTED', 'UNKNOWN'] as const;
 
 export type PlayerPresenceStatus = (typeof PLAYER_PRESENCE_STATUSES)[number];
 

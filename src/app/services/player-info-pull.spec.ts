@@ -32,7 +32,7 @@ describe('PlayerInfoPull', () => {
     service = TestBed.inject(PlayerInfoPull);
   });
 
-  it('normalizes profile data and uppercases the presence status', async () => {
+  it('normalizes CONNECTED-like states from the profile response', async () => {
     apiClientSpy.request.and.returnValues(
       Promise.resolve({
         profile: {
@@ -58,13 +58,13 @@ describe('PlayerInfoPull', () => {
       email: 'tester@example.com',
       experienceLevel: 7,
       progressLevel: 45,
-      state: 'ONLINE',
+      state: 'CONNECTED',
       personalState: 'ready',
       balance: 250,
     });
   });
 
-  it('accepts the legacy cached balance shape while migrating to coins', async () => {
+  it('keeps UNKNOWN when the backend returns it', async () => {
     apiClientSpy.request.and.returnValues(
       Promise.resolve({
         profile: {
@@ -73,7 +73,7 @@ describe('PlayerInfoPull', () => {
           email: 'tester@example.com',
           exp_level: 7,
           progress_level: 45,
-          state: 'online',
+          state: 'UNKNOWN',
           personal_state: 'ready',
           id: 'u_12',
         },
@@ -92,7 +92,7 @@ describe('PlayerInfoPull', () => {
       email: 'tester@example.com',
       experienceLevel: 7,
       progressLevel: 45,
-      state: 'ONLINE',
+      state: 'UNKNOWN',
       personalState: 'ready',
       balance: 125,
     });
@@ -126,7 +126,7 @@ describe('PlayerInfoPull', () => {
       email: 'tester@example.com',
       experienceLevel: 7,
       progressLevel: 45,
-      state: 'ONLINE',
+      state: 'CONNECTED',
       personalState: 'ready',
       balance: 80,
     });
@@ -151,12 +151,14 @@ describe('PlayerInfoPull', () => {
   it('updates the player status through the status endpoint', async () => {
     apiClientSpy.request.and.resolveTo({ message: 'Estado actualizado' });
 
-    await expectAsync(service.updateStatus('INVISIBLE')).toBeResolvedTo('Estado actualizado');
+    await expectAsync(service.updateStatus('DISCONNECTED')).toBeResolvedTo(
+      'Estado actualizado'
+    );
 
     expect(apiClientSpy.request).toHaveBeenCalledWith('/users/status', {
       method: 'PATCH',
       token: 'token-123',
-      body: { status: 'INVISIBLE' },
+      body: { status: 'DISCONNECTED' },
       useCache: false,
     });
     expect(apiClientSpy.invalidateCache).toHaveBeenCalledWith('/users/profile');
