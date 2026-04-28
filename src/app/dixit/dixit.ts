@@ -240,8 +240,9 @@ export class Dixit implements OnInit, OnDestroy {
           return;
         }
 
-        this.applyRealtimePrivateHand(privateHand.hand);
-        this.cdr.detectChanges();
+        if (this.applyRealtimePrivateHand(privateHand.hand)) {
+          this.cdr.detectChanges();
+        }
       },
       { injector: this.injector }
     );
@@ -966,7 +967,10 @@ export class Dixit implements OnInit, OnDestroy {
       this.readArrayFromCandidates(currentPlayerState, ['hand', 'cards'])
     );
     if (handCards.length > 0) {
-      this.cards = handCards;
+      const reconciledHandCards = this.reconcileCardList(handCards, this.cards);
+      if (!this.areCardArraysIdentical(this.cards, reconciledHandCards)) {
+        this.cards = reconciledHandCards;
+      }
     }
 
     const boardCardEntries = this.readArrayFromCandidates(currentRoundState, ['boardCards']);
@@ -980,7 +984,13 @@ export class Dixit implements OnInit, OnDestroy {
     const choiceCards = this.normalizeChoiceCards(
       boardCardEntries.length > 0 ? boardCardEntries : fallbackChoiceEntries
     );
-    this.choiceCards = choiceCards.length > 0 ? choiceCards : [...this.cards];
+    const nextChoiceCards =
+      choiceCards.length > 0
+        ? this.reconcileCardList(choiceCards, this.choiceCards)
+        : [...this.cards];
+    if (!this.areCardArraysIdentical(this.choiceCards, nextChoiceCards)) {
+      this.choiceCards = nextChoiceCards;
+    }
     this.currentPlayerPlayedCardCode = this.resolveCurrentPlayerPlayedCardCode(
       currentRoundState,
       currentPlayerState
@@ -1023,12 +1033,15 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  private applyRealtimePrivateHand(hand: RealtimePrivateHandEntry[]): void {
+  private applyRealtimePrivateHand(hand: RealtimePrivateHandEntry[]): boolean {
     // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
     this.latestPrivateHand = [...hand];
-    const handCards = this.buildPrivateHandCards(hand);
+    let handCards = this.buildPrivateHandCards(hand);
+    if (this.handSubmitted && this.selectedHandCardCode) {
+      handCards = handCards.filter((card) => card.code !== this.selectedHandCardCode);
+    }
     if (handCards.length === 0) {
-      return;
+      return false;
     }
 
     // Esta comprobación se ejecuta cada vez que llega private_hand. Con un Set
@@ -1039,18 +1052,32 @@ export class Dixit implements OnInit, OnDestroy {
       this.choiceCards.length === 0 ||
       this.choiceCards.every((card) => handCodes.has(card.code));
 
-    this.cards = handCards;
-    if (previousChoiceCardsWereHandCards) {
-      this.choiceCards = [...handCards];
+    const reconciledHandCards = this.reconcileCardList(handCards, this.cards);
+    const cardsChanged = !this.areCardArraysIdentical(this.cards, reconciledHandCards);
+    if (cardsChanged) {
+      this.cards = reconciledHandCards;
     }
 
+    let choiceCardsChanged = false;
+    if (previousChoiceCardsWereHandCards) {
+      const nextChoiceCards = cardsChanged ? [...this.cards] : this.choiceCards;
+      choiceCardsChanged = !this.areCardArraysIdentical(this.choiceCards, nextChoiceCards);
+      if (choiceCardsChanged) {
+        this.choiceCards = nextChoiceCards;
+      }
+    }
+
+    let selectionChanged = false;
     if (
       !this.handSubmitted &&
       this.selectedHandCardCode &&
       !this.cards.some((card) => card.code === this.selectedHandCardCode)
     ) {
       this.selectedHandCardCode = '';
+      selectionChanged = true;
     }
+
+    return cardsChanged || choiceCardsChanged || selectionChanged;
   }
 
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
@@ -1462,8 +1489,8 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     return (
-      this.readStringFromCandidates(card, ['id', 'cardId', 'card_id', 'code']) ??
-      this.readNumber(card, ['id', 'cardId', 'card_id'])?.toString() ??
+      this.readStringFromCandidates(card, ['cardId', 'card_id', 'id', 'code']) ??
+      this.readNumber(card, ['cardId', 'card_id', 'id'])?.toString() ??
       ''
     );
 
@@ -1522,12 +1549,17 @@ export class Dixit implements OnInit, OnDestroy {
       this.readStringFromCandidates(card, ['code', 'cardId', 'card_id', 'id']) ??
       this.readNumber(card, ['cardId', 'card_id', 'id'])?.toString() ??
       `card-${index + 1}`;
+    const knownCard = this.findKnownCardByCode(code);
     const image =
-      this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
-      DEFAULT_CARD_IMAGE;
+      this.preferKnownCardImage(
+        this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+          DEFAULT_CARD_IMAGE,
+        knownCard
+      );
     const value =
-      this.readStringFromCandidates(card, ['title', 'name', 'value']) ?? code;
-    const suit = this.readStringFromCandidates(card, ['suit', 'collection']) ?? 'DIXIT';
+      this.readStringFromCandidates(card, ['title', 'name', 'value']) ?? knownCard?.value ?? code;
+    const suit =
+      this.readStringFromCandidates(card, ['suit', 'collection']) ?? knownCard?.suit ?? 'DIXIT';
 
     return {
       code,
@@ -1736,6 +1768,53 @@ export class Dixit implements OnInit, OnDestroy {
     return /^\d+$/.test(cardCode) ? Number(cardCode) : cardCode;
   }
 
+  private reconcileCardList(nextCards: DeckCard[], currentCards: DeckCard[]): DeckCard[] {
+    const currentCardsByCode = new Map(currentCards.map((card) => [card.code, card]));
+    return nextCards.map((nextCard) => {
+      const currentCard = currentCardsByCode.get(nextCard.code);
+      return currentCard && this.areCardsEquivalent(currentCard, nextCard) ? currentCard : nextCard;
+    });
+  }
+
+  private areCardsEquivalent(left: DeckCard, right: DeckCard): boolean {
+    return (
+      left.code === right.code &&
+      left.image === right.image &&
+      left.value === right.value &&
+      left.suit === right.suit
+    );
+  }
+
+  private areCardArraysIdentical(left: DeckCard[], right: DeckCard[]): boolean {
+    return left.length === right.length && left.every((card, index) => card === right[index]);
+  }
+
+  private preferKnownCardImage(image: string, knownCard: DeckCard | null): string {
+    if (!knownCard || !knownCard.image || knownCard.image === DEFAULT_CARD_IMAGE) {
+      return image;
+    }
+
+    return knownCard.image;
+  }
+
+  private removeCardFromVisibleHand(cardCode: string): void {
+    const nextCards = this.cards.filter((card) => card.code !== cardCode);
+    if (nextCards.length === this.cards.length) {
+      return;
+    }
+
+    const currentHandCodes = new Set(this.cards.map((card) => card.code));
+    const choiceCardsMirrorHand =
+      this.phase === 'hand' ||
+      this.choiceCards.length === 0 ||
+      this.choiceCards.every((card) => currentHandCodes.has(card.code));
+
+    this.cards = nextCards;
+    if (choiceCardsMirrorHand) {
+      this.choiceCards = [...nextCards];
+    }
+  }
+
   private markHandSubmitted(): void {
     this.handSubmitted = true;
     this.submittedHandRoundNumber = this.roundNumber;
@@ -1782,6 +1861,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    this.removeCardFromVisibleHand(this.selectedHandCardCode);
     this.storySubmitted = true;
     this.markHandSubmitted();
     this.errorMessage = '';
@@ -1819,6 +1899,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    this.removeCardFromVisibleHand(this.selectedHandCardCode);
     this.markHandSubmitted();
     this.errorMessage = '';
   }

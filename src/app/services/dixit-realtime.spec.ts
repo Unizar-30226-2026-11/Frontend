@@ -287,6 +287,45 @@ describe('DixitRealtime', () => {
     );
   });
 
+  it('prefers cardId over id when private_hand includes both fields', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+    socket.trigger('connect');
+    await connectionPromise;
+
+    socket.trigger('server:game:private_hand', {
+      hand: [{ id: 999, cardId: 17, url_image: 'https://cdn.example.com/card-17.webp' }],
+    });
+
+    expect(service.privateHand()).toEqual(
+      jasmine.objectContaining({
+        lobbyCode: 'A1B2',
+        hand: [jasmine.objectContaining({ id: 17, cardId: 17 })],
+      })
+    );
+  });
+
   it('syncs the active game engine from state_updated when the mode is STELLA', fakeAsync(() => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine

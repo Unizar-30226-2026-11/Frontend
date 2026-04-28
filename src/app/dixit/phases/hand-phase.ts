@@ -641,12 +641,14 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
     .hand-card {
       width: 100%;
       max-width: 120px;
+      aspect-ratio: 3 / 5;
       justify-self: center;
       appearance: none;
       background: transparent;
       border: 0;
       padding: 0;
       border-radius: 20px;
+      overflow: hidden;
       cursor: grab;
       transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
     }
@@ -667,8 +669,11 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
     .hand-card img {
       width: 100%;
+      height: 100%;
       display: block;
       border-radius: 18px;
+      object-fit: cover;
+      object-position: center;
     }
 
     .players-list {

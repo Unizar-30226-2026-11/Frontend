@@ -89,7 +89,7 @@ describe('Auth', () => {
     expect(restoredService.email()).toBe('persisted@example.com');
     expect(restoredService.activeGameId()).toBe('GAME-42');
     expect(restoredService.activeGameEngine()).toBe('Stella');
-    expect(restoredService.activeGameRoute()).toBe('/dixit-stella/GAME-42');
+    expect(restoredService.activeGameRoute()).toBe('/game/GAME-42');
   });
 
   it('derives the active game engine from the persisted realtime game state', () => {
@@ -114,7 +114,7 @@ describe('Auth', () => {
 
     expect(restoredService.activeGameId()).toBe('GAME-42');
     expect(restoredService.activeGameEngine()).toBe('Stella');
-    expect(restoredService.activeGameRoute()).toBe('/dixit-stella/GAME-42');
+    expect(restoredService.activeGameRoute()).toBe('/game/GAME-42');
   });
 
   it('does not restore an expired persisted session from localStorage', () => {

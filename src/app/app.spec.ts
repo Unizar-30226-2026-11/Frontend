@@ -37,6 +37,12 @@ class TestDixit {}
 })
 class TestDixitStella {}
 
+@Component({
+  standalone: true,
+  template: '<p>game shell</p>',
+})
+class TestGameShell {}
+
 describe('App', () => {
   let authStub: {
     ensureInitialized: jasmine.Spy<
@@ -76,9 +82,10 @@ describe('App', () => {
           { path: '', component: TestHome },
           { path: 'store', component: TestStore },
           { path: 'games', component: TestGames },
+          { path: 'game/:id', component: TestGameShell },
           { path: 'dixit/:id', component: TestDixit },
           { path: 'dixit-stella/:id', component: TestDixitStella },
-          { path: 'stella-test', component: TestDixitStella },
+          { path: 'test/stella/:id', component: TestDixitStella },
         ]),
         {
           provide: Auth,
@@ -128,10 +135,10 @@ describe('App', () => {
     expect(compiled.querySelector('app-navigation-bar')).toBeTruthy();
   });
 
-  it('should hide the navigation bar on dixit routes', async () => {
+  it('should hide the navigation bar on game routes', async () => {
     const fixture = TestBed.createComponent(App);
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/dixit/demo-room');
+    await router.navigateByUrl('/game/demo-room');
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -151,7 +158,7 @@ describe('App', () => {
   it('should hide the navigation bar on the stella test route', async () => {
     const fixture = TestBed.createComponent(App);
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/stella-test');
+    await router.navigateByUrl('/test/stella/TEST-STELLA');
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -161,13 +168,13 @@ describe('App', () => {
   it('clears a stale active game and returns to /games when recovery gets a 404', async () => {
     authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9', activeGameEngine: 'Stella' });
     authStub.activeGameId.and.returnValue('ROOM-9');
-    authStub.activeGameRoute.and.returnValue('/dixit-stella/ROOM-9');
+    authStub.activeGameRoute.and.returnValue('/game/ROOM-9');
     realtimeStub.restoreActiveGameConnection.and.rejectWith(
       new ApiRequestError('Sala no encontrada', 404)
     );
 
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/dixit-stella/ROOM-9');
+    await router.navigateByUrl('/game/ROOM-9');
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();

@@ -4,6 +4,7 @@ import {
   CardCollection,
   CollectionsPull,
 } from '../services/collections-pull';
+import { CardPull } from '../services/card-pull';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 
@@ -34,7 +35,9 @@ export interface CommunityCard {
 
 export abstract class MenuShowcaseState {
   protected readonly collectionsPull = inject(CollectionsPull);
+  protected readonly cardPull = inject(CardPull);
   protected readonly cdr = inject(ChangeDetectorRef);
+  private readonly ownedCardIds = new Set<string>();
 
   totalCards = 0;
   collectedCards = 0;
@@ -89,12 +92,21 @@ export abstract class MenuShowcaseState {
     this.cardsError = '';
 
     try {
-      const collections = await this.collectionsPull.getCollections();
+      const [collections, userCards] = await Promise.all([
+        this.collectionsPull.getCollections(),
+        this.cardPull.getCards(),
+      ]);
+
+      this.ownedCardIds.clear();
+      userCards.forEach((card) => {
+        const normalizedCode = card.code.trim();
+        if (normalizedCode) {
+          this.ownedCardIds.add(normalizedCode);
+        }
+      });
+
       this.collections = this.toMenuCollections(collections);
-      this.collectedCards = this.collections.reduce(
-        (total, collection) => total + collection.collected,
-        0
-      );
+      this.collectedCards = this.ownedCardIds.size;
       this.totalCards = this.collections.reduce(
         (total, collection) => total + collection.total,
         0
@@ -140,8 +152,9 @@ export abstract class MenuShowcaseState {
         id: card.idCard,
         title: card.title,
         imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
-        locked: false,
+        locked: !this.ownedCardIds.has(card.idCard),
       }));
+      collection.collected = collection.cards.filter((card) => !card.locked).length;
       collection.cardsLoaded = true;
     } catch (error) {
       collection.cardsError =
@@ -157,12 +170,34 @@ export abstract class MenuShowcaseState {
       id: collection.id,
       name: collection.name,
       total: collection.totalCards,
-      collected: collection.totalCards,
+      collected: this.estimateOwnedCardsForCollection(collection.id),
       expanded: false,
       cardsLoading: false,
       cardsLoaded: false,
       cardsError: '',
       cards: [],
     }));
+  }
+
+  private estimateOwnedCardsForCollection(collectionId: string): number {
+    let ownedCount = 0;
+
+    for (const cardId of this.ownedCardIds) {
+      if (this.resolveCollectionIdFromCardId(cardId) === collectionId) {
+        ownedCount += 1;
+      }
+    }
+
+    return ownedCount;
+  }
+
+  private resolveCollectionIdFromCardId(cardId: string): string | null {
+    const normalizedCardId = cardId.trim();
+    if (!normalizedCardId) {
+      return null;
+    }
+
+    const collectionMatch = normalizedCardId.match(/^(.*)_card_/i);
+    return collectionMatch?.[1]?.trim() || null;
   }
 }

@@ -976,9 +976,9 @@ export class DixitRealtime {
     }
 
     const id =
-      this.normalizeCardId(card['id']) ??
       this.normalizeCardId(card['cardId']) ??
       this.normalizeCardId(card['card_id']) ??
+      this.normalizeCardId(card['id']) ??
       this.normalizeCardId(card['code']);
     if (id === null) {
       return null;

@@ -149,16 +149,29 @@ export class GamesPull {
   ): string {
     const rawRoute = response.game?.route?.trim();
     if (rawRoute) {
-      return rawRoute.startsWith('/') ? rawRoute : `/${rawRoute}`;
+      return this.normalizeGameRoute(rawRoute);
     }
 
     const gameId = response.game?.id?.trim() || fallbackLobbyCode;
     const resolvedEngine = response.game?.engine ?? fallbackEngine;
+    return this.normalizeGameRoute(
+      resolvedEngine === 'Stella'
+        ? `/dixit-stella/${encodeURIComponent(gameId)}`
+        : `/dixit/${encodeURIComponent(gameId)}`
+    );
+  }
 
-    if (resolvedEngine === 'Stella') {
-      return `/dixit-stella/${encodeURIComponent(gameId)}`;
+  private normalizeGameRoute(route: string): string {
+    const normalizedRoute = route.startsWith('/') ? route : `/${route}`;
+    const legacyMatch = normalizedRoute.match(/^\/(?:dixit|dixit-stella)\/([^/?#]+)/i);
+    if (legacyMatch?.[1]) {
+      return `/game/${legacyMatch[1]}`;
     }
 
-    return `/dixit/${encodeURIComponent(gameId)}`;
+    if (normalizedRoute.startsWith('/game/')) {
+      return normalizedRoute;
+    }
+
+    return normalizedRoute;
   }
 }

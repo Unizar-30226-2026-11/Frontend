@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { vi } from 'vitest';
 
@@ -321,6 +321,111 @@ describe('Dixit', () => {
     expect(component.isHandSubmitDisabled).toBeTrue();
   });
 
+  it('submits the backend cardId from private_hand when the payload also includes an internal id', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SUBMISSION',
+        currentRound: {
+          storytellerId: 'cpu_1',
+          clue: 'Una pista real',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimePrivateHand']([
+      { id: 999, cardId: 17, url_image: 'https://cdn.example.com/card-17.webp' },
+    ]);
+
+    component.onHandCardSelected(component.cards[0]);
+    component.submitHandSelection();
+
+    expect(component.selectedHandCardCode).toBe('17');
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SUBMIT_CARD', {
+      cardId: 17,
+    });
+  });
+
+  it('keeps the same rendered hand entries when private_hand arrives with the same cards', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimePrivateHand']([17, 42]);
+    const previousCards = component.cards;
+    const previousFirstCard = component.cards[0];
+
+    const changed = component['applyRealtimePrivateHand']([17, 42]);
+
+    expect(changed).toBeFalse();
+    expect(component.cards).toBe(previousCards);
+    expect(component.cards[0]).toBe(previousFirstCard);
+  });
+
+  it('keeps the same rendered hand entry when the backend resends the same card with a different image URL', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimePrivateHand']([
+      { cardId: 17, url_image: 'https://cdn.example.com/card-17-a.webp', name: 'Carta 17' },
+    ]);
+    const previousCards = component.cards;
+    const previousFirstCard = component.cards[0];
+
+    const changed = component['applyRealtimePrivateHand']([
+      { cardId: 17, url_image: 'https://cdn.example.com/card-17-b.webp', name: 'Carta 17' },
+    ]);
+
+    expect(changed).toBeFalse();
+    expect(component.cards).toBe(previousCards);
+    expect(component.cards[0]).toBe(previousFirstCard);
+  });
+
+  it('removes only the submitted card from the visible hand without rebuilding the rest', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SUBMISSION',
+        currentRound: {
+          storytellerId: 'cpu_1',
+          clue: 'Una pista real',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    const previousSecondCard = component.cards[1];
+    const previousThirdCard = component.cards[2];
+
+    component.onHandCardSelected(component.cards[0]);
+    component.submitHandSelection();
+
+    expect(component.cards.map((card) => card.code)).toEqual(['c_102', 'c_103']);
+    expect(component.cards[0]).toBe(previousSecondCard);
+    expect(component.cards[1]).toBe(previousThirdCard);
+  });
+
+  it('keeps a submitted card hidden even if the same private_hand payload is received again', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SUBMISSION',
+        currentRound: {
+          storytellerId: 'cpu_1',
+          clue: 'Una pista real',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimePrivateHand']([17, 42]);
+
+    component.onHandCardSelected(component.cards[0]);
+    component.submitHandSelection();
+    component['applyRealtimePrivateHand']([17, 42]);
+
+    expect(component.cards.map((card) => card.code)).toEqual(['42']);
+  });
+
   it('submits the selected vote through the realtime service', async () => {
     await initializeComponent(fixture);
 
@@ -547,7 +652,7 @@ describe('Dixit', () => {
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Simular casilla de duelo backend');
-  }));
+  });
 
   it('opens the rival picker for backend duel simulation', fakeAsync(() => {
     fixture.detectChanges();
@@ -557,7 +662,7 @@ describe('Dixit', () => {
     fixture.detectChanges();
 
     const button = Array.from(
-      fixture.nativeElement.querySelectorAll('button')
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
     ).find((candidate) => (candidate.textContent as string).includes('Simular casilla de duelo backend')) as
       | HTMLButtonElement
       | undefined;

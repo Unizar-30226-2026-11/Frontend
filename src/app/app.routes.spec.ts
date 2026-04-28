@@ -64,7 +64,7 @@ describe('app routes', () => {
           useValue: {
             ensureInitialized: () => Promise.resolve(null),
             activeGameId: () => 'ROOM-9',
-            activeGameRoute: () => '/dixit-stella/ROOM-9',
+            activeGameRoute: () => '/game/ROOM-9',
             isLoggedIn: () => true,
           },
         },
@@ -76,7 +76,7 @@ describe('app routes', () => {
       redirectLoggedInHomeGuard({} as never, {} as never)
     );
 
-    expect(router.serializeUrl(result as UrlTree)).toBe('/dixit-stella/ROOM-9');
+    expect(router.serializeUrl(result as UrlTree)).toBe('/game/ROOM-9');
   });
 
   it('blocks lobby routes while a game is active', async () => {
@@ -88,7 +88,7 @@ describe('app routes', () => {
           useValue: {
             ensureInitialized: () => Promise.resolve(null),
             activeGameId: () => 'ROOM-9',
-            activeGameRoute: () => '/dixit-stella/ROOM-9',
+            activeGameRoute: () => '/game/ROOM-9',
           },
         },
       ],
@@ -99,7 +99,7 @@ describe('app routes', () => {
       activeGameLobbyGuard({} as never, {} as never)
     );
 
-    expect(router.serializeUrl(result as UrlTree)).toBe('/dixit-stella/ROOM-9');
+    expect(router.serializeUrl(result as UrlTree)).toBe('/game/ROOM-9');
   });
 
   it('redirects protected routes to /login when the user is logged out', async () => {

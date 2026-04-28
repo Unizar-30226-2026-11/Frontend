@@ -8,11 +8,13 @@ import { CardCollection, CollectionCard, CollectionsPull } from '../services/col
 import { Auth } from '../services/auth';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
+import { CardPull } from '../services/card-pull';
 
 describe('LobbyMenu', () => {
   let component: LobbyMenu;
   let fixture: ComponentFixture<LobbyMenu>;
   let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
+  let cardPullSpy: jasmine.SpyObj<CardPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
   let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
   let routerSpy: jasmine.SpyObj<Router>;
@@ -28,13 +30,15 @@ describe('LobbyMenu', () => {
     ]);
     collectionsPullSpy.getCollections.and.resolveTo(createCollectionsFixture());
     collectionsPullSpy.getCollectionCards.and.resolveTo(createCollectionCardsFixture());
+    cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
+    cardPullSpy.getCards.and.resolveTo(createOwnedCardsFixture());
     gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGameDetails', 'startLobby']);
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
     gamesPullSpy.startLobby.and.resolveTo({
       message: 'Partida iniciada',
       lobbyCode: 'A1B2',
       status: 'starting',
-      route: '/dixit/A1B2',
+      route: '/game/A1B2',
     });
     realtimeSpy = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
       'ensureLobbyConnection',
@@ -64,6 +68,7 @@ describe('LobbyMenu', () => {
       imports: [LobbyMenu],
       providers: [
         { provide: CollectionsPull, useValue: collectionsPullSpy },
+        { provide: CardPull, useValue: cardPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
         { provide: DixitRealtime, useValue: realtimeSpy },
         { provide: Router, useValue: routerSpy },
@@ -85,10 +90,11 @@ describe('LobbyMenu', () => {
 
   it('loads collections on init', () => {
     expect(collectionsPullSpy.getCollections).toHaveBeenCalledTimes(1);
+    expect(cardPullSpy.getCards).toHaveBeenCalledTimes(1);
     expect(collectionsPullSpy.getCollectionCards).not.toHaveBeenCalled();
     expect(component.collections.length).toBe(2);
     expect(component.collections.every((collection) => !collection.expanded)).toBeTrue();
-    expect(component.collectedCards).toBe(12);
+    expect(component.collectedCards).toBe(2);
     expect(component.totalCards).toBe(12);
   });
 
@@ -99,6 +105,9 @@ describe('LobbyMenu', () => {
     expect(component.collections[0].expanded).toBeTrue();
     expect(component.collections[0].cardsLoaded).toBeTrue();
     expect(component.collections[0].cards.length).toBe(2);
+    expect(component.collections[0].collected).toBe(1);
+    expect(component.collections[0].cards[0].locked).toBeFalse();
+    expect(component.collections[0].cards[1].locked).toBeTrue();
   });
 
   it('loads lobby players from the route id', () => {
@@ -228,6 +237,23 @@ function createCollectionCardsFixture(): CollectionCard[] {
       rarity: 'Comun',
       title: 'Guardian del Lago',
       imageUrl: '/assets/card-2.png',
+    },
+  ];
+}
+
+function createOwnedCardsFixture() {
+  return [
+    {
+      code: 'col_set1_card_001',
+      image: '/assets/card-1.png',
+      value: 'Dragon de Fuego',
+      suit: 'DIXIT',
+    },
+    {
+      code: 'col_set2_card_003',
+      image: '/assets/card-3.png',
+      value: 'Espectro Lunar',
+      suit: 'DIXIT',
     },
   ];
 }
