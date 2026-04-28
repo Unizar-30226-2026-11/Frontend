@@ -1,0 +1,114 @@
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
+
+import { MainMenu } from './main-menu';
+import { CardCollection, CollectionCard, CollectionsPull } from '../services/collections-pull';
+
+describe('MainMenu', () => {
+  let component: MainMenu;
+  let fixture: ComponentFixture<MainMenu>;
+  let routerSpy: jasmine.SpyObj<Router>;
+  let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
+
+  beforeEach(async () => {
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    routerSpy.navigate.and.resolveTo(true);
+    collectionsPullSpy = jasmine.createSpyObj<CollectionsPull>('CollectionsPull', [
+      'getCollections',
+      'getCollectionCards',
+    ]);
+    collectionsPullSpy.getCollections.and.resolveTo(createCollectionsFixture());
+    collectionsPullSpy.getCollectionCards.and.resolveTo(createCollectionCardsFixture());
+
+    await TestBed.configureTestingModule({
+      imports: [MainMenu],
+      providers: [
+        { provide: Router, useValue: routerSpy },
+        { provide: CollectionsPull, useValue: collectionsPullSpy },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(MainMenu);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+  });
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('loads only collections on init and keeps them collapsed', () => {
+    expect(collectionsPullSpy.getCollections).toHaveBeenCalledTimes(1);
+    expect(collectionsPullSpy.getCollectionCards).not.toHaveBeenCalled();
+    expect(component.collections.length).toBe(2);
+    expect(component.collections.every((collection) => !collection.expanded)).toBeTrue();
+    expect(component.totalCards).toBe(12);
+    expect(component.collectedCards).toBe(12);
+  });
+
+  it('loads cards the first time a collection is expanded and reuses them afterwards', async () => {
+    await component.toggleCollection('col_set1');
+
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledOnceWith('col_set1');
+    expect(component.collections[0].expanded).toBeTrue();
+    expect(component.collections[0].cardsLoaded).toBeTrue();
+    expect(component.collections[0].cards.length).toBe(2);
+
+    await component.toggleCollection('col_set1');
+    await component.toggleCollection('col_set1');
+
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledTimes(1);
+    expect(component.collections[0].expanded).toBeTrue();
+  });
+
+  it('navigates to games from the primary action', () => {
+    component.goToGames();
+
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/games']);
+  });
+
+  it('navigates to the store from the secondary action', () => {
+    component.goToStore();
+
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/store']);
+  });
+});
+
+function createCollectionsFixture(): CardCollection[] {
+  return [
+    {
+      id: 'col_set1',
+      name: 'Set Inicial',
+      description: 'Coleccion base',
+      releaseDate: '2026-03-12',
+      totalCards: 10,
+    },
+    {
+      id: 'col_set2',
+      name: 'Set Avanzado',
+      description: 'Coleccion avanzada',
+      releaseDate: '2026-03-13',
+      totalCards: 2,
+    },
+  ];
+}
+
+function createCollectionCardsFixture(): CollectionCard[] {
+  return [
+    {
+      idCard: 'col_set1_card_001',
+      idCollection: 'col_set1',
+      rarity: 'Rara',
+      title: 'Dragon de Fuego',
+      imageUrl: '/assets/card-1.png',
+    },
+    {
+      idCard: 'col_set1_card_002',
+      idCollection: 'col_set1',
+      rarity: 'Comun',
+      title: 'Guardian del Lago',
+      imageUrl: '/assets/card-2.png',
+    },
+  ];
+}
