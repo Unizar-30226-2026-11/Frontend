@@ -60,7 +60,11 @@ export class App {
       return false;
     }
 
-    return !this.currentPath().startsWith('/dixit/') && !this.currentPath().startsWith('/test/dixit');
+    return (
+      !this.currentPath().startsWith('/dixit/') &&
+      !this.currentPath().startsWith('/test/dixit') &&
+      !this.currentPath().startsWith('/dixit-stella/')
+    );
   }
 
   activeGameBannerMessage(): string {
@@ -72,12 +76,12 @@ export class App {
   }
 
   goToActiveGame(): void {
-    const activeGameId = this.auth.activeGameId();
-    if (!activeGameId) {
+    const activeGameRoute = this.auth.activeGameRoute();
+    if (!activeGameRoute) {
       return;
     }
 
-    void this.router.navigateByUrl(`/dixit/${encodeURIComponent(activeGameId)}`);
+    void this.router.navigateByUrl(activeGameRoute);
   }
 
   private currentPath(): string {
@@ -100,17 +104,19 @@ export class App {
           this.auth.setActiveGameId(null);
         }
 
-        const targetUrl = `/dixit/${encodeURIComponent(activeGameId)}`;
-        if (this.currentPath() === targetUrl) {
+        const activeGameRoute =
+          this.auth.activeGameRoute() ?? `/dixit/${encodeURIComponent(activeGameId)}`;
+        if (this.currentPath() === activeGameRoute) {
           await this.router.navigateByUrl('/games');
         }
         return;
       }
     }
 
-    const targetUrl = `/dixit/${encodeURIComponent(activeGameId)}`;
-    if (this.currentPath() !== targetUrl) {
-      await this.router.navigateByUrl(targetUrl);
+    const activeGameRoute =
+      this.auth.activeGameRoute() ?? `/dixit/${encodeURIComponent(activeGameId)}`;
+    if (this.currentPath() !== activeGameRoute) {
+      await this.router.navigateByUrl(activeGameRoute);
     }
   }
 }

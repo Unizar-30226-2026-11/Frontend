@@ -246,8 +246,7 @@ export class NavigationBar {
   }
 
   brandRoute(): string {
-    const activeGameId = this.auth.activeGameId();
-    return activeGameId ? `/dixit/${encodeURIComponent(activeGameId)}` : '/games';
+    return this.auth.activeGameRoute() ?? '/menu';
   }
 
   brandAriaLabel(): string {

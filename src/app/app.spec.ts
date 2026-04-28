@@ -39,9 +39,14 @@ class TestDixitStella {}
 
 describe('App', () => {
   let authStub: {
-    ensureInitialized: jasmine.Spy<() => Promise<{ activeGameId: string | null } | null>>;
+    ensureInitialized: jasmine.Spy<
+      () => Promise<{ activeGameId: string | null; activeGameEngine?: 'Classic' | 'Stella' | null } | null>
+    >;
     activeGameId: jasmine.Spy<() => string | null>;
-    setActiveGameId: jasmine.Spy<(activeGameId: string | null) => void>;
+    activeGameRoute: jasmine.Spy<() => string | null>;
+    setActiveGameId: jasmine.Spy<
+      (activeGameId: string | null, activeGameEngine?: 'Classic' | 'Stella' | null) => void
+    >;
   };
   let realtimeStub: {
     toast: jasmine.Spy<() => null>;
@@ -54,6 +59,7 @@ describe('App', () => {
     authStub = {
       ensureInitialized: jasmine.createSpy().and.resolveTo(null),
       activeGameId: jasmine.createSpy().and.returnValue(null),
+      activeGameRoute: jasmine.createSpy().and.returnValue(null),
       setActiveGameId: jasmine.createSpy(),
     };
     realtimeStub = {
@@ -153,14 +159,15 @@ describe('App', () => {
   });
 
   it('clears a stale active game and returns to /games when recovery gets a 404', async () => {
-    authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9' });
+    authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9', activeGameEngine: 'Stella' });
     authStub.activeGameId.and.returnValue('ROOM-9');
+    authStub.activeGameRoute.and.returnValue('/dixit-stella/ROOM-9');
     realtimeStub.restoreActiveGameConnection.and.rejectWith(
       new ApiRequestError('Sala no encontrada', 404)
     );
 
     const router = TestBed.inject(Router);
-    await router.navigateByUrl('/dixit/ROOM-9');
+    await router.navigateByUrl('/dixit-stella/ROOM-9');
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     await fixture.whenStable();

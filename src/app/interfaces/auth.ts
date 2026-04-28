@@ -1,3 +1,5 @@
+import type { LobbyEngine } from './game';
+
 export interface AuthUser {
   id: string;
   username: string;
@@ -8,6 +10,7 @@ export interface AuthSession {
   token: string;
   user: AuthUser;
   activeGameId: string | null;
+  activeGameEngine: LobbyEngine | null;
 }
 
 export interface LoginPayload {
@@ -34,6 +37,7 @@ export interface LoginResponse {
   message: string;
   token: string;
   activeGameId?: string | null;
+  activeGameEngine?: LobbyEngine | null;
   user: {
     id: string;
     username: string;
@@ -46,6 +50,7 @@ export interface RefreshResponse {
   accessToken?: string;
   token?: string;
   activeGameId?: string | null;
+  activeGameEngine?: LobbyEngine | null;
   user?: {
     id?: string;
     username?: string;

@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Game } from '../interfaces/game';
+import { Game, type LobbyEngine } from '../interfaces/game';
 import { GamesPull } from '../services/games-pull';
 import { GameCard } from './components/game-card/game-card';
 import { Auth } from '../services/auth';
@@ -54,7 +54,11 @@ import { Auth } from '../services/auth';
 
             <label class="field">
               <span>Modo</span>
-              <input type="text" value="Classic" disabled />
+              <select [(ngModel)]="createLobbyEngine" [disabled]="createLobbyLoading()">
+                @for (engine of availableLobbyEngines; track engine.value) {
+                  <option [ngValue]="engine.value">{{ engine.label }}</option>
+                }
+              </select>
             </label>
 
             <label class="field checkbox-field">
@@ -294,9 +298,14 @@ export class Games {
   readonly createLobbyLoading = signal(false);
   readonly createLobbyError = signal<string | null>(null);
   readonly createLobbyMessage = signal<string | null>(null);
+  readonly availableLobbyEngines: ReadonlyArray<{ value: LobbyEngine; label: string }> = [
+    { value: 'Classic', label: 'Classic' },
+    { value: 'Stella', label: 'Stella' },
+  ];
 
   createLobbyName = '';
   createLobbyMaxPlayers = 4;
+  createLobbyEngine: LobbyEngine = 'Classic';
   createLobbyPrivate = false;
 
   constructor() {
@@ -345,7 +354,7 @@ export class Games {
       const result = await this.gameService.createLobby({
         name: this.createLobbyName.trim(),
         maxPlayers: this.createLobbyMaxPlayers,
-        engine: 'Classic',
+        engine: this.createLobbyEngine,
         isPrivate: this.createLobbyPrivate,
       });
 

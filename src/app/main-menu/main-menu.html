@@ -1,127 +1,40 @@
-  <section class="menu-layout">
-    <article class="panel my-cards">
-      <header class="panel-header">
-        <h2>Mis Cartas:</h2>
-        <span class="badge">{{ collectedCards }}/{{ totalCards }}</span>
-      </header>
-
-      <div class="cards-scroll">
-        @if (cardsLoading) {
-          <p class="cards-status">Cargando colecciones...</p>
-        } @else if (cardsError) {
-          <p class="cards-status">{{ cardsError }}</p>
-        } @else if (collections.length === 0) {
-          <p class="cards-status">No hay cartas disponibles.</p>
-        } @else {
-          @for (collection of collections; track collection.id) {
-            <section>
-              <header class="collection-header">
-                <h3 class="collection-title">{{ collection.name }}</h3>
-                <span class="badge small">{{ collection.collected }}/{{ collection.total }}</span>
-              </header>
-
-              <div class="cards-grid">
-                @for (card of collection.cards; track card.id) {
-                  <article class="card-tile" [attr.title]="card.title">
-                    <img [src]="card.imageUrl" [alt]="card.title" loading="lazy" />
-                    @if (card.locked) {
-                      <div class="locked-overlay" aria-label="Carta bloqueada">🔒</div>
-                    }
-                    <span class="card-id">{{ card.title }}</span>
-                  </article>
-                }
-              </div>
-            </section>
-          }
-        }
-      </div>
-    </article>
-
-    <article class="panel community-card">
-      <h2>Carta de la Comunidad:</h2>
-      <figure class="community-figure">
-        <img [src]="currentCommunityCard.imageUrl" [alt]="currentCommunityCard.title" />
-      </figure>
-      <h3 class="community-title">{{ currentCommunityCard.title }}</h3>
-      <div class="community-actions">
-        <button type="button" class="round-btn" (click)="previousCommunityCard()" aria-label="Carta anterior">↑</button>
-        <button type="button" class="round-btn" (click)="nextCommunityCard()" aria-label="Carta siguiente">↓</button>
-        <span class="badge dark">{{ currentCommunityCard.id }}</span>
-        <div class="stars" aria-label="Valorar carta">
-          @for (star of [1, 2, 3, 4, 5]; track star) {
-            <button
-              type="button"
-              class="star"
-              [class.active]="star <= currentRating"
-              (click)="setRating(star)"
-              [attr.aria-label]="'Puntuar con ' + star + ' estrellas'">
-              ★
-            </button>
-          }
-        </div>
-      </div>
-    </article>
-
-    <section class="right-column">
-      <article class="panel room-panel">
-        <header class="panel-header">
-          <h2>Sala actual:</h2>
-          <span class="badge">{{ playersInRoom }}/{{ roomCapacity }}</span>
-        </header>
-        <div class="room-scroll">
-          @if (roomLoading) {
-            <p class="room-status">Cargando sala...</p>
-          } @else if (roomError) {
-            <p class="room-status">{{ roomError }}</p>
-          } @else if (roomSlots.length === 0) {
-            <p class="room-status">No hay jugadores en la sala.</p>
-          } @else {
-            @for (slot of roomSlots; track slot.slotId) {
-              <div class="room-slot" [class.ready]="slot.state === 'listo'">
-                <span class="slot-name">{{ slot.name }}</span>
-                <span class="slot-state">{{ slot.state }}</span>
-              </div>
-            }
-          }
-        </div>
-      </article>
-
-      <label class="select-label">
-        Seleccion Mapa
-        <select class="choice-select">
-        @for (map of maps; track map) {
-          <option>{{ map }}</option>
-        }
-        </select>
-      </label>
-
-      <label class="select-label">
-        Seleccion Mazo
-        <select class="choice-select">
-        @for (deck of decks; track deck) {
-          <option>{{ deck }}</option>
-        }
-        </select>
-      </label>
-
-      @if (primaryActionMessage) {
-        <p class="action-feedback success">{{ primaryActionMessage }}</p>
-      }
-
-      @if (primaryActionError) {
-        <p class="action-feedback error">{{ primaryActionError }}</p>
-      }
-
-      <button
-        type="button"
-        class="queue-btn"
-        [disabled]="isPrimaryActionDisabled"
-        (click)="onPrimaryAction()"
-      >
-        {{ primaryActionButtonText }}
-      </button>
-
-      <p class="action-hint">{{ primaryActionHint }}</p>
-    </section>
+<section class="menu-layout">
+  <section class="showcase-column">
+    <app-menu-showcase
+      [collections]="collections"
+      [totalCards]="totalCards"
+      [collectedCards]="collectedCards"
+      [cardsLoading]="cardsLoading"
+      [cardsError]="cardsError"
+      [currentCommunityCard]="currentCommunityCard"
+      [currentRating]="currentRating"
+      [communityTitle]="'Cartas de la Comunidad:'"
+      (previousCommunity)="previousCommunityCard()"
+      (nextCommunity)="nextCommunityCard()"
+      (ratingChange)="setRating($event)"
+    />
   </section>
-  `,
+
+  <aside class="action-column">
+    <article class="action-panel">
+      <h2 class="action-title">Adentrate a jugar</h2>
+
+      <div class="action-stack">
+        <button type="button" class="action-button primary" (click)="goToGames()">
+          <strong>Buscar partida</strong>
+          <span class="action-glyph">→</span>
+        </button>
+
+        <button type="button" class="action-button" (click)="goToStore()">
+          <strong>Comprar cartas</strong>
+          <span class="action-glyph">→</span>
+        </button>
+
+        <button type="button" class="action-button accent" (click)="goToDeckBuilder()">
+          <strong>Crear mazo</strong>
+          <span class="action-glyph">→</span>
+        </button>
+      </div>
+    </article>
+  </aside>
+</section>

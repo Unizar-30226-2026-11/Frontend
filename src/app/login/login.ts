@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { buildGameRoute } from '../interfaces/game';
 import { Auth } from '../services/auth';
 import { LoginForm } from './components/login-form/login-form';
 
@@ -166,9 +167,9 @@ export class Login {
     try {
       const session = await this.auth.logIn(email, password);
       const targetRoute = session.activeGameId
-        ? ['/dixit', session.activeGameId]
-        : ['/games'];
-      await this.router.navigate(targetRoute);
+        ? buildGameRoute(session.activeGameId, session.activeGameEngine ?? 'Classic')
+        : '/menu';
+      await this.router.navigateByUrl(targetRoute);
     } catch (error: unknown) {
       this.error =
         error instanceof Error ? error.message : 'No se pudo iniciar sesion';

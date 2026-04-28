@@ -10,10 +10,11 @@ import {
   RealtimeGameStateUpdate,
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
+  RealtimeMinigameStart,
   RealtimePrivateHandEntry,
   RealtimePrivateHand,
   RealtimeDuelChallenge,
-  RealtimeMinigameStart,
+  RealtimeSpecialEvent,
   RealtimeStarClaim,
   RealtimeStarSpawn,
   RealtimeSession,
@@ -25,6 +26,7 @@ import { ApiClient } from './api-client';
 import { Auth } from './auth';
 import { isApiRequestErrorStatus } from '../interfaces/api';
 import { PlayerStore } from './player-store';
+import type { LobbyEngine } from '../interfaces/game';
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
@@ -64,8 +66,10 @@ export class DixitRealtime {
 
   // --- Estado de conflictos 1 vs 1 ---
   private readonly duelChallengeSignal = signal<RealtimeDuelChallenge | null>(null);
-  private readonly activeMinigameSignal = signal<RealtimeMinigameStart | null>(null);
-  // --- Estado de eventos especiales del tablero ---
+  private readonly minigameStartSignal = signal<RealtimeMinigameStart | null>(null);
+  private readonly specialEventSignal = signal<RealtimeSpecialEvent | null>(null);
+  // Estado efímero de efectos visuales del tablero.
+  // activeStar representa una estrella aún disponible para capturar.
   private readonly activeStarSignal = signal<RealtimeStarSpawn | null>(null);
   // Resultado de la ultima captura de estrella para que la UI pueda
   // mostrar el banner y actualizar puntuaciones sin depender de otro evento.
@@ -92,9 +96,8 @@ export class DixitRealtime {
 
   // --- Computed de conflictos 1 vs 1 ---
   readonly duelChallenge = computed(() => this.duelChallengeSignal());
-  readonly activeMinigame = computed(() => this.activeMinigameSignal());
-
-  // --- Computed de eventos especiales del tablero ---
+  readonly minigameStart = computed(() => this.minigameStartSignal());
+  readonly specialEvent = computed(() => this.specialEventSignal());
   readonly activeStar = computed(() => this.activeStarSignal());
   readonly starClaim = computed(() => this.starClaimSignal());
 
@@ -130,7 +133,8 @@ export class DixitRealtime {
     this.lastErrorSignal.set('');
     this.gameEndedSignal.set(null);
     this.walletUpdatedSignal.set(null);
-    this.activeMinigameSignal.set(null);
+    this.minigameStartSignal.set(null);
+    this.specialEventSignal.set(null);
 
     let response: LobbyJoinResponse;
     try {
@@ -254,6 +258,17 @@ export class DixitRealtime {
     });
   }
 
+  // Envía el resultado local del minijuego al backend. El servidor debe comparar
+  // los resultados de los dos jugadores y desbloquear la partida.
+  sendMinigameScore(score: number): void {
+    const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.floor(score)) : 0;
+    this.debug('emit client:game:minigame_score', { score: normalizedScore });
+    this.emit('client:game:minigame_score', {
+      lobbyCode: this.requireSession().lobbyCode,
+      score: normalizedScore,
+    });
+  }
+
   // Envía un mensaje de chat a la sala activa ignorando cadenas vacías o con
   // solo espacios.
   sendChat(text: string): void {
@@ -284,6 +299,14 @@ export class DixitRealtime {
   // Descarta el toast visible una vez consumido por la UI.
   clearToast(): void {
     this.toastSignal.set(null);
+  }
+
+  clearMinigameStart(): void {
+    this.minigameStartSignal.set(null);
+  }
+
+  clearSpecialEvent(): void {
+    this.specialEventSignal.set(null);
   }
 
   // Cierra el estado efímero del duelo cuando el modal se ha gestionado.
@@ -323,7 +346,8 @@ export class DixitRealtime {
     this.gameStartedSignal.set(null);
     this.privateHandSignal.set(null);
     this.duelChallengeSignal.set(null);
-    this.activeMinigameSignal.set(null);
+    this.minigameStartSignal.set(null);
+    this.specialEventSignal.set(null);
     this.activeStarSignal.set(null);
     this.starClaimSignal.set(null);
     this.gameEndedSignal.set(null);
@@ -507,6 +531,10 @@ export class DixitRealtime {
     socket.on('private:hand', handlePrivateHand);
 
     socket.on('server:game:special_event', (payload: unknown) => {
+      const specialEvent = this.normalizeSpecialEvent(payload);
+      if (specialEvent) {
+        this.specialEventSignal.set(specialEvent);
+      }
       const message = this.resolveSpecialEventMessage(payload);
       if (message) {
         this.pushToast(message);
@@ -529,43 +557,21 @@ export class DixitRealtime {
       this.debug('event server:game:duel_available', payload);
     });
 
-    const handleMinigameStart = (payload: unknown, eventName: string): void => {
+    socket.on('server:game:minigame_start', (payload: unknown) => {
       const minigame = this.normalizeMinigameStart(payload);
       if (!minigame) {
         return;
       }
 
-      this.activeMinigameSignal.set(minigame);
+      this.minigameStartSignal.set(minigame);
+      this.specialEventSignal.set(null);
       this.duelChallengeSignal.set(null);
       this.pushToast(
         minigame.isDuel
-          ? `Duelo iniciado. Minijuego ${minigame.type}.`
-          : `Minijuego ${minigame.type} iniciado.`
+          ? 'Duelo iniciado. Resuelve el minijuego.'
+          : 'Empate en el tablero. Resuelve el minijuego.'
       );
-      this.debug(`event ${eventName}`, minigame);
-    };
-
-    const handleConflictCancelled = (payload: unknown, eventName: string): void => {
-      this.activeMinigameSignal.set(null);
-      this.duelChallengeSignal.set(null);
-      this.pushToast(this.resolveConflictCancelledMessage(payload));
-      this.debug(`event ${eventName}`, payload);
-    };
-
-    socket.on('server:game:minigame_start', (payload: unknown) => {
-      handleMinigameStart(payload, 'server:game:minigame_start');
-    });
-
-    socket.on('minigame_start', (payload: unknown) => {
-      handleMinigameStart(payload, 'minigame_start');
-    });
-
-    socket.on('server:game:conflict_cancelled', (payload: unknown) => {
-      handleConflictCancelled(payload, 'server:game:conflict_cancelled');
-    });
-
-    socket.on('CONFLICT_CANCELLED', (payload: unknown) => {
-      handleConflictCancelled(payload, 'CONFLICT_CANCELLED');
+      this.debug('event server:game:minigame_start', minigame);
     });
 
     socket.on('server:game:deck_reshuffled', (payload: unknown) => {
@@ -1000,7 +1006,7 @@ export class DixitRealtime {
       return;
     }
 
-    this.auth.setActiveGameId(recoveredGameId);
+    this.auth.setActiveGameId(recoveredGameId, this.resolveGameEngine(state));
     this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
 
     if (state) {
@@ -1052,6 +1058,7 @@ export class DixitRealtime {
     const data = asRecord(payload);
     const wrappedData = asRecord(data?.['data']) ?? data;
     const state = asRecord(wrappedData?.['state']);
+    const engine = this.resolveGameEngineFromPayload(wrappedData, state);
     const lobbyCode =
       readString(wrappedData ?? undefined, 'lobbyCode') ??
       readString(wrappedData ?? undefined, 'code') ??
@@ -1071,12 +1078,15 @@ export class DixitRealtime {
     }
 
     this.gameEndedSignal.set(null);
-    this.activeMinigameSignal.set(null);
-    this.auth.setActiveGameId(lobbyCode);
+    this.walletUpdatedSignal.set(null);
+    this.minigameStartSignal.set(null);
+    this.specialEventSignal.set(null);
+    this.auth.setActiveGameId(lobbyCode, engine);
     this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
     this.gameStartedSignal.set({
       lobbyCode,
       state: state ?? undefined,
+      engine,
       receivedAt: Date.now(),
     });
     this.debug(`event ${eventName}`, {
@@ -1095,7 +1105,8 @@ export class DixitRealtime {
     const message = this.resolveGameEndedMessage(payload);
 
     this.gameEndedSignal.set(endedResult);
-    this.activeMinigameSignal.set(null);
+    this.minigameStartSignal.set(null);
+    this.specialEventSignal.set(null);
     this.duelChallengeSignal.set(null);
     this.setGameState({
       state: {
@@ -1146,41 +1157,6 @@ export class DixitRealtime {
   }
 
   // === Conflictos 1 vs 1 y minijuegos ===
-
-  private normalizeMinigameStart(payload: unknown): RealtimeMinigameStart | null {
-    const data = asRecord(payload);
-    const wrappedData = asRecord(data?.['data']) ?? data;
-    const type =
-      readNumber(wrappedData, 'type') ??
-      readNumber(wrappedData, 'minigameType') ??
-      readNumber(wrappedData, 'gameType');
-
-    if (type === null) {
-      return null;
-    }
-
-    return {
-      type,
-      isDuel:
-        readBoolean(wrappedData, 'isDuel') ??
-        readBoolean(wrappedData, 'duel') ??
-        false,
-      durationSeconds:
-        readNumber(wrappedData, 'durationSeconds') ??
-        readNumber(wrappedData, 'duration') ??
-        15,
-      receivedAt: Date.now(),
-    };
-  }
-
-  private resolveConflictCancelledMessage(payload: unknown): string {
-    const serverMessage = this.resolveServerMessage(payload);
-    if (serverMessage !== 'Se produjo un error en la conexion realtime') {
-      return serverMessage;
-    }
-
-    return 'El minijuego se ha cancelado.';
-  }
 
   // === Normalizacion de cierre de partida ===
 
@@ -1278,7 +1254,48 @@ export class DixitRealtime {
     });
   }
 
-  // Garantiza que las llamadas REST previas al websocket tengan token de sesion.
+  private resolveGameEngine(state?: Record<string, unknown> | null): LobbyEngine | undefined {
+    const mode = readString(state ?? undefined, 'mode')?.trim().toUpperCase();
+    if (mode === 'STELLA') {
+      return 'Stella';
+    }
+
+    if (mode === 'STANDARD') {
+      return 'Classic';
+    }
+
+    return undefined;
+  }
+
+  private resolveGameEngineFromPayload(
+    wrappedData: Record<string, unknown> | null,
+    state?: Record<string, unknown> | null
+  ): LobbyEngine | undefined {
+    return (
+      this.resolveGameEngine(state) ??
+      this.normalizeLobbyEngine(readString(asRecord(wrappedData?.['game']), 'engine')) ??
+      this.normalizeLobbyEngine(readString(asRecord(wrappedData?.['lobby']), 'engine')) ??
+      this.normalizeLobbyEngine(readString(wrappedData ?? undefined, 'engine')) ??
+      this.resolveGameEngine(this.gameStateSignal()?.state) ??
+      this.auth.activeGameEngine?.() ??
+      undefined
+    );
+  }
+
+  private normalizeLobbyEngine(value: string | null | undefined): LobbyEngine | undefined {
+    const normalizedValue = value?.trim().toUpperCase();
+    if (normalizedValue === 'STELLA') {
+      return 'Stella';
+    }
+
+    if (normalizedValue === 'CLASSIC' || normalizedValue === 'STANDARD') {
+      return 'Classic';
+    }
+
+    return undefined;
+  }
+
+  // Garantiza que las llamadas REST previas al websocket tengan token de sesión.
   private requireToken(): string {
     const token = this.auth.token();
     if (!token) {
@@ -1354,6 +1371,11 @@ export class DixitRealtime {
     this.lastGameStateReceivedAt = nextGameState.receivedAt;
     this.gameStateSignal.set(nextGameState);
     this.persistGameState(nextGameState);
+
+    const activeLobbyCode = this.sessionState()?.lobbyCode ?? this.auth.activeGameId();
+    if (activeLobbyCode) {
+      this.auth.setActiveGameId(activeLobbyCode, this.resolveGameEngine(nextGameState.state));
+    }
   }
 
   // Busca el gameState utilizable dentro de los distintos envoltorios que puede
@@ -1388,6 +1410,55 @@ export class DixitRealtime {
       asRecord(state['currentRound']) !== null ||
       asRecord(state['scores']) !== null
     );
+  }
+
+  private normalizeMinigameStart(payload: unknown): RealtimeMinigameStart | null {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    if (!wrappedData) {
+      return null;
+    }
+
+    const player1 = readString(wrappedData, 'player1') ?? '';
+    const player2 = readString(wrappedData, 'player2') ?? '';
+    if (!player1 || !player2) {
+      return null;
+    }
+
+    return {
+      player1,
+      player2,
+      type: Math.max(0, Math.floor(readNumber(wrappedData, 'type') ?? 0)),
+      duration: this.normalizeMinigameDuration(readNumber(wrappedData, 'duration')),
+      isDuel: readBoolean(wrappedData, 'isDuel') ?? false,
+      receivedAt: Date.now(),
+    };
+  }
+
+  private normalizeSpecialEvent(payload: unknown): RealtimeSpecialEvent | null {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    const effect = readString(wrappedData, 'effect');
+    if (!wrappedData || !effect) {
+      return null;
+    }
+
+    return {
+      effect,
+      message: readString(wrappedData, 'message') ?? '',
+      winnerId: readString(wrappedData, 'winnerId') ?? undefined,
+      loserId: readString(wrappedData, 'loserId') ?? undefined,
+      isDuel: readBoolean(wrappedData, 'isDuel') ?? undefined,
+      receivedAt: Date.now(),
+    };
+  }
+
+  private normalizeMinigameDuration(duration: number | null): number {
+    if (duration === null) {
+      return 15_000;
+    }
+
+    return Math.max(5_000, Math.min(60_000, Math.round(duration)));
   }
 
   private normalizeStarSpawn(payload: unknown): RealtimeStarSpawn | null {
@@ -1628,6 +1699,7 @@ function readNumber(
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+// Lee booleanos opcionales del payload websocket.
 function readBoolean(
   source: Record<string, unknown> | null | undefined,
   key: string
@@ -1639,6 +1711,3 @@ function readBoolean(
   const value = source[key];
   return typeof value === 'boolean' ? value : null;
 }
-
-
-

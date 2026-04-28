@@ -50,6 +50,7 @@ describe('Games', () => {
   it('creates a classic lobby and navigates to it', async () => {
     component.createLobbyName = 'Sala de prueba';
     component.createLobbyMaxPlayers = 5;
+    component.createLobbyEngine = 'Classic';
     component.createLobbyPrivate = true;
 
     await component.submitCreateLobby();
@@ -61,5 +62,21 @@ describe('Games', () => {
       isPrivate: true,
     });
     expect(routerSpy.navigateByUrl).toHaveBeenCalledOnceWith('/games/A1B2');
+  });
+
+  it('creates a stella lobby when that mode is selected', async () => {
+    component.createLobbyName = 'Sala Stella';
+    component.createLobbyMaxPlayers = 4;
+    component.createLobbyEngine = 'Stella';
+    component.createLobbyPrivate = false;
+
+    await component.submitCreateLobby();
+
+    expect(gamesPullSpy.createLobby).toHaveBeenCalledWith({
+      name: 'Sala Stella',
+      maxPlayers: 4,
+      engine: 'Stella',
+      isPrivate: false,
+    });
   });
 });
