@@ -4,7 +4,7 @@ import { of } from 'rxjs';
 
 import { LobbyMenu } from './lobby-menu';
 import { Game } from '../interfaces/game';
-import { CardCollectionWithCards, CollectionsPull } from '../services/collections-pull';
+import { CardCollection, CollectionCard, CollectionsPull } from '../services/collections-pull';
 import { Auth } from '../services/auth';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
@@ -23,9 +23,11 @@ describe('LobbyMenu', () => {
 
   beforeEach(async () => {
     collectionsPullSpy = jasmine.createSpyObj<CollectionsPull>('CollectionsPull', [
-      'getCollectionsWithCards',
+      'getCollections',
+      'getCollectionCards',
     ]);
-    collectionsPullSpy.getCollectionsWithCards.and.resolveTo(createCollectionsFixture());
+    collectionsPullSpy.getCollections.and.resolveTo(createCollectionsFixture());
+    collectionsPullSpy.getCollectionCards.and.resolveTo(createCollectionCardsFixture());
     gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGameDetails', 'startLobby']);
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
     gamesPullSpy.startLobby.and.resolveTo({
@@ -82,10 +84,21 @@ describe('LobbyMenu', () => {
   });
 
   it('loads collections on init', () => {
-    expect(collectionsPullSpy.getCollectionsWithCards).toHaveBeenCalledTimes(1);
+    expect(collectionsPullSpy.getCollections).toHaveBeenCalledTimes(1);
+    expect(collectionsPullSpy.getCollectionCards).not.toHaveBeenCalled();
     expect(component.collections.length).toBe(2);
-    expect(component.collectedCards).toBe(3);
+    expect(component.collections.every((collection) => !collection.expanded)).toBeTrue();
+    expect(component.collectedCards).toBe(12);
     expect(component.totalCards).toBe(12);
+  });
+
+  it('loads a collection cards only after expanding it', async () => {
+    await component.toggleCollection('col_set1');
+
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledOnceWith('col_set1');
+    expect(component.collections[0].expanded).toBeTrue();
+    expect(component.collections[0].cardsLoaded).toBeTrue();
+    expect(component.collections[0].cards.length).toBe(2);
   });
 
   it('loads lobby players from the route id', () => {
@@ -181,7 +194,7 @@ describe('LobbyMenu', () => {
   });
 });
 
-function createCollectionsFixture(): CardCollectionWithCards[] {
+function createCollectionsFixture(): CardCollection[] {
   return [
     {
       id: 'col_set1',
@@ -189,20 +202,6 @@ function createCollectionsFixture(): CardCollectionWithCards[] {
       description: 'Coleccion base',
       releaseDate: '2026-03-12',
       totalCards: 10,
-      cards: [
-        {
-          idCard: 'col_set1_card_001',
-          idCollection: 'col_set1',
-          rarity: 'Rara',
-          title: 'Dragon de Fuego',
-        },
-        {
-          idCard: 'col_set1_card_002',
-          idCollection: 'col_set1',
-          rarity: 'Comun',
-          title: 'Guardian del Lago',
-        },
-      ],
     },
     {
       id: 'col_set2',
@@ -210,14 +209,25 @@ function createCollectionsFixture(): CardCollectionWithCards[] {
       description: 'Coleccion avanzada',
       releaseDate: '2026-03-13',
       totalCards: 2,
-      cards: [
-        {
-          idCard: 'col_set2_card_001',
-          idCollection: 'col_set2',
-          rarity: 'Epica',
-          title: 'Espectro Lunar',
-        },
-      ],
+    },
+  ];
+}
+
+function createCollectionCardsFixture(): CollectionCard[] {
+  return [
+    {
+      idCard: 'col_set1_card_001',
+      idCollection: 'col_set1',
+      rarity: 'Rara',
+      title: 'Dragon de Fuego',
+      imageUrl: '/assets/card-1.png',
+    },
+    {
+      idCard: 'col_set1_card_002',
+      idCollection: 'col_set1',
+      rarity: 'Comun',
+      title: 'Guardian del Lago',
+      imageUrl: '/assets/card-2.png',
     },
   ];
 }

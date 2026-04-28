@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, inject } from '@angular/core';
 
 import {
-  CardCollectionWithCards,
+  CardCollection,
   CollectionsPull,
 } from '../services/collections-pull';
 
@@ -19,6 +19,10 @@ export interface MenuCardCollection {
   name: string;
   total: number;
   collected: number;
+  expanded: boolean;
+  cardsLoading: boolean;
+  cardsLoaded: boolean;
+  cardsError: string;
   cards: MenuCollectionCard[];
 }
 
@@ -85,7 +89,7 @@ export abstract class MenuShowcaseState {
     this.cardsError = '';
 
     try {
-      const collections = await this.collectionsPull.getCollectionsWithCards();
+      const collections = await this.collectionsPull.getCollections();
       this.collections = this.toMenuCollections(collections);
       this.collectedCards = this.collections.reduce(
         (total, collection) => total + collection.collected,
@@ -107,18 +111,58 @@ export abstract class MenuShowcaseState {
     }
   }
 
-  private toMenuCollections(collections: CardCollectionWithCards[]): MenuCardCollection[] {
+  async toggleCollection(collectionId: string): Promise<void> {
+    const collection = this.collections.find((item) => item.id === collectionId);
+    if (!collection) {
+      return;
+    }
+
+    if (collection.expanded) {
+      collection.expanded = false;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    collection.expanded = true;
+
+    if (collection.cardsLoaded || collection.cardsLoading) {
+      this.cdr.detectChanges();
+      return;
+    }
+
+    collection.cardsLoading = true;
+    collection.cardsError = '';
+    this.cdr.detectChanges();
+
+    try {
+      const cards = await this.collectionsPull.getCollectionCards(collection.id);
+      collection.cards = cards.map((card) => ({
+        id: card.idCard,
+        title: card.title,
+        imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
+        locked: false,
+      }));
+      collection.cardsLoaded = true;
+    } catch (error) {
+      collection.cardsError =
+        error instanceof Error ? error.message : 'No se pudieron cargar las cartas';
+    } finally {
+      collection.cardsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private toMenuCollections(collections: CardCollection[]): MenuCardCollection[] {
     return collections.map((collection) => ({
       id: collection.id,
       name: collection.name,
-      total: collection.totalCards > 0 ? collection.totalCards : collection.cards.length,
-      collected: collection.cards.length,
-      cards: collection.cards.map((card) => ({
-        id: card.idCard,
-        title: card.title,
-        imageUrl: DEFAULT_CARD_IMAGE,
-        locked: false,
-      })),
+      total: collection.totalCards,
+      collected: collection.totalCards,
+      expanded: false,
+      cardsLoading: false,
+      cardsLoaded: false,
+      cardsError: '',
+      cards: [],
     }));
   }
 }

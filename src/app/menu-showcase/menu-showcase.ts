@@ -23,23 +23,51 @@ import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
           <p class="cards-status">No hay cartas disponibles.</p>
         } @else {
           @for (collection of collections; track collection.id) {
-            <section>
-              <header class="collection-header">
+            <section class="collection-section">
+              <button
+                type="button"
+                class="collection-header"
+                [attr.aria-expanded]="collection.expanded"
+                [attr.aria-controls]="'collection-panel-' + collection.id"
+                (click)="toggleCollection.emit(collection.id)"
+              >
                 <h3 class="collection-title">{{ collection.name }}</h3>
                 <span class="badge small">{{ collection.collected }}/{{ collection.total }}</span>
-              </header>
+                <span class="collection-chevron" aria-hidden="true">
+                  {{ collection.expanded ? 'v' : '>' }}
+                </span>
+              </button>
 
-              <div class="cards-grid">
-                @for (card of collection.cards; track card.id) {
-                  <article class="card-tile" [attr.title]="card.title">
-                    <img [src]="card.imageUrl" [alt]="card.title" loading="lazy" />
-                    @if (card.locked) {
-                      <div class="locked-overlay" aria-label="Carta bloqueada">🔒</div>
-                    }
-                    <span class="card-id">{{ card.title }}</span>
-                  </article>
-                }
-              </div>
+              @if (collection.expanded) {
+                <div class="collection-panel" [id]="'collection-panel-' + collection.id">
+                  @if (collection.cardsLoading) {
+                    <p class="cards-status">Cargando cartas...</p>
+                  } @else if (collection.cardsError) {
+                    <p class="cards-status">{{ collection.cardsError }}</p>
+                  } @else if (collection.cards.length === 0) {
+                    <p class="cards-status">No hay cartas en esta coleccion.</p>
+                  } @else {
+                    <div class="cards-grid">
+                      @for (card of collection.cards; track card.id) {
+                        <article class="card-tile" [attr.title]="card.title">
+                          <img
+                            [src]="card.imageUrl"
+                            [alt]="card.title"
+                            loading="lazy"
+                            draggable="false"
+                          />
+                          @if (card.locked) {
+                            <div class="locked-overlay" aria-label="Carta bloqueada">
+                              &#128274;
+                            </div>
+                          }
+                          <span class="card-id">{{ card.title }}</span>
+                        </article>
+                      }
+                    </div>
+                  }
+                </div>
+              }
             </section>
           }
         }
@@ -59,7 +87,7 @@ import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
           (click)="previousCommunity.emit()"
           aria-label="Carta anterior"
         >
-          ↑
+          &uarr;
         </button>
         <button
           type="button"
@@ -67,7 +95,7 @@ import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
           (click)="nextCommunity.emit()"
           aria-label="Carta siguiente"
         >
-          ↓
+          &darr;
         </button>
         <span class="badge dark">{{ currentCommunityCard.id }}</span>
         <div class="stars" aria-label="Valorar carta">
@@ -79,7 +107,7 @@ import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
               (click)="ratingChange.emit(star)"
               [attr.aria-label]="'Puntuar con ' + star + ' estrellas'"
             >
-              ★
+              &#9733;
             </button>
           }
         </div>
@@ -101,4 +129,5 @@ export class MenuShowcase {
   @Output() previousCommunity = new EventEmitter<void>();
   @Output() nextCommunity = new EventEmitter<void>();
   @Output() ratingChange = new EventEmitter<number>();
+  @Output() toggleCollection = new EventEmitter<string>();
 }
