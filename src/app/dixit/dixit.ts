@@ -16,6 +16,7 @@ import {
   RealtimeLobbyState,
   RealtimeMinigameStart,
   RealtimePrivateHandEntry,
+  RealtimeSpecialEvent,
   RealtimeStarClaim,
   RealtimeStarSpawn,
   RealtimeWalletUpdated,
@@ -59,6 +60,9 @@ interface BoardEffectPopup {
   description: string;
   icon: string;
 }
+
+type MinigameUiState = 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled';
+type SimulationTriggerMode = 'duel' | null;
 
 interface ResolvedPhaseState {
   phase: DixitPhase;
@@ -175,6 +179,9 @@ export class Dixit implements OnInit, OnDestroy {
   isSimulationDrawerOpen = false;
   isMinigame1Open = false;
   isMinigame2Open = false;
+  minigameUiState: MinigameUiState = 'playing';
+  minigameStatusMessage = '';
+  simulationTriggerMode: SimulationTriggerMode = null;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
@@ -186,6 +193,10 @@ export class Dixit implements OnInit, OnDestroy {
   private lastAppliedGameEndedReceivedAt = 0;
   private lastAppliedWalletUpdatedAt = 0;
   private gameEndRequested = false;
+  private lastAppliedMinigameReceivedAt = 0;
+  private minigameResultSent = false;
+  private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
+  private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   starClaimSequence = 0;
 
   constructor() {
@@ -272,22 +283,6 @@ export class Dixit implements OnInit, OnDestroy {
     effect(
       () => {
         const activeLobbyCode = this.realtime.activeLobbyCode();
-        const activeMinigame = this.realtime.activeMinigame();
-        if (activeLobbyCode !== this.id) {
-          this.applyRealtimeMinigame(null);
-          this.cdr.detectChanges();
-          return;
-        }
-
-        this.applyRealtimeMinigame(activeMinigame);
-        this.cdr.detectChanges();
-      },
-      { injector: this.injector }
-    );
-
-    effect(
-      () => {
-        const activeLobbyCode = this.realtime.activeLobbyCode();
         const activeStar = this.realtime.activeStar();
         // La estrella es un efecto volátil de sala. Solo se pinta si corresponde
         // a la lobby activa que el componente está mostrando.
@@ -323,12 +318,26 @@ export class Dixit implements OnInit, OnDestroy {
     effect(
       () => {
         const activeLobbyCode = this.realtime.activeLobbyCode();
-        const gameEndedResult = this.realtime.gameEndedResult();
-        if (!gameEndedResult || activeLobbyCode !== this.id) {
+        const minigame = this.realtime.minigameStart();
+        if (!minigame || activeLobbyCode !== this.id) {
           return;
         }
 
-        this.applyRealtimeGameEnded(gameEndedResult);
+        this.applyRealtimeMinigameStart(minigame);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const gameEnded = this.realtime.gameEndedResult();
+        if (!gameEnded || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeGameEnded(gameEnded);
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -343,6 +352,20 @@ export class Dixit implements OnInit, OnDestroy {
         }
 
         this.applyRealtimeWalletUpdated(walletUpdated);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const specialEvent = this.realtime.specialEvent();
+        if (!specialEvent || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeSpecialEvent(specialEvent);
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -371,14 +394,19 @@ export class Dixit implements OnInit, OnDestroy {
         this.activeStar = currentActiveStar;
       }
 
-      const currentActiveMinigame = this.realtime.activeMinigame();
-      if (this.realtime.activeLobbyCode() === this.id) {
-        this.applyRealtimeMinigame(currentActiveMinigame);
-      }
-
       const currentGameEnded = this.realtime.gameEndedResult();
       if (currentGameEnded && this.realtime.activeLobbyCode() === this.id) {
         this.applyRealtimeGameEnded(currentGameEnded);
+      }
+
+      const currentMinigame = this.realtime.minigameStart();
+      if (currentMinigame && this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeMinigameStart(currentMinigame);
+      }
+
+      const currentSpecialEvent = this.realtime.specialEvent();
+      if (currentSpecialEvent && this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeSpecialEvent(currentSpecialEvent);
       }
 
       const currentWalletUpdated = this.realtime.walletUpdated();
@@ -413,6 +441,8 @@ export class Dixit implements OnInit, OnDestroy {
     this.clearRevealRankingTimer();
     this.clearNextRoundTimer();
     this.clearStarWinnerTimer();
+    this.clearMinigameResolutionTimer();
+    this.clearMinigameUnavailableSubmitTimer();
   }
 
   get currentPhaseMeta(): PhaseStep {
@@ -578,6 +608,27 @@ export class Dixit implements OnInit, OnDestroy {
     }));
   }
 
+  get hasFinalRanking(): boolean {
+    return this.finalRanking.length > 0;
+  }
+
+  get currentPlayerFinalResult(): FinalRankingRow | null {
+    return this.finalRanking.find((entry) => entry.isCurrentPlayer) ?? null;
+  }
+
+  get finalOverlayTitle(): string {
+    const result = this.currentPlayerFinalResult;
+    if (!result) {
+      return 'Resultados finales';
+    }
+
+    if (result.place === 1) {
+      return 'Has ganado la partida';
+    }
+
+    return `Has terminado ${this.formatPlace(result.place)}`;
+  }
+
   get duelTargetPlayers(): DixitPlayerRow[] {
     return this.playerRows.filter((player) => !player.isCurrentPlayer);
   }
@@ -591,20 +642,54 @@ export class Dixit implements OnInit, OnDestroy {
     return !!this.activeStar && this.realtime.connectionStatus() === 'connected';
   }
 
-  get currentPlayerFinalResult(): FinalRankingRow | null {
-    return this.finalRanking.find((entry) => entry.playerId === this.currentUserId) ?? null;
+  get isCurrentPlayerInActiveMinigame(): boolean {
+    return !!this.activeMinigame && (
+      this.activeMinigame.player1 === this.currentUserId ||
+      this.activeMinigame.player2 === this.currentUserId
+    );
   }
 
-  get hasFinalRanking(): boolean {
-    return this.finalRanking.length > 0;
+  get activeMinigameDurationMs(): number {
+    return this.activeMinigame?.duration ?? 15_000;
   }
 
-  get finalOverlayTitle(): string {
-    if (this.currentPlayerFinalResult) {
-      return `${this.formatPlace(this.currentPlayerFinalResult.place)} puesto`;
+  get activeMinigameOpponentName(): string {
+    if (!this.activeMinigame) {
+      return 'Rival';
     }
 
-    return 'Partida finalizada';
+    const opponentId =
+      this.activeMinigame.player1 === this.currentUserId
+        ? this.activeMinigame.player2
+        : this.activeMinigame.player1;
+
+    return this.resolvePlayerName(opponentId) || 'Rival';
+  }
+
+  get activeMinigamePlayerOneName(): string {
+    return this.resolvePlayerName(this.activeMinigame?.player1 ?? '') || 'Jugador 1';
+  }
+
+  get activeMinigamePlayerTwoName(): string {
+    return this.resolvePlayerName(this.activeMinigame?.player2 ?? '') || 'Jugador 2';
+  }
+
+  get activeMinigameSeedKey(): string {
+    if (!this.activeMinigame) {
+      return 'minigame-default';
+    }
+
+    return [
+      this.activeMinigame.player1,
+      this.activeMinigame.player2,
+      this.activeMinigame.type,
+      this.activeMinigame.duration,
+      this.activeMinigame.isDuel ? 'duel' : 'conflict',
+    ].join('|');
+  }
+
+  get isUnavailableMinigameType(): boolean {
+    return this.activeMinigame !== null && this.resolveMinigameView(this.activeMinigame.type) === null;
   }
 
   private bootstrapFallbackRoster(): void {
@@ -710,6 +795,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.gameEnded = (update.lastAction ?? '').toUpperCase().includes('ENDED');
 
     this.applyRealtimePlayers(state);
+    this.applyRealtimeScores(state);
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
@@ -848,6 +934,27 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.boardTokens = this.buildBoardTokensFromScores();
+  }
+
+  private applyRealtimeScores(state: Record<string, unknown>): void {
+    const scoresRecord = asRecord(state['scores']);
+    if (!scoresRecord) {
+      return;
+    }
+
+    let hasAnyScore = false;
+    for (const [playerId, scoreValue] of Object.entries(scoresRecord)) {
+      if (typeof scoreValue !== 'number' || !Number.isFinite(scoreValue)) {
+        continue;
+      }
+
+      this.pointsByPlayer.set(playerId, scoreValue);
+      hasAnyScore = true;
+    }
+
+    if (hasAnyScore) {
+      this.boardTokens = this.buildBoardTokensFromScores();
+    }
   }
 
   private applyRealtimeCards(state: Record<string, unknown>): void {
@@ -1717,7 +1824,7 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   goHome(): void {
-    void this.router.navigate(['/games']);
+    void this.router.navigate(['/menu']);
   }
 
   toggleFinalRanking(): void {
@@ -1748,47 +1855,6 @@ export class Dixit implements OnInit, OnDestroy {
   closeSimulationDrawer(): void {
     this.isSimulationDrawerOpen = false;
   }
-
-  private applyRealtimeMinigame(minigame: RealtimeMinigameStart | null): void {
-    this.activeMinigame = minigame;
-
-    if (!minigame) {
-      this.isMinigame1Open = false;
-      this.isMinigame2Open = false;
-      return;
-    }
-
-    this.activeDuelChallenge = null;
-    switch (this.resolveMinigameView(minigame.type)) {
-      case 2:
-        this.isMinigame2Open = true;
-        this.isMinigame1Open = false;
-        break;
-      case 1:
-      default:
-        this.isMinigame1Open = true;
-        this.isMinigame2Open = false;
-        break;
-    }
-  }
-
-  private resolveMinigameView(minigameType: number): 1 | 2 {
-    switch (minigameType) {
-      case 1:
-        return 2;
-      case 0:
-      case 2:
-      default:
-        return 1;
-    }
-  }
-
-  openMinigame1(): void {
-    this.isMinigame1Open = true;
-    this.isMinigame2Open = false;
-    this.closeSimulationDrawer();
-  }
-
   closeMinigame1(): void {
     if (this.activeMinigame) {
       return;
@@ -1797,10 +1863,19 @@ export class Dixit implements OnInit, OnDestroy {
     this.isMinigame1Open = false;
   }
 
-  openMinigame2(): void {
-    this.isMinigame2Open = true;
-    this.isMinigame1Open = false;
+  simulateDuelSquareLanding(): void {
+    if (this.duelTargetPlayers.length === 0) {
+      this.errorMessage = 'No hay rivales disponibles para simular una casilla de duelo.';
+      return;
+    }
+
     this.closeSimulationDrawer();
+    this.errorMessage = '';
+    this.simulationTriggerMode = 'duel';
+    this.activeDuelChallenge = {
+      challengerId: this.currentUserId || this.localCurrentPlayerId,
+      receivedAt: Date.now(),
+    };
   }
 
   closeMinigame2(): void {
@@ -1809,6 +1884,27 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.isMinigame2Open = false;
+  }
+
+  onMinigameFinished(result: { score: number }): void {
+    if (!this.activeMinigame || this.minigameResultSent) {
+      return;
+    }
+
+    this.minigameResultSent = true;
+    this.minigameUiState = 'waiting';
+    this.minigameStatusMessage = 'Puntuacion enviada. Esperando al rival...';
+    try {
+      this.realtime.sendMinigameScore(result.score);
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el resultado del minijuego';
+      this.minigameResultSent = false;
+      this.minigameUiState = 'playing';
+      this.minigameStatusMessage = '';
+      return;
+    }
   }
 
   simulateChoicePhaseOpened(): void {
@@ -1967,6 +2063,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   closeDuelModal(): void {
     this.activeDuelChallenge = null;
+    this.simulationTriggerMode = null;
     this.realtime.clearDuelChallenge();
   }
 
@@ -2262,6 +2359,140 @@ export class Dixit implements OnInit, OnDestroy {
 
     this.lastAppliedWalletUpdatedAt = walletUpdated.receivedAt;
     this.finalWalletBalance = walletUpdated.balance;
+  }
+
+  private applyRealtimeMinigameStart(minigame: RealtimeMinigameStart): void {
+    if (minigame.receivedAt <= this.lastAppliedMinigameReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    this.clearMinigameResolutionTimer();
+    this.clearMinigameUnavailableSubmitTimer();
+    this.simulationTriggerMode = null;
+    this.activeMinigame = minigame;
+    this.minigameResultSent = false;
+    this.minigameUiState = 'playing';
+    this.minigameStatusMessage = '';
+    this.closeDuelModal();
+    this.realtime.clearMinigameStart();
+
+    if (!this.isCurrentPlayerInActiveMinigame) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.minigameStatusMessage =
+        this.resolveMinigameView(minigame.type) === null
+          ? 'Minijuego no disponible en este cliente. Esperando resolucion del servidor...'
+          : 'Duelo en curso. Esperando resolucion del servidor...';
+      this.closeSimulationDrawer();
+      return;
+    }
+
+    const minigameView = this.resolveMinigameView(minigame.type);
+    if (minigameView === null) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.minigameUiState = 'waiting';
+      this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
+      this.scheduleUnavailableMinigameSubmit(minigame.duration);
+    } else if (minigameView === 2) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = true;
+    } else {
+      this.isMinigame1Open = true;
+      this.isMinigame2Open = false;
+    }
+
+    this.closeSimulationDrawer();
+  }
+
+  private resolveMinigameView(type: number): 1 | 2 | null {
+    if (type === 0) {
+      return 1;
+    }
+
+    if (type === 1) {
+      return 2;
+    }
+
+    return null;
+  }
+
+  private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
+    if (!this.activeMinigame) {
+      return;
+    }
+
+    if (specialEvent.effect === 'CONFLICT_RESOLVED') {
+      if (specialEvent.winnerId === this.currentUserId) {
+        this.minigameUiState = 'won';
+        this.minigameStatusMessage = 'Victoria';
+      } else if (specialEvent.loserId === this.currentUserId) {
+        this.minigameUiState = 'lost';
+        this.minigameStatusMessage = 'Derrota';
+      } else {
+        this.minigameUiState = 'waiting';
+        this.minigameStatusMessage = specialEvent.message || 'Conflicto resuelto.';
+      }
+
+      this.scheduleMinigameClose(3000);
+      return;
+    }
+
+    if (specialEvent.effect === 'CONFLICT_CANCELLED' || specialEvent.effect === 'CONFLICT_DRAW') {
+      this.minigameUiState = 'cancelled';
+      this.minigameStatusMessage =
+        specialEvent.message || 'El minijuego ha terminado sin ganador.';
+      this.scheduleMinigameClose(2000);
+    }
+  }
+
+  private scheduleMinigameClose(delayMs: number): void {
+    this.clearMinigameResolutionTimer();
+    this.minigameResolutionTimer = setTimeout(() => {
+      this.closeActiveMinigame();
+      this.minigameResolutionTimer = null;
+      this.cdr.detectChanges();
+    }, delayMs);
+  }
+
+  private clearMinigameResolutionTimer(): void {
+    if (this.minigameResolutionTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.minigameResolutionTimer);
+    this.minigameResolutionTimer = null;
+  }
+
+  private scheduleUnavailableMinigameSubmit(durationMs: number): void {
+    this.clearMinigameUnavailableSubmitTimer();
+    this.minigameUnavailableSubmitTimer = setTimeout(() => {
+      this.minigameUnavailableSubmitTimer = null;
+      this.onMinigameFinished({ score: 0 });
+      this.cdr.detectChanges();
+    }, Math.max(500, durationMs));
+  }
+
+  private clearMinigameUnavailableSubmitTimer(): void {
+    if (this.minigameUnavailableSubmitTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.minigameUnavailableSubmitTimer);
+    this.minigameUnavailableSubmitTimer = null;
+  }
+
+  private closeActiveMinigame(): void {
+    this.isMinigame1Open = false;
+    this.isMinigame2Open = false;
+    this.clearMinigameUnavailableSubmitTimer();
+    this.clearMinigameResolutionTimer();
+    this.activeMinigame = null;
+    this.simulationTriggerMode = null;
+    this.minigameResultSent = false;
+    this.minigameUiState = 'playing';
+    this.minigameStatusMessage = '';
   }
 
   private resolvePlayerName(playerId: string): string {

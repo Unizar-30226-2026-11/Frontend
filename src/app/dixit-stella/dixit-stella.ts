@@ -1,19 +1,20 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, Injector, OnInit, effect, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { RealtimeGameStateUpdate, RealtimeLobbyState } from '../interfaces/dixit-realtime';
 import { Game } from '../interfaces/game';
 import { WordCard } from '../interfaces/word-card';
+import { Auth } from '../services/auth';
 import { DeckCard } from '../services/card-pull';
+import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
-import { WordCardPull } from '../services/word-card-pull';
 import {
-  BOARD_CARD_COUNT,
   BOARD_COLUMNS,
   BOARD_ROWS,
   MAX_SELECTIONS,
   MIN_SELECTIONS,
   PHASE_META,
-  TOTAL_ROUNDS,
+  PLAYER_COLORS,
   type PhaseMeta,
   type RevealLogEntry,
   type RevealOutcome,
@@ -21,25 +22,14 @@ import {
   type StellaPhase,
   type StellaPlayerState,
 } from './dixit-stella.constants';
-import {
-  applyScoringPhase,
-  createPlayersFromLobby,
-  createSeedFromString,
-  normalizeSelection,
-  resetPlayersForRound,
-  resolveActiveWord,
-  sortPlayersByScore,
-  shuffleWithSeed,
-} from './dixit-stella.logic';
-import {
-  runAdvanceAfterScoring,
-  runAutoSubmitOpponents,
-  runResolveExplorerTurn,
-  runStartAnnouncePhase,
-  runStartRevealPhase,
-  runToggleCurrentSelection,
-  type StellaRuntimeHost,
-} from './dixit-stella.runtime';
+
+interface StellaRoundSnapshot {
+  playerMarks: Record<string, number[]>;
+  revealedCards: number[];
+  currentScoutId: string;
+}
+
+const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 
 @Component({
   selector: 'app-dixit-stella',
@@ -47,75 +37,131 @@ import {
   templateUrl: './dixit-stella.html',
   styleUrl: './dixit-stella.css',
 })
-export class DixitStella implements OnInit, OnDestroy {
+export class DixitStella implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
   private readonly stellaCardPull = inject(StellaCardPull);
-  private readonly wordCardPull = inject(WordCardPull);
   private readonly gamesPull = inject(GamesPull);
-  private limitFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly realtime = inject(DixitRealtime);
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly injector = inject(Injector);
+
+  private readonly playerNames = new Map<string, string>();
+  private readonly cardCatalog = new Map<number, DeckCard>();
+  private readonly boardCardIdsByCode = new Map<string, number>();
+  private lastAppliedGameStateReceivedAt = 0;
+  private lastBoardSignature = '';
   private revealLogSequence = 0;
-  private imageDeck: DeckCard[] = [];
+  private firstScoutId = '';
+  private previousRoundSnapshot: StellaRoundSnapshot | null = null;
+  private draftSelectionIds: number[] = [];
 
   readonly boardRowIndexes = Array.from({ length: BOARD_ROWS }, (_, index) => index);
   readonly announceTrack = Array.from({ length: MAX_SELECTIONS }, (_, index) => index + 1);
-  readonly totalRounds = TOTAL_ROUNDS;
 
   id = '';
-  roomTitle = 'Stella demo';
+  roomTitle = 'Sala Stella';
   loading = true;
   errorMessage = '';
-  phase: StellaPhase = 'association';
+  phase: StellaPhase = 'STELLA_WORD_REVEAL';
   roundNumber = 1;
   boardCards: DeckCard[] = [];
-  wordCards: WordCard[] = [];
   activeWordCard: WordCard | null = null;
   activeWord = '';
   players: StellaPlayerState[] = [];
-  deckCursor = 0;
-  firstExplorerIndex = 0;
   activeExplorerId = '';
   darkPlayerId = '';
   revealLog: RevealLogEntry[] = [];
   scoringSummary: ScoringSummaryRow[] = [];
   finalWinners: StellaPlayerState[] = [];
-  selectionMessage = 'Marca entre 1 y 10 cartas para cerrar tu pizarra.';
-  lastResolutionTitle = 'Esperando siguiente chispa';
+  selectionMessage = 'Esperando estado realtime de Stella.';
+  lastResolutionTitle = 'Esperando revelaciones';
   limitFeedbackActive = false;
   inspectedCard: DeckCard | null = null;
 
-  async ngOnInit(): Promise<void> {
-    this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? 'TEST';
+  constructor() {
+    effect(
+      () => {
+        const lobbyState = this.realtime.lobbyState();
+        if (!lobbyState || lobbyState.code !== this.id) {
+          return;
+        }
 
-    try {
-      const cards = await this.stellaCardPull.getCards(30);
-      const words = this.wordCardPull.getCardsSync(TOTAL_ROUNDS);
+        this.applyRealtimeLobbyState(lobbyState);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
 
-      if (cards.length < 30) {
-        throw new Error('No hay suficientes cartas demo para montar la mesa Stella');
-      }
+    effect(
+      () => {
+        const gameState = this.realtime.gameState();
+        if (!gameState || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
 
-      if (words.length < TOTAL_ROUNDS) {
-        throw new Error('No hay suficientes cartas de palabra para las 4 rondas');
-      }
+        this.applyRealtimeGameState(gameState);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
 
-      this.roomTitle = `Sala ${this.id || 'demo'}`;
-      this.initializeMatch(cards, words, null);
-    } catch (error: unknown) {
-      this.errorMessage =
-        error instanceof Error ? error.message : 'No se pudo preparar la partida Stella';
-    } finally {
-      this.loading = false;
-    }
+    effect(
+      () => {
+        const realtimeError = this.realtime.lastError();
+        if (!realtimeError || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
 
-    void this.hydrateLobbyContext();
+        this.errorMessage = realtimeError;
+        this.loading = false;
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
   }
 
-  ngOnDestroy(): void {
-    if (this.limitFeedbackTimer !== null) {
-      clearTimeout(this.limitFeedbackTimer);
-      this.limitFeedbackTimer = null;
+  async ngOnInit(): Promise<void> {
+    this.id = this.route.snapshot.paramMap.get('id')?.trim() ?? '';
+    if (!this.id) {
+      this.loading = false;
+      this.errorMessage = 'No se encontro el codigo de la sala Stella';
+      return;
     }
+
+    const [cardsResult, lobbyResult, connectionResult] = await Promise.allSettled([
+      this.stellaCardPull.getCards(),
+      this.gamesPull.getGameDetails(this.id).catch(() => null),
+      this.realtime.ensureLobbyConnection(this.id),
+    ]);
+
+    if (cardsResult.status === 'fulfilled') {
+      this.hydrateCardCatalog(cardsResult.value);
+    } else {
+      this.errorMessage =
+        cardsResult.reason instanceof Error
+          ? cardsResult.reason.message
+          : 'No se pudieron cargar las cartas de Stella';
+    }
+
+    if (lobbyResult.status === 'fulfilled' && lobbyResult.value) {
+      this.applyLobbyDetails(lobbyResult.value);
+    }
+
+    if (connectionResult.status === 'rejected' && !this.errorMessage) {
+      this.errorMessage =
+        connectionResult.reason instanceof Error
+          ? connectionResult.reason.message
+          : 'No se pudo conectar Stella en tiempo real';
+    }
+
+    const initialGameState = this.realtime.gameState();
+    if (initialGameState && this.realtime.activeLobbyCode() === this.id) {
+      this.applyRealtimeGameState(initialGameState);
+    }
+
+    this.loading = false;
   }
 
   get currentPhaseMeta(): PhaseMeta {
@@ -123,27 +169,45 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   get currentPlayer(): StellaPlayerState {
-    const player = this.players.find((entry) => entry.isCurrentUser) ?? this.players[0];
-    if (!player) {
-      throw new Error('La mesa Stella no tiene jugadores cargados');
-    }
-    return player;
+    const currentPlayerState = this.players.find((entry) => entry.isCurrentUser);
+    return (
+      currentPlayerState ?? {
+        id: this.currentPlayerId,
+        name: this.auth.username() || 'Tu',
+        color: PLAYER_COLORS[0],
+        score: 0,
+        selection: this.getCurrentSelectionCodes(),
+        selectionCount: this.getCurrentSelectionCodes().length,
+        submitted: false,
+        lanternState: 'LIGHT',
+        hasFallen: false,
+        revealedSelectionCodes: [],
+        roundPoints: 0,
+        successfulAssociations: 0,
+        isCurrentUser: true,
+      }
+    );
   }
 
   get primaryWinner(): StellaPlayerState | null {
     return this.finalWinners[0] ?? null;
   }
 
+  get currentSelectionCodes(): string[] {
+    return this.getCurrentSelectionCodes();
+  }
+
   get currentSelectionCount(): number {
-    return this.currentPlayer.selection.length;
+    return this.currentSelectionCodes.length;
   }
 
   get canSubmitSelection(): boolean {
     return (
-      this.phase === 'association' &&
+      this.phase === 'STELLA_MARKING' &&
       !this.currentPlayer.submitted &&
       this.currentSelectionCount >= MIN_SELECTIONS &&
-      this.currentSelectionCount <= MAX_SELECTIONS
+      this.currentSelectionCount <= MAX_SELECTIONS &&
+      this.realtime.connectionStatus() === 'connected'
     );
   }
 
@@ -160,49 +224,39 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   get hudTitle(): string {
-    if (this.phase === 'association') {
-      return `${this.currentSelectionCount}/10 cartas seleccionadas`;
+    switch (this.phase) {
+      case 'STELLA_WORD_REVEAL':
+        return 'Preparando ronda';
+      case 'STELLA_MARKING':
+        return `${this.currentSelectionCount}/10 cartas seleccionadas`;
+      case 'STELLA_REVEAL':
+        return this.activeExplorer ? `Turno de ${this.activeExplorer.name}` : 'Esperando scout';
+      case 'SCORING':
+        return 'Ronda resuelta';
+      case 'FINISHED':
+        return 'La partida ha terminado';
     }
-
-    if (this.phase === 'announce') {
-      return 'Los conteos ya son publicos';
-    }
-
-    if (this.phase === 'reveal' && this.activeExplorer) {
-      return `Turno de ${this.activeExplorer.name}`;
-    }
-
-    if (this.phase === 'scoring') {
-      return 'Ronda resuelta';
-    }
-
-    return 'La partida ha terminado';
   }
 
   get hudDescription(): string {
-    if (this.phase === 'association') {
-      return 'La seleccion queda bloqueada al confirmar y la undecima carta se ignora.';
+    switch (this.phase) {
+      case 'STELLA_WORD_REVEAL':
+        return 'El servidor esta publicando la palabra y preparando el marcado.';
+      case 'STELLA_MARKING':
+        return 'Marca entre 1 y 10 cartas y confirma cuando termines.';
+      case 'STELLA_REVEAL':
+        return this.isCurrentUserExplorer
+          ? 'Te toca revelar: pulsa una de tus cartas marcadas que aun no se haya revelado.'
+          : 'Espera a que el jugador explorador revele su siguiente carta.';
+      case 'SCORING':
+        return 'El servidor ya ha aplicado puntuacion y penalizaciones.';
+      case 'FINISHED':
+        return 'La clasificacion final ya no cambia.';
     }
-
-    if (this.phase === 'announce') {
-      return 'Solo entra en Oscuridad el lider unico en numero de selecciones.';
-    }
-
-    if (this.phase === 'reveal') {
-      return this.isCurrentUserExplorer
-        ? 'Te toca explorar: pulsa una de tus cartas aun no reveladas.'
-        : 'Los rivales se resuelven automaticamente cuando llega su turno.';
-    }
-
-    if (this.phase === 'scoring') {
-      return 'La penalizacion de Oscuridad solo se aplica si el jugador oscuro tambien cae.';
-    }
-
-    return 'La clasificacion final ya no cambia.';
   }
 
   goHome(): void {
-    void this.router.navigate(['/']);
+    void this.router.navigate(['/menu']);
   }
 
   goToProfile(): void {
@@ -231,15 +285,15 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   isFirstExplorer(playerId: string): boolean {
-    return this.players[this.firstExplorerIndex]?.id === playerId;
+    return this.firstScoutId === playerId;
   }
 
   isCardSelected(cardCode: string): boolean {
-    return this.currentPlayer.selection.includes(cardCode);
+    return this.currentSelectionCodes.includes(cardCode);
   }
 
   getSelectionOrder(cardCode: string): number {
-    const selectionIndex = this.currentPlayer.selection.indexOf(cardCode);
+    const selectionIndex = this.currentSelectionCodes.indexOf(cardCode);
     return selectionIndex >= 0 ? selectionIndex + 1 : 0;
   }
 
@@ -249,7 +303,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
   isCardRevealable(cardCode: string): boolean {
     const explorer = this.activeExplorer;
-    if (!explorer || !explorer.isCurrentUser || this.phase !== 'reveal') {
+    if (!explorer || !explorer.isCurrentUser || this.phase !== 'STELLA_REVEAL') {
       return false;
     }
 
@@ -257,11 +311,11 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   canInteractWithCard(cardCode: string): boolean {
-    if (this.phase === 'association') {
-      return !this.currentPlayer.submitted && this.boardCards.some((card) => card.code === cardCode);
+    if (this.phase === 'STELLA_MARKING') {
+      return !this.currentPlayer.submitted && this.boardCardIdsByCode.has(cardCode);
     }
 
-    if (this.phase === 'reveal') {
+    if (this.phase === 'STELLA_REVEAL') {
       return this.isCardRevealable(cardCode);
     }
 
@@ -269,13 +323,16 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   onBoardCardClicked(cardCode: string): void {
-    if (this.phase === 'association') {
-      this.toggleCurrentSelection(cardCode);
+    if (this.phase === 'STELLA_MARKING') {
+      this.toggleDraftSelection(cardCode);
       return;
     }
 
-    if (this.phase === 'reveal' && this.isCardRevealable(cardCode)) {
-      this.resolveExplorerTurn(cardCode);
+    if (this.phase === 'STELLA_REVEAL' && this.isCardRevealable(cardCode)) {
+      const cardId = this.boardCardIdsByCode.get(cardCode);
+      if (typeof cardId === 'number') {
+        this.realtime.sendGameAction('STELLA_REVEAL_MARK', { cardId });
+      }
     }
   }
 
@@ -285,38 +342,18 @@ export class DixitStella implements OnInit, OnDestroy {
       return;
     }
 
-    this.setSelectionForPlayer(this.currentPlayer.id, [...this.currentPlayer.selection]);
-    this.autoSubmitOpponents();
-    this.startAnnouncePhase();
-  }
-
-  setSelectionForPlayer(playerId: string, cardCodes: string[]): void {
-    const player = this.players.find((entry) => entry.id === playerId);
-    if (!player) {
-      return;
-    }
-
-    const uniqueCodes = normalizeSelection(cardCodes, this.boardCards);
-
-    player.selection = uniqueCodes;
-    player.selectionCount = uniqueCodes.length;
-    player.submitted = true;
-  }
-
-  startAnnouncePhase(): void {
-    runStartAnnouncePhase(this as unknown as StellaRuntimeHost);
-  }
-
-  startRevealPhase(): void {
-    runStartRevealPhase(this as unknown as StellaRuntimeHost);
-  }
-
-  resolveExplorerTurn(cardCode?: string): void {
-    runResolveExplorerTurn(this as unknown as StellaRuntimeHost, cardCode);
+    this.realtime.sendGameAction('STELLA_SUBMIT_MARKS', {
+      cardIds: [...this.draftSelectionIds],
+    });
+    this.selectionMessage = 'Marcas enviadas. Esperando al resto de jugadores.';
   }
 
   advanceAfterScoring(): void {
-    runAdvanceAfterScoring(this as unknown as StellaRuntimeHost);
+    if (this.phase !== 'SCORING') {
+      return;
+    }
+
+    this.realtime.sendGameAction('NEXT_ROUND');
   }
 
   getPlayersAtCount(count: number): StellaPlayerState[] {
@@ -336,11 +373,9 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   getRevealPrompt(player: StellaPlayerState): string {
-    if (player.isCurrentUser) {
-      return 'Te toca explorar. Pulsa una de tus cartas marcadas para intentar una chispa.';
-    }
-
-    return `${player.name} resuelve automaticamente la mejor coincidencia que aun conserve.`;
+    return player.isCurrentUser
+      ? 'Es tu turno. Pulsa una de tus cartas marcadas para revelarla.'
+      : `Esperando a que ${player.name} revele una de sus cartas.`;
   }
 
   getWinnersLabel(): string {
@@ -348,111 +383,397 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   getPlayersSortedByScore(): StellaPlayerState[] {
-    return sortPlayersByScore(this.players);
+    return [...this.players].sort((left, right) => right.score - left.score);
   }
 
-  private async loadLobbyDetails(): Promise<Game | null> {
-    if (!this.id) {
-      return null;
-    }
-
-    try {
-      return await this.gamesPull.getGameDetails(this.id);
-    } catch {
-      return null;
-    }
-  }
-
-  private async hydrateLobbyContext(): Promise<void> {
-    const lobby = await this.loadLobbyDetails();
-    if (!lobby) {
-      return;
-    }
-
+  private applyLobbyDetails(lobby: Game): void {
     this.roomTitle = lobby.title?.trim() || this.roomTitle;
+
+    lobby.players.forEach((playerId) => {
+      this.playerNames.set(playerId, this.playerNames.get(playerId) ?? playerId);
+    });
   }
 
-  private initializeMatch(cards: DeckCard[], words: WordCard[], lobby: Game | null): void {
-    const seedKey = this.id || 'stella-demo';
+  private hydrateCardCatalog(cards: DeckCard[]): void {
+    this.cardCatalog.clear();
 
-    this.imageDeck = shuffleWithSeed(cards, `${seedKey}-images`);
-    this.wordCards = shuffleWithSeed(words, `${seedKey}-words`).slice(0, TOTAL_ROUNDS);
-    this.boardCards = this.imageDeck.slice(0, BOARD_CARD_COUNT);
-    this.deckCursor = BOARD_CARD_COUNT;
-    const lobbyPlayers = lobby?.players.filter((playerId) => playerId.trim().length > 0) ?? [];
-    this.players = createPlayersFromLobby(lobbyPlayers);
-    this.firstExplorerIndex = createSeedFromString(`${seedKey}-first`) % this.players.length;
-
-    this.prepareRoundState();
+    cards.forEach((card) => {
+      const numericCode = Number(card.code);
+      if (Number.isFinite(numericCode)) {
+        this.cardCatalog.set(numericCode, card);
+      }
+    });
   }
 
-  private prepareRoundState(): void {
-    this.phase = 'association';
-    this.activeWordCard = this.wordCards[this.roundNumber - 1] ?? this.wordCards[0] ?? null;
-    this.activeWord = this.activeWordCard
-      ? resolveActiveWord(this.activeWordCard, this.roundNumber, this.id)
-      : '';
-    this.activeExplorerId = '';
-    this.darkPlayerId = '';
-    this.revealLog = [];
-    this.scoringSummary = [];
-    this.selectionMessage = 'Marca entre 1 y 10 cartas para cerrar tu pizarra.';
-    this.lastResolutionTitle = 'Preparando ronda';
-    this.limitFeedbackActive = false;
-    resetPlayersForRound(this.players);
+  private applyRealtimeLobbyState(lobbyState: RealtimeLobbyState): void {
+    lobbyState.players.forEach((player) => {
+      this.playerNames.set(player.id, player.username);
+    });
+
+    if (!this.roomTitle.trim()) {
+      this.roomTitle = `Sala ${lobbyState.code}`;
+    }
   }
 
-  private toggleCurrentSelection(cardCode: string): void {
-    runToggleCurrentSelection(this as unknown as StellaRuntimeHost, cardCode);
-  }
-
-  private autoSubmitOpponents(): void {
-    runAutoSubmitOpponents(this as unknown as StellaRuntimeHost);
-  }
-
-  private awardAssociation(player: StellaPlayerState, points: number): void {
-    if (player.hasFallen) {
+  private applyRealtimeGameState(gameState: RealtimeGameStateUpdate): void {
+    if (gameState.receivedAt <= this.lastAppliedGameStateReceivedAt) {
       return;
     }
 
-    player.roundPoints += points;
-    player.successfulAssociations += 1;
+    const state = this.asRecord(gameState.state);
+    if (!state || this.readString(state, 'mode')?.toUpperCase() !== 'STELLA') {
+      return;
+    }
+
+    this.lastAppliedGameStateReceivedAt = gameState.receivedAt;
+    this.errorMessage = '';
+    this.loading = false;
+
+    const phase = this.normalizePhase(this.readString(state, 'phase'));
+    const currentRound = this.asRecord(state['currentRound']) ?? {};
+    const boardCardIds = this.readNumberArray(currentRound, 'boardCards');
+    const boardSignature = boardCardIds.join(',');
+    const playerMarks = this.readPlayerMarks(currentRound);
+    const revealedCards = this.readNumberArray(currentRound, 'revealedCards');
+    const currentScoutId = this.readString(currentRound, 'currentScoutId') ?? '';
+    const fallenPlayers = new Set(this.readStringArray(currentRound, 'fallenPlayers'));
+    const scores = this.readNumberRecord(state, 'scores');
+    const roundScores = this.readNumberRecord(currentRound, 'roundScores');
+    const successfulMarks = this.readNumberRecord(currentRound, 'successfulMarks');
+    const winners = this.readStringArray(state, 'winners');
+    const playerIds = this.resolvePlayerIds(state, scores, playerMarks);
+
+    if (boardSignature && boardSignature !== this.lastBoardSignature) {
+      this.roundNumber = this.lastBoardSignature ? this.roundNumber + 1 : 1;
+      this.lastBoardSignature = boardSignature;
+      this.draftSelectionIds = [];
+      this.revealLog = [];
+      this.revealLogSequence = 0;
+      this.firstScoutId = '';
+      this.previousRoundSnapshot = null;
+      this.inspectedCard = null;
+    }
+
+    if (!this.firstScoutId && currentScoutId) {
+      this.firstScoutId = currentScoutId;
+    }
+
+    const previousSnapshot = this.previousRoundSnapshot;
+    this.phase = phase;
+    this.activeExplorerId = currentScoutId;
+    this.darkPlayerId = this.readString(currentRound, 'inTheDarkPlayerId') ?? '';
+    this.activeWord = this.readString(currentRound, 'word') ?? '';
+    this.activeWordCard = this.activeWord
+      ? {
+          id: this.roundNumber,
+          terms: [this.activeWord, this.activeWord],
+        }
+      : null;
+
+    this.boardCardIdsByCode.clear();
+    this.boardCards = boardCardIds.map((cardId) => {
+      const card = this.resolveBoardCard(cardId);
+      this.boardCardIdsByCode.set(card.code, cardId);
+      return card;
+    });
+
+    const revealedCardSet = new Set(revealedCards.map((cardId) => String(cardId)));
+    this.players = playerIds.map((playerId, index) => {
+      const selection = (playerMarks[playerId] ?? []).map((cardId) => String(cardId));
+      const roundPointsNet = roundScores[playerId] ?? 0;
+
+      return {
+        id: playerId,
+        name: this.playerNames.get(playerId) ?? playerId,
+        color: PLAYER_COLORS[index % PLAYER_COLORS.length],
+        score: scores[playerId] ?? 0,
+        selection,
+        selectionCount: selection.length,
+        submitted: playerMarks[playerId] !== undefined,
+        lanternState: this.darkPlayerId === playerId ? 'DARK' : 'LIGHT',
+        hasFallen: fallenPlayers.has(playerId),
+        revealedSelectionCodes: selection.filter((cardCode) => revealedCardSet.has(cardCode)),
+        roundPoints: roundPointsNet,
+        successfulAssociations: successfulMarks[playerId] ?? 0,
+        isCurrentUser: playerId === this.currentPlayerId,
+      };
+    });
+
+    if (playerMarks[this.currentPlayerId]?.length) {
+      this.draftSelectionIds = [];
+    } else if (phase !== 'STELLA_MARKING') {
+      this.draftSelectionIds = [];
+    }
+
+    this.appendRevealLog(previousSnapshot, {
+      playerMarks,
+      revealedCards,
+      currentScoutId,
+    });
+    this.previousRoundSnapshot = {
+      playerMarks,
+      revealedCards: [...revealedCards],
+      currentScoutId,
+    };
+
+    this.scoringSummary = this.buildScoringSummary(roundScores, successfulMarks, fallenPlayers);
+    this.finalWinners = winners.length
+      ? this.players.filter((player) => winners.includes(player.id))
+      : [];
+    this.syncStatusCopy();
   }
 
-  private pushRevealLog(
-    explorerName: string,
-    cardCode: string,
-    cardLabel: string,
-    matchingPlayerNames: string[],
-    outcome: RevealOutcome
+  private appendRevealLog(
+    previousSnapshot: StellaRoundSnapshot | null,
+    nextSnapshot: StellaRoundSnapshot
   ): void {
-    const outcomeLabel =
-      outcome === 'super-spark' ? 'Super-spark' : outcome === 'spark' ? 'Spark' : 'Caida';
+    if (!previousSnapshot) {
+      return;
+    }
 
-    this.revealLog = [
-      {
+    const newRevealedCards = nextSnapshot.revealedCards.filter(
+      (cardId) => !previousSnapshot.revealedCards.includes(cardId)
+    );
+    if (newRevealedCards.length === 0) {
+      return;
+    }
+
+    const nextEntries = newRevealedCards.map((cardId) => {
+      const explorerId = previousSnapshot.currentScoutId || nextSnapshot.currentScoutId;
+      const matchingPlayerNames = Object.entries(nextSnapshot.playerMarks)
+        .filter(([playerId, marks]) => playerId !== explorerId && marks.includes(cardId))
+        .map(([playerId]) => this.playerNames.get(playerId) ?? playerId);
+      const outcome: RevealOutcome =
+        matchingPlayerNames.length === 0
+          ? 'fall'
+          : matchingPlayerNames.length === 1
+            ? 'super-spark'
+            : 'spark';
+
+      return {
         id: ++this.revealLogSequence,
-        explorerName,
-        cardCode,
-        cardLabel,
+        explorerName: this.playerNames.get(explorerId) ?? explorerId ?? 'Scout',
+        cardCode: String(cardId),
+        cardLabel: this.resolveBoardCard(cardId).value,
         matchingPlayerNames,
         outcome,
-        outcomeLabel,
-      },
-      ...this.revealLog,
-    ];
+        outcomeLabel:
+          outcome === 'super-spark' ? 'Super-spark' : outcome === 'spark' ? 'Spark' : 'Caida',
+      };
+    });
+
+    this.revealLog = [...nextEntries.reverse(), ...this.revealLog];
   }
 
-  private getPlayerIndex(playerId: string): number {
-    return this.players.findIndex((player) => player.id === playerId);
+  private buildScoringSummary(
+    roundScores: Record<string, number>,
+    successfulMarks: Record<string, number>,
+    fallenPlayers: Set<string>
+  ): ScoringSummaryRow[] {
+    const penaltyPlayerId =
+      this.darkPlayerId && fallenPlayers.has(this.darkPlayerId) ? this.darkPlayerId : '';
+
+    return this.players.map((player) => {
+      const penalty = player.id === penaltyPlayerId ? successfulMarks[player.id] ?? 0 : 0;
+      const netPoints = roundScores[player.id] ?? 0;
+      const roundPoints = netPoints + penalty;
+
+      return {
+        playerId: player.id,
+        playerName: player.name,
+        scoreBefore: player.score - netPoints,
+        roundPoints,
+        penalty,
+        netPoints,
+        totalScore: player.score,
+      };
+    });
   }
 
-  private applyScoringPhase(): void {
-    const scoringResult = applyScoringPhase(this.players, this.darkPlayerId);
-    this.scoringSummary = scoringResult.summary;
-    this.phase = 'scoring';
-    this.activeExplorerId = '';
-    this.lastResolutionTitle = 'Puntuacion cerrada';
-    this.selectionMessage = scoringResult.selectionMessage;
+  private syncStatusCopy(): void {
+    switch (this.phase) {
+      case 'STELLA_WORD_REVEAL':
+        this.selectionMessage = 'La palabra ya es visible. Esperando a que el servidor abra el marcado.';
+        this.lastResolutionTitle = 'Palabra revelada';
+        break;
+      case 'STELLA_MARKING':
+        this.selectionMessage = this.currentPlayer.submitted
+          ? 'Tus marcas ya estan enviadas. Esperando al resto de jugadores.'
+          : 'Marca entre 1 y 10 cartas para cerrar tu pizarra.';
+        this.lastResolutionTitle = 'Marcado abierto';
+        break;
+      case 'STELLA_REVEAL':
+        this.selectionMessage = this.isCurrentUserExplorer
+          ? 'Tu turno: elige una de tus marcas sin revelar.'
+          : this.activeExplorer
+            ? `Esperando la jugada de ${this.activeExplorer.name}.`
+            : 'Esperando el siguiente scout.';
+        this.lastResolutionTitle = this.latestRevealLog
+          ? `Ultima jugada: ${this.latestRevealLog.outcomeLabel}`
+          : 'Revelado en curso';
+        break;
+      case 'SCORING':
+        this.selectionMessage = this.darkPlayerId
+          ? `Oscuridad: ${this.playerNames.get(this.darkPlayerId) ?? this.darkPlayerId}.`
+          : 'Ningun jugador ha quedado en Oscuridad.';
+        this.lastResolutionTitle = 'Puntuacion cerrada';
+        break;
+      case 'FINISHED':
+        this.selectionMessage = 'La partida ha finalizado.';
+        this.lastResolutionTitle = 'Victoria final';
+        break;
+    }
+  }
+
+  private toggleDraftSelection(cardCode: string): void {
+    const cardId = this.boardCardIdsByCode.get(cardCode);
+    if (typeof cardId !== 'number') {
+      return;
+    }
+
+    const currentIndex = this.draftSelectionIds.indexOf(cardId);
+    if (currentIndex >= 0) {
+      this.draftSelectionIds = this.draftSelectionIds.filter((entry) => entry !== cardId);
+      this.limitFeedbackActive = false;
+      return;
+    }
+
+    if (this.draftSelectionIds.length >= MAX_SELECTIONS) {
+      this.limitFeedbackActive = true;
+      this.selectionMessage = 'No puedes marcar mas de 10 cartas.';
+      return;
+    }
+
+    this.limitFeedbackActive = false;
+    this.draftSelectionIds = [...this.draftSelectionIds, cardId];
+  }
+
+  private resolveBoardCard(cardId: number): DeckCard {
+    return (
+      this.cardCatalog.get(cardId) ?? {
+        code: String(cardId),
+        image: DEFAULT_CARD_IMAGE,
+        value: `Carta ${cardId}`,
+        suit: 'STELLA',
+      }
+    );
+  }
+
+  private resolvePlayerIds(
+    state: Record<string, unknown>,
+    scores: Record<string, number>,
+    playerMarks: Record<string, number[]>
+  ): string[] {
+    const playerIds = this.readStringArray(state, 'players');
+    if (playerIds.length > 0) {
+      return playerIds;
+    }
+
+    return Array.from(
+      new Set([
+        ...Object.keys(scores),
+        ...Object.keys(playerMarks),
+        ...this.playerNames.keys(),
+        this.currentPlayerId,
+      ].filter(Boolean))
+    );
+  }
+
+  private normalizePhase(value: string | null): StellaPhase {
+    switch (value) {
+      case 'STELLA_MARKING':
+      case 'STELLA_REVEAL':
+      case 'SCORING':
+      case 'FINISHED':
+        return value;
+      case 'STELLA_WORD_REVEAL':
+      default:
+        return 'STELLA_WORD_REVEAL';
+    }
+  }
+
+  private get currentPlayerId(): string {
+    return this.auth.session()?.user.id ?? '';
+  }
+
+  private getCurrentSelectionCodes(): string[] {
+    const currentPlayerState = this.players.find((entry) => entry.isCurrentUser);
+    if (currentPlayerState?.submitted) {
+      return currentPlayerState.selection;
+    }
+
+    return this.draftSelectionIds.map((cardId) => String(cardId));
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
+  }
+
+  private readString(source: Record<string, unknown>, key: string): string | null {
+    const value = source[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  private readStringArray(source: Record<string, unknown>, key: string): string[] {
+    const value = source[key];
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      .map((entry) => entry.trim());
+  }
+
+  private readNumberArray(source: Record<string, unknown>, key: string): number[] {
+    const value = source[key];
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => (typeof entry === 'number' ? entry : typeof entry === 'string' ? Number(entry) : NaN))
+      .filter((entry) => Number.isFinite(entry));
+  }
+
+  private readNumberRecord(source: Record<string, unknown>, key: string): Record<string, number> {
+    const value = this.asRecord(source[key]);
+    if (!value) {
+      return {};
+    }
+
+    return Object.entries(value).reduce<Record<string, number>>((accumulator, [entryKey, entryValue]) => {
+      const numericValue =
+        typeof entryValue === 'number'
+          ? entryValue
+          : typeof entryValue === 'string'
+            ? Number(entryValue)
+            : NaN;
+
+      if (Number.isFinite(numericValue)) {
+        accumulator[entryKey] = numericValue;
+      }
+
+      return accumulator;
+    }, {});
+  }
+
+  private readPlayerMarks(source: Record<string, unknown>): Record<string, number[]> {
+    const value = this.asRecord(source['playerMarks']);
+    if (!value) {
+      return {};
+    }
+
+    return Object.entries(value).reduce<Record<string, number[]>>((accumulator, [playerId, marks]) => {
+      if (Array.isArray(marks)) {
+        accumulator[playerId] = marks
+          .map((entry) =>
+            typeof entry === 'number' ? entry : typeof entry === 'string' ? Number(entry) : NaN
+          )
+          .filter((entry) => Number.isFinite(entry));
+      }
+
+      return accumulator;
+    }, {});
   }
 }

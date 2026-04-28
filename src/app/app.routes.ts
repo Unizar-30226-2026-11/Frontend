@@ -6,6 +6,7 @@ import { Store } from './store/store';
 import { StorePack } from './store/store-pack/store-pack';
 import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
+import { LobbyMenu } from './lobby-menu/lobby-menu';
 import { Settings } from './settings/settings';
 import { Dixit } from './dixit/dixit';
 import { DixitStella } from './dixit-stella/dixit-stella';
@@ -15,8 +16,9 @@ import { DixitTestShell } from './test/dixit/dixit-test-shell';
 import { StarTest } from './test/star/star-test';
 import { Auth } from './services/auth';
 
-function buildActiveGameUrlTree(router: Router, activeGameId: string) {
-  return router.createUrlTree(['/dixit', activeGameId]);
+function buildActiveGameUrlTree(router: Router, auth: Auth) {
+  const activeGameRoute = auth.activeGameRoute();
+  return activeGameRoute ? router.parseUrl(activeGameRoute) : true;
 }
 
 export const redirectLoggedInHomeGuard: CanActivateFn = async () => {
@@ -26,14 +28,14 @@ export const redirectLoggedInHomeGuard: CanActivateFn = async () => {
   const activeGameId = auth.activeGameId();
 
   if (activeGameId) {
-    return buildActiveGameUrlTree(router, activeGameId);
+    return buildActiveGameUrlTree(router, auth);
   }
 
   if (!auth.isLoggedIn()) {
     return true;
   }
 
-  return router.createUrlTree(['/games']);
+  return router.createUrlTree(['/menu']);
 };
 
 export const activeGameLobbyGuard: CanActivateFn = async () => {
@@ -46,7 +48,19 @@ export const activeGameLobbyGuard: CanActivateFn = async () => {
     return true;
   }
 
-  return buildActiveGameUrlTree(router, activeGameId);
+  return buildActiveGameUrlTree(router, auth);
+};
+
+export const requireAuthGuard: CanActivateFn = async () => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  await auth.ensureInitialized();
+
+  if (auth.isLoggedIn()) {
+    return true;
+  }
+
+  return router.createUrlTree(['/login']);
 };
 
 export const routes: Routes = [
@@ -57,41 +71,52 @@ export const routes: Routes = [
         canActivate: [redirectLoggedInHomeGuard],
     },
     {
+        path: 'menu',
+        title: 'Main Menu',
+        component: MainMenu,
+        canActivate: [requireAuthGuard, activeGameLobbyGuard],
+    },
+    {
         path: 'games',
         title: 'Games List',
         component: Games,
-        canActivate: [activeGameLobbyGuard],
+        canActivate: [requireAuthGuard, activeGameLobbyGuard],
     },
     {
         path: 'games/:id',
         title: 'Waiting Menu',
-        component: MainMenu,
-        canActivate: [activeGameLobbyGuard],
+        component: LobbyMenu,
+        canActivate: [requireAuthGuard, activeGameLobbyGuard],
     },
     {
         path: 'store',
         title: 'Store',
         component: Store,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'store/packs/:id',
         title: 'Store Pack',
         component: StorePack,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'settings',
         title: 'Settings',
         component: Settings,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'dixit/:id',
         title: 'Dixit',
         component: Dixit,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'dixit-stella/:id',
         title: 'Dixit Stella',
         component: DixitStella,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'stella-test',
@@ -113,6 +138,7 @@ export const routes: Routes = [
         path: 'profile',
         title: 'Profile',
         component: Profile,
+        canActivate: [requireAuthGuard],
     },
     {
         path: 'test/dixit',

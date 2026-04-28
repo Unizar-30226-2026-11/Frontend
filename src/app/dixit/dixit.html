@@ -133,6 +133,15 @@
             @if (gameEnded) {
               <p>La partida se ha marcado como finalizada en el servidor.</p>
             }
+
+            <div class="duel-options">
+              <button type="button" class="sidebar-action" (click)="simulateDuelSquareLanding()">
+                Simular casilla de duelo backend
+              </button>
+            </div>
+            <p class="duel-copy">
+              Este boton usa el flujo real del backend: eliges rival y se envia el duelo por socket.
+            </p>
           </article>
         </aside>
       }
@@ -284,10 +293,82 @@
       </div>
     }
 
+    @if (activeMinigame && !isCurrentPlayerInActiveMinigame) {
+      <div class="wildcard-popup-backdrop">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="minigame-watch-title"
+        >
+          <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+          <h2 id="minigame-watch-title">Minijuego en curso</h2>
+          <p class="duel-copy">
+            {{ activeMinigamePlayerOneName }} vs {{ activeMinigamePlayerTwoName }}
+          </p>
+          <p class="duel-copy">{{ minigameStatusMessage || 'Esperando al servidor...' }}</p>
+        </article>
+      </div>
+    }
+
+    @if (activeMinigame && isCurrentPlayerInActiveMinigame && isUnavailableMinigameType) {
+      <div class="wildcard-popup-backdrop">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="minigame-unavailable-title"
+        >
+          <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+          <h2 id="minigame-unavailable-title">Minijuego no disponible</h2>
+          <p class="duel-copy">
+            {{ activeMinigamePlayerOneName }} vs {{ activeMinigamePlayerTwoName }}
+          </p>
+          <p class="duel-copy">{{ minigameStatusMessage }}</p>
+        </article>
+      </div>
+    }
+
     @if (isMinigame1Open) {
-      <app-dixit-minijuego-1 (close)="closeMinigame1()" />
+      <app-dixit-minijuego-1
+        [durationMs]="activeMinigameDurationMs"
+        [opponentNickname]="activeMinigameOpponentName"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        (close)="closeMinigame1()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="wildcard-popup-backdrop">
+          <article class="wildcard-popup" role="dialog" aria-modal="true" aria-labelledby="minigame-state-title">
+            <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h2 id="minigame-state-title">{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h2>
+            <p class="duel-copy">
+              {{ minigameStatusMessage }}
+            </p>
+          </article>
+        </div>
+      }
     }
 
     @if (isMinigame2Open) {
-      <app-dixit-minijuego-2 (close)="closeMinigame2()" />
+      <app-dixit-minijuego-2
+        [durationMs]="activeMinigameDurationMs"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        [seedKey]="activeMinigameSeedKey"
+        (close)="closeMinigame2()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="wildcard-popup-backdrop">
+          <article class="wildcard-popup" role="dialog" aria-modal="true" aria-labelledby="minigame-state-title-2">
+            <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h2 id="minigame-state-title-2">{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h2>
+            <p class="duel-copy">
+              {{ minigameStatusMessage }}
+            </p>
+          </article>
+        </div>
+      }
     }

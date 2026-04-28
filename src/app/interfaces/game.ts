@@ -81,3 +81,8 @@ export interface Game {
   status: string;
   isPrivate: boolean;
 }
+
+export function buildGameRoute(gameId: string, engine: LobbyEngine = 'Classic'): string {
+  const encodedGameId = encodeURIComponent(gameId);
+  return engine === 'Stella' ? `/dixit-stella/${encodedGameId}` : `/dixit/${encodedGameId}`;
+}

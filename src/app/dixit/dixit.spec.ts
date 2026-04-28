@@ -24,13 +24,13 @@ describe('Dixit', () => {
       'sendGameAction',
       'endGame',
       'disconnect',
+      'sendMinigameScore',
       'lobbyState',
       'gameState',
       'gameEndedResult',
       'walletUpdated',
       'privateHand',
       'duelChallenge',
-      'activeMinigame',
       'activeStar',
       'starClaim',
       'clearStarClaim',
@@ -39,6 +39,10 @@ describe('Dixit', () => {
       'lastError',
       'connectionStatus',
       'chatMessages',
+      'minigameStart',
+      'specialEvent',
+      'clearSpecialEvent',
+      'clearMinigameStart',
     ]);
     realtimeSpy.ensureLobbyConnection.and.resolveTo();
     realtimeSpy.lobbyState.and.returnValue(null);
@@ -47,13 +51,14 @@ describe('Dixit', () => {
     realtimeSpy.walletUpdated.and.returnValue(null);
     realtimeSpy.privateHand.and.returnValue(null);
     realtimeSpy.duelChallenge.and.returnValue(null);
-    realtimeSpy.activeMinigame.and.returnValue(null);
     realtimeSpy.activeStar.and.returnValue(null);
     realtimeSpy.starClaim.and.returnValue(null);
     realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
     realtimeSpy.lastError.and.returnValue('');
     realtimeSpy.connectionStatus.and.returnValue('connected');
     realtimeSpy.chatMessages.and.returnValue([]);
+    realtimeSpy.minigameStart.and.returnValue(null);
+    realtimeSpy.specialEvent.and.returnValue(null);
 
     await TestBed.configureTestingModule({
       imports: [Dixit],
@@ -172,10 +177,12 @@ describe('Dixit', () => {
       receivedAt: Date.now(),
     };
 
-    component['applyRealtimeMinigame']({
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
       type: 0,
       isDuel: false,
-      durationSeconds: 15,
+      duration: 15_000,
       receivedAt: Date.now(),
     });
     fixture.detectChanges();
@@ -189,15 +196,17 @@ describe('Dixit', () => {
   it('closes the minigame overlay when the active conflict is cancelled', async () => {
     await initializeComponent(fixture);
 
-    component['applyRealtimeMinigame']({
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
       type: 1,
       isDuel: true,
-      durationSeconds: 15,
+      duration: 15_000,
       receivedAt: Date.now(),
     });
     fixture.detectChanges();
 
-    component['applyRealtimeMinigame'](null);
+    component['closeActiveMinigame']();
     fixture.detectChanges();
 
     expect(component.isMinigame1Open).toBeFalse();
@@ -537,9 +546,30 @@ describe('Dixit', () => {
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Estado realtime');
-    expect(text).toContain('Socket');
-  });
+    expect(text).toContain('Simular casilla de duelo backend');
+  }));
+
+  it('opens the rival picker for backend duel simulation', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+
+    component.isSimulationDrawerOpen = true;
+    fixture.detectChanges();
+
+    const button = Array.from(
+      fixture.nativeElement.querySelectorAll('button')
+    ).find((candidate) => (candidate.textContent as string).includes('Simular casilla de duelo backend')) as
+      | HTMLButtonElement
+      | undefined;
+
+    expect(button).toBeDefined();
+    button?.click();
+    fixture.detectChanges();
+
+    expect(component.activeDuelChallenge).not.toBeNull();
+    expect(component.simulationTriggerMode).toBe('duel');
+    expect(component.isSimulationDrawerOpen).toBeFalse();
+  }));
 });
 
 async function initializeComponent(fixture: ComponentFixture<Dixit>): Promise<void> {
@@ -570,4 +600,3 @@ function createCardsFixture(): DeckCard[] {
     },
   ];
 }
-

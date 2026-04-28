@@ -6,7 +6,7 @@
           <p class="eyebrow">{{ roomTitle }}</p>
           <div class="round-meta">
             <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
-            <span class="round-chip">Ronda {{ roundNumber }}/{{ totalRounds }}</span>
+            <span class="round-chip">Ronda {{ roundNumber }}</span>
           </div>
           <p class="phase-copy">{{ currentPhaseMeta.description }}</p>
         </div>
@@ -66,7 +66,7 @@
                   <div class="player-metrics">
                     <span>{{ player.score }} estrellas</span>
                     <span>{{ player.selectionCount }}/10 marcadas</span>
-                    @if (phase === 'reveal' || phase === 'scoring' || phase === 'finished') {
+                    @if (phase === 'STELLA_REVEAL' || phase === 'SCORING' || phase === 'FINISHED') {
                       <span>{{ getRemainingSelectionCodes(player).length }} sin revelar</span>
                     }
                   </div>
@@ -136,7 +136,7 @@
               }
             </section>
 
-            @if (phase === 'reveal') {
+            @if (phase === 'STELLA_REVEAL') {
               @if (activeExplorer; as explorer) {
                 <section class="reveal-banner">
                   <div>
@@ -157,7 +157,7 @@
               }
             }
 
-            @if (phase === 'scoring') {
+            @if (phase === 'SCORING') {
               <section class="scoring-panel">
                 <div class="panel-header">
                   <p class="eyebrow">Cierre de ronda</p>
@@ -191,7 +191,7 @@
               </section>
             }
 
-            @if (phase === 'finished') {
+            @if (phase === 'FINISHED') {
               @if (primaryWinner; as winner) {
                 <section class="final-panel">
                   <p class="eyebrow">Partida terminada</p>
@@ -215,7 +215,7 @@
           </main>
 
           <aside class="status-panel">
-            @if (phase === 'association') {
+            @if (phase === 'STELLA_WORD_REVEAL' || phase === 'STELLA_MARKING') {
               <section class="side-card">
                 <p class="eyebrow">Reglas</p>
                 <h3>Seleccion oculta</h3>
@@ -231,13 +231,11 @@
                 </div>
 
                 <div class="selection-list">
-                  @for (code of currentPlayer.selection; track code) {
+                  @for (code of currentSelectionCodes; track code) {
                     <span>{{ getCardLabel(code) }}</span>
                   }
                 </div>
-              </section>
-            } @else if (phase === 'announce') {
-              <section class="side-card">
+
                 <p class="eyebrow">Pista 1-10</p>
                 <h3>Intensidad declarada</h3>
                 <div class="announce-track">
@@ -260,7 +258,7 @@
                 </div>
                 <p class="announce-copy">{{ selectionMessage }}</p>
               </section>
-            } @else if (phase === 'reveal') {
+            } @else if (phase === 'STELLA_REVEAL') {
               <section class="side-card">
                 <p class="eyebrow">Resolucion</p>
                 <h3>{{ lastResolutionTitle }}</h3>
@@ -289,7 +287,7 @@
                   }
                 </div>
               </section>
-            } @else if (phase === 'scoring') {
+            } @else if (phase === 'SCORING') {
               <section class="side-card">
                 <p class="eyebrow">Penalizacion</p>
                 <h3>Oscuridad</h3>
@@ -320,7 +318,11 @@
           </div>
 
           <div class="hud-actions">
-            @if (phase === 'association') {
+            @if (phase === 'STELLA_WORD_REVEAL') {
+              <button type="button" class="primary-action" disabled>
+                Esperando marcado
+              </button>
+            } @else if (phase === 'STELLA_MARKING') {
               <button
                 type="button"
                 class="primary-action"
@@ -329,22 +331,17 @@
               >
                 Confirmar seleccion
               </button>
-            } @else if (phase === 'announce') {
-              <button type="button" class="primary-action" (click)="startRevealPhase()">
-                Empezar revelado
-              </button>
-            } @else if (phase === 'reveal') {
+            } @else if (phase === 'STELLA_REVEAL') {
               <button
                 type="button"
                 class="primary-action"
-                [disabled]="isCurrentUserExplorer"
-                (click)="resolveExplorerTurn()"
+                disabled
               >
-                Resolver turno actual
+                {{ isCurrentUserExplorer ? 'Elige una carta del tablero' : 'Esperando al scout' }}
               </button>
-            } @else if (phase === 'scoring') {
+            } @else if (phase === 'SCORING') {
               <button type="button" class="primary-action" (click)="advanceAfterScoring()">
-                {{ roundNumber === totalRounds ? 'Ver ganador' : 'Siguiente ronda' }}
+                Siguiente ronda
               </button>
             } @else {
               <button type="button" class="primary-action" (click)="returnToGames()">

@@ -388,10 +388,14 @@ export class DixitRealtimeSimulator {
 
   startMinigame(type: number, isDuel = false): void {
     this.clearMinigameTimeout();
+    const opponentId =
+      this.players.find((player) => player.id !== CURRENT_USER_ID)?.id ?? 'u_other';
     this.activeMinigameSignal.set({
+      player1: CURRENT_USER_ID,
+      player2: opponentId,
       type,
       isDuel,
-      durationSeconds: 15,
+      duration: 15_000,
       receivedAt: Date.now(),
     });
     this.duelChallengeSignal.set(null);
@@ -806,7 +810,7 @@ export class DixitRealtimeSimulator {
       lobbyCode: this.lobbyCode,
       minigameType: activeMinigame.type,
       isDuel: activeMinigame.isDuel,
-      durationSeconds: activeMinigame.durationSeconds,
+      duration: activeMinigame.duration,
       reason,
       resolvedAt: new Date().toISOString(),
       actorId: CURRENT_USER_ID,

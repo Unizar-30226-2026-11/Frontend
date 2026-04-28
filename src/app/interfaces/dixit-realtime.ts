@@ -1,3 +1,5 @@
+import type { LobbyEngine } from './game';
+
 export type DixitConnectionStatus =
   | 'idle'
   | 'joining'
@@ -50,6 +52,7 @@ export interface RealtimeGameStateUpdate {
 export interface RealtimeGameStarted {
   lobbyCode: string;
   state?: Record<string, unknown>;
+  engine?: LobbyEngine;
   receivedAt: number;
 }
 
@@ -121,6 +124,24 @@ export interface RealtimeDuelChallenge {
   receivedAt: number;
 }
 
+export interface RealtimeMinigameStart {
+  player1: string;
+  player2: string;
+  type: number;
+  duration: number;
+  isDuel: boolean;
+  receivedAt: number;
+}
+
+export interface RealtimeSpecialEvent {
+  effect: string;
+  message: string;
+  winnerId?: string;
+  loserId?: string;
+  isDuel?: boolean;
+  receivedAt: number;
+}
+
 // Punto expresado en porcentaje de pantalla. El backend envía 0..100
 // y el frontend lo proyecta directamente sobre un overlay fixed.
 export interface RealtimeStarPoint {
@@ -145,12 +166,5 @@ export interface RealtimeStarSpawn {
 export interface RealtimeStarClaim {
   winnerId: string;
   newScores: Record<string, number>;
-  receivedAt: number;
-}
-
-export interface RealtimeMinigameStart {
-  type: number;
-  isDuel: boolean;
-  durationSeconds: number;
   receivedAt: number;
 }

@@ -3,28 +3,51 @@ import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 
 import { DixitStella } from './dixit-stella';
 import { Game } from '../interfaces/game';
-import { WordCard } from '../interfaces/word-card';
+import { Auth } from '../services/auth';
 import { DeckCard } from '../services/card-pull';
+import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
-import { WordCardPull } from '../services/word-card-pull';
 
 describe('DixitStella', () => {
   let component: DixitStella;
   let fixture: ComponentFixture<DixitStella>;
   let stellaCardPullSpy: jasmine.SpyObj<StellaCardPull>;
-  let wordCardPullSpy: jasmine.SpyObj<WordCardPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let authStub: {
+    session: jasmine.Spy<() => { user: { id: string } } | null>;
+    username: jasmine.Spy<() => string>;
+  };
+  let realtimeStub: {
+    ensureLobbyConnection: jasmine.Spy<(lobbyCode: string) => Promise<void>>;
+    activeLobbyCode: jasmine.Spy<() => string>;
+    gameState: jasmine.Spy<() => { state: Record<string, unknown>; receivedAt: number } | null>;
+    lobbyState: jasmine.Spy<() => null>;
+    lastError: jasmine.Spy<() => string>;
+    connectionStatus: jasmine.Spy<() => string>;
+    sendGameAction: jasmine.Spy<(actionType: string, payload?: Record<string, unknown>) => void>;
+  };
 
   beforeEach(async () => {
     stellaCardPullSpy = jasmine.createSpyObj<StellaCardPull>('StellaCardPull', ['getCards']);
-    wordCardPullSpy = jasmine.createSpyObj<WordCardPull>('WordCardPull', ['getCards']);
     gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGameDetails']);
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    authStub = {
+      session: jasmine.createSpy().and.returnValue({ user: { id: 'u_111' } }),
+      username: jasmine.createSpy().and.returnValue('Alpha'),
+    };
+    realtimeStub = {
+      ensureLobbyConnection: jasmine.createSpy().and.resolveTo(),
+      activeLobbyCode: jasmine.createSpy().and.returnValue('STELLA1'),
+      gameState: jasmine.createSpy().and.returnValue(createRealtimeState()),
+      lobbyState: jasmine.createSpy().and.returnValue(null),
+      lastError: jasmine.createSpy().and.returnValue(''),
+      connectionStatus: jasmine.createSpy().and.returnValue('connected'),
+      sendGameAction: jasmine.createSpy(),
+    };
 
-    stellaCardPullSpy.getCards.and.resolveTo(createCardsFixture(36));
-    wordCardPullSpy.getCards.and.resolveTo(createWordCardsFixture());
+    stellaCardPullSpy.getCards.and.resolveTo(createCardsFixture(30));
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
     routerSpy.navigate.and.resolveTo(true);
 
@@ -32,9 +55,10 @@ describe('DixitStella', () => {
       imports: [DixitStella],
       providers: [
         { provide: StellaCardPull, useValue: stellaCardPullSpy },
-        { provide: WordCardPull, useValue: wordCardPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: DixitRealtime, useValue: realtimeStub },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -53,151 +77,71 @@ describe('DixitStella', () => {
     fixture.detectChanges();
   });
 
-  it('creates the Stella table with a 15-card board', () => {
+  it('renders the realtime board from the Stella socket state', () => {
     expect(component).toBeTruthy();
+    expect(realtimeStub.ensureLobbyConnection).toHaveBeenCalledOnceWith('STELLA1');
+    expect(component.phase).toBe('STELLA_MARKING');
+    expect(component.activeWord).toBe('Bosque Encantado');
     expect(component.boardCards.length).toBe(15);
-    expect(component.getBoardCardsForRow(0).length).toBe(5);
-    expect(component.getBoardCardsForRow(1).length).toBe(5);
-    expect(component.getBoardCardsForRow(2).length).toBe(5);
+    expect(component.players.length).toBe(4);
+    expect(component.players[0]?.selectionCount).toBe(0);
+    expect(component.players[1]?.selectionCount).toBe(2);
   });
 
-  it('ignores the eleventh selected card', () => {
-    const firstTenCodes = getCodes(component, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    const eleventhCode = component.boardCards[10].code;
-
-    for (const code of firstTenCodes) {
-      component.onBoardCardClicked(code);
-    }
-    component.onBoardCardClicked(eleventhCode);
-
-    expect(component.currentPlayer.selection.length).toBe(10);
-    expect(component.currentPlayer.selection).not.toContain(eleventhCode);
-  });
-
-  it('submits the local selection without blocking and moves to announce', () => {
-    component.onBoardCardClicked(component.boardCards[0].code);
-    component.onBoardCardClicked(component.boardCards[1].code);
-    component.onBoardCardClicked(component.boardCards[2].code);
+  it('sends STELLA_SUBMIT_MARKS with the selected board ids', () => {
+    component.onBoardCardClicked('1');
+    component.onBoardCardClicked('2');
+    component.onBoardCardClicked('3');
 
     component.submitSelection();
 
-    expect(component.phase).toBe('announce');
-    expect(component.players.every((player) => player.submitted)).toBeTrue();
+    expect(realtimeStub.sendGameAction).toHaveBeenCalledWith('STELLA_SUBMIT_MARKS', {
+      cardIds: [1, 2, 3],
+    });
   });
 
-  it('marks a unique leader as dark during announce', () => {
-    component.setSelectionForPlayer(component.players[0].id, getCodes(component, [0, 1, 2, 3, 4]));
-    component.setSelectionForPlayer(component.players[1].id, getCodes(component, [0, 1]));
-    component.setSelectionForPlayer(component.players[2].id, getCodes(component, [2, 3]));
-    component.setSelectionForPlayer(component.players[3].id, getCodes(component, [4, 5]));
+  it('sends STELLA_REVEAL_MARK when the current scout reveals a selected card', async () => {
+    realtimeStub.gameState.and.returnValue(
+      createRealtimeState({
+        phase: 'STELLA_REVEAL',
+        currentRound: {
+          playerMarks: {
+            u_111: [1, 2],
+            u_222: [2],
+            u_333: [3],
+            u_444: [4],
+          },
+          revealedCards: [],
+          currentScoutId: 'u_111',
+        },
+      })
+    );
 
-    component.startAnnouncePhase();
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(component.phase).toBe('announce');
-    expect(component.players[0].lanternState).toBe('DARK');
-    expect(component.players[1].lanternState).toBe('LIGHT');
-  });
+    component.onBoardCardClicked('2');
 
-  it('makes the explorer fall when nobody else selected the revealed card', () => {
-    const uniqueCode = component.boardCards[0].code;
-    const sharedCode = component.boardCards[1].code;
-    component.firstExplorerIndex = 0;
-
-    component.setSelectionForPlayer(component.players[0].id, [uniqueCode, sharedCode]);
-    component.setSelectionForPlayer(component.players[1].id, [sharedCode]);
-    component.setSelectionForPlayer(component.players[2].id, [component.boardCards[2].code]);
-    component.setSelectionForPlayer(component.players[3].id, [component.boardCards[3].code]);
-
-    component.startAnnouncePhase();
-    component.startRevealPhase();
-    component.resolveExplorerTurn(uniqueCode);
-
-    expect(component.players[0].hasFallen).toBeTrue();
-    expect(component.latestRevealLog?.outcome).toBe('fall');
-  });
-
-  it('applies darkness penalty only when the dark player falls', () => {
-    const sharedCode = component.boardCards[0].code;
-    const fallCode = component.boardCards[1].code;
-    component.firstExplorerIndex = 0;
-
-    component.setSelectionForPlayer(component.players[0].id, [sharedCode, fallCode, component.boardCards[2].code]);
-    component.setSelectionForPlayer(component.players[1].id, [sharedCode]);
-    component.setSelectionForPlayer(component.players[2].id, [component.boardCards[3].code]);
-    component.setSelectionForPlayer(component.players[3].id, [component.boardCards[4].code]);
-
-    component.startAnnouncePhase();
-    component.startRevealPhase();
-    component.resolveExplorerTurn(sharedCode);
-    component.activeExplorerId = component.players[0].id;
-    component.resolveExplorerTurn(fallCode);
-
-    while (component.phase === 'reveal') {
-      component.resolveExplorerTurn();
-    }
-
-    expect(component.phase).toBe('scoring');
-    const darkPlayer = component.players[0];
-    const summaryRow = component.scoringSummary.find((row) => row.playerId === darkPlayer.id);
-
-    expect(darkPlayer.lanternState).toBe('DARK');
-    expect(darkPlayer.hasFallen).toBeTrue();
-    expect(summaryRow?.roundPoints).toBe(3);
-    expect(summaryRow?.penalty).toBe(1);
-    expect(summaryRow?.netPoints).toBe(2);
-  });
-
-  it('replaces one board row and rotates the first explorer after scoring', () => {
-    component.firstExplorerIndex = 0;
-    const previousFirstExplorerId = component.players[component.firstExplorerIndex].id;
-    const originalRows = [
-      component.getBoardCardsForRow(0).map((card) => card.code),
-      component.getBoardCardsForRow(1).map((card) => card.code),
-      component.getBoardCardsForRow(2).map((card) => card.code),
-    ];
-
-    for (let index = 0; index < component.players.length; index += 1) {
-      component.setSelectionForPlayer(component.players[index].id, [component.boardCards[index].code]);
-    }
-
-    component.startAnnouncePhase();
-    component.startRevealPhase();
-    component.resolveExplorerTurn(component.players[0].selection[0]);
-
-    while (component.phase === 'reveal') {
-      component.resolveExplorerTurn();
-    }
-
-    component.advanceAfterScoring();
-
-    expect(component.roundNumber).toBe(2);
-    expect(component.players[component.firstExplorerIndex].id).not.toBe(previousFirstExplorerId);
-    expect(component.getBoardCardsForRow(0).map((card) => card.code)).not.toEqual(originalRows[0]);
-    expect(component.getBoardCardsForRow(1).map((card) => card.code)).toEqual(originalRows[1]);
-    expect(component.getBoardCardsForRow(2).map((card) => card.code)).toEqual(originalRows[2]);
+    expect(realtimeStub.sendGameAction).toHaveBeenCalledWith('STELLA_REVEAL_MARK', {
+      cardId: 2,
+    });
   });
 });
 
 function createCardsFixture(count: number): DeckCard[] {
   return Array.from({ length: count }, (_, index) => {
-    const cardNumber = String(index + 1).padStart(2, '0');
+    const cardId = index + 1;
 
     return {
-      code: `ST${cardNumber}`,
-      image: `https://picsum.photos/seed/test-${cardNumber}/480/720`,
-      value: `Card ${cardNumber}`,
+      code: String(cardId),
+      image: `https://picsum.photos/seed/test-${cardId}/480/720`,
+      value: `Carta ${cardId}`,
       suit: 'Dream',
     };
   });
-}
-
-function createWordCardsFixture(): WordCard[] {
-  return [
-    { id: 1, terms: ['Aurora', 'Espejo'] },
-    { id: 2, terms: ['Silencio', 'Bosque'] },
-    { id: 3, terms: ['Mascara', 'Eco'] },
-    { id: 4, terms: ['Vertigo', 'Constelacion'] },
-  ];
 }
 
 function createLobbyFixture(): Game {
@@ -216,6 +160,51 @@ function createLobbyFixture(): Game {
   };
 }
 
-function getCodes(component: DixitStella, indexes: number[]): string[] {
-  return indexes.map((index) => component.boardCards[index].code);
+function createRealtimeState(
+  overrides: {
+    phase?: string;
+    currentRound?: Partial<Record<string, unknown>>;
+  } = {}
+): { state: Record<string, unknown>; receivedAt: number } {
+  return {
+    receivedAt: 1,
+    state: {
+      lobbyCode: 'STELLA1',
+      mode: 'STELLA',
+      phase: overrides.phase ?? 'STELLA_MARKING',
+      status: 'playing',
+      players: ['u_111', 'u_222', 'u_333', 'u_444'],
+      disconnectedPlayers: [],
+      scores: {
+        u_111: 0,
+        u_222: 4,
+        u_333: 2,
+        u_444: 1,
+      },
+      currentRound: {
+        word: 'Bosque Encantado',
+        boardCards: Array.from({ length: 15 }, (_, index) => index + 1),
+        playerMarks: {
+          u_222: [1, 2],
+        },
+        revealedCards: [],
+        currentScoutId: null,
+        fallenPlayers: [],
+        inTheDarkPlayerId: 'u_222',
+        roundScores: {
+          u_111: 0,
+          u_222: 0,
+          u_333: 0,
+          u_444: 0,
+        },
+        successfulMarks: {
+          u_111: 0,
+          u_222: 0,
+          u_333: 0,
+          u_444: 0,
+        },
+        ...overrides.currentRound,
+      },
+    },
+  };
 }

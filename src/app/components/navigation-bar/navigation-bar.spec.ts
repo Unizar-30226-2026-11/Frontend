@@ -36,7 +36,7 @@ describe('NavigationBar', () => {
       providers: [
         provideRouter([]),
         { provide: FriendsPull, useValue: friendsPullSpy },
-        { provide: Auth, useValue: { activeGameId: () => null } },
+        { provide: Auth, useValue: { activeGameId: () => null, activeGameRoute: () => null } },
       ],
     }).compileComponents();
 

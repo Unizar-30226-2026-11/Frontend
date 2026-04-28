@@ -1,6 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, output } from '@angular/core';
-import { CardPull } from '../../../services/card-pull';
-import type { DeckCard } from '../../../services/card-pull';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, input, output } from '@angular/core';
 
 interface MemoryCard {
   id: number;
@@ -10,11 +8,32 @@ interface MemoryCard {
   state: 'hidden' | 'revealed' | 'matched';
 }
 
+interface MemoryPairTemplate {
+  code: string;
+  label: string;
+  color: string;
+}
+
+const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
+  { code: 'memory-1', label: 'Aurora', color: '#6ec5ff' },
+  { code: 'memory-2', label: 'Farol', color: '#ffb347' },
+  { code: 'memory-3', label: 'Mascara', color: '#ff7aa2' },
+  { code: 'memory-4', label: 'Llave', color: '#d8c26a' },
+  { code: 'memory-5', label: 'Reloj', color: '#8eb8ff' },
+  { code: 'memory-6', label: 'Cometa', color: '#ff8f70' },
+  { code: 'memory-7', label: 'Bruma', color: '#9fd3c7' },
+  { code: 'memory-8', label: 'Corona', color: '#f5d76e' },
+  { code: 'memory-9', label: 'Portal', color: '#9b87f5' },
+  { code: 'memory-10', label: 'Nube', color: '#9ad0f5' },
+  { code: 'memory-11', label: 'Bosque', color: '#74c69d' },
+  { code: 'memory-12', label: 'Luna', color: '#c3bef0' },
+] as const;
+
 @Component({
   selector: 'app-dixit-minijuego-2',
   standalone: true,
   template: `
-    <div class="memory-backdrop" (click)="close.emit()">
+    <div class="memory-backdrop" (click)="closable() ? close.emit() : null">
       <article
         class="memory-shell"
         role="dialog"
@@ -26,12 +45,14 @@ interface MemoryCard {
           <div class="memory-copy">
             <p class="eyebrow">Minijuego 2</p>
             <h2 id="minigame-2-title">Buscar parejas</h2>
-            <p>Tienes 15 segundos para descubrir todas las parejas con las cartas de Dixit.</p>
+            <p>Tienes {{ initialTimeLeft }} segundos para descubrir todas las parejas.</p>
           </div>
 
-          <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
-            Cerrar
-          </button>
+          @if (closable()) {
+            <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
+              Cerrar
+            </button>
+          }
         </header>
 
         <section class="memory-stats" aria-label="Marcador del minijuego">
@@ -51,42 +72,36 @@ interface MemoryCard {
           </article>
         </section>
 
-        @if (loading) {
-          <section class="status-panel">
-            <p>Cargando cartas...</p>
-          </section>
-        } @else if (errorMessage) {
-          <section class="status-panel error">
-            <p>{{ errorMessage }}</p>
-          </section>
-        } @else {
-          <section class="cards-grid" aria-label="Tablero de memoria">
-            @for (card of cards; track card.id) {
-              <button
-                type="button"
-                class="memory-card"
-                [class.revealed]="card.state !== 'hidden'"
-                [class.matched]="card.state === 'matched'"
-                [disabled]="card.state === 'matched' || isResolvingPair || isGameOver"
-                [attr.aria-label]="card.state === 'hidden' ? 'Carta boca abajo' : 'Carta ' + card.label"
-                (click)="onCardSelected(card.id)"
-              >
-                <span class="card-back">?</span>
-                <span class="card-front">
-                  <img [src]="card.image" [alt]="card.label" draggable="false" />
-                </span>
-              </button>
-            }
-          </section>
-        }
+        <section class="cards-grid" aria-label="Tablero de memoria">
+          @for (card of cards; track card.id) {
+            <button
+              type="button"
+              class="memory-card"
+              [class.revealed]="card.state !== 'hidden'"
+              [class.matched]="card.state === 'matched'"
+              [disabled]="card.state === 'matched' || isResolvingPair || isGameOver"
+              [attr.aria-label]="card.state === 'hidden' ? 'Carta boca abajo' : 'Carta ' + card.label"
+              (click)="onCardSelected(card.id)"
+            >
+              <span class="card-back">?</span>
+              <span class="card-front">
+                <img [src]="card.image" [alt]="card.label" draggable="false" />
+              </span>
+            </button>
+          }
+        </section>
 
         <footer class="memory-footer">
           @if (isGameWon) {
             <p>Has encontrado todas las parejas antes de que se acabe el tiempo.</p>
-            <button type="button" class="restart-button" (click)="restartGame()">Jugar otra vez</button>
+            @if (allowRestart()) {
+              <button type="button" class="restart-button" (click)="restartGame()">Jugar otra vez</button>
+            }
           } @else if (isGameOver) {
             <p>Tiempo terminado. Has encontrado {{ matchedPairs }} de {{ totalPairs }} parejas.</p>
-            <button type="button" class="restart-button" (click)="restartGame()">Reintentar</button>
+            @if (allowRestart()) {
+              <button type="button" class="restart-button" (click)="restartGame()">Reintentar</button>
+            }
           } @else {
             <p>Revela dos cartas. Si coinciden, la pareja se queda descubierta.</p>
           }
@@ -97,15 +112,18 @@ interface MemoryCard {
   styleUrl: './minijuego-2.css',
 })
 export class DixitMinijuego2 implements OnInit, OnDestroy {
+  readonly durationMs = input(20_000);
+  readonly allowRestart = input(true);
+  readonly closable = input(true);
+  readonly seedKey = input('');
   readonly close = output<void>();
+  readonly finished = output<{ score: number }>();
   private readonly cdr = inject(ChangeDetectorRef);
-  private readonly cardPull = inject(CardPull);
   private timerIntervalId: ReturnType<typeof setInterval> | null = null;
   private mismatchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private hasEmittedResult = false;
 
   cards: MemoryCard[] = [];
-  loading = true;
-  errorMessage = '';
   timeLeft = 15;
   matchedPairs = 0;
   attempts = 0;
@@ -118,8 +136,12 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
     return this.cards.length / 2;
   }
 
-  async ngOnInit(): Promise<void> {
-    await this.startGame();
+  get initialTimeLeft(): number {
+    return this.resolveInitialTimeLeft();
+  }
+
+  ngOnInit(): void {
+    this.startGame();
   }
 
   ngOnDestroy(): void {
@@ -162,6 +184,7 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
         this.isGameWon = true;
         this.isGameOver = true;
         this.clearIntervalTimer();
+        this.emitResultOnce();
       }
 
       return;
@@ -183,41 +206,20 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
   }
 
   restartGame(): void {
-    void this.startGame();
+    this.startGame();
   }
 
-  private async startGame(): Promise<void> {
+  private startGame(): void {
     this.clearTimers();
-    this.loading = true;
-    this.errorMessage = '';
-    this.timeLeft = 15;
+    this.timeLeft = this.resolveInitialTimeLeft();
     this.matchedPairs = 0;
     this.attempts = 0;
     this.isResolvingPair = false;
     this.isGameOver = false;
     this.isGameWon = false;
+    this.hasEmittedResult = false;
     this.revealedCardIds = [];
-
-    try {
-      const sourceCards = await this.cardPull.getCards();
-      if (sourceCards.length === 0) {
-        this.cards = [];
-        this.errorMessage = 'No se pudieron cargar cartas para el minijuego.';
-        this.isGameOver = true;
-        return;
-      }
-
-      this.cards = this.buildShuffledCards(sourceCards);
-    } catch (error: unknown) {
-      this.cards = [];
-      this.errorMessage =
-        error instanceof Error ? error.message : 'No se pudieron cargar cartas para el minijuego.';
-      this.isGameOver = true;
-      return;
-    } finally {
-      this.loading = false;
-      this.cdr.detectChanges();
-    }
+    this.cards = this.buildShuffledCards();
 
     this.timerIntervalId = setInterval(() => {
       if (this.timeLeft <= 1) {
@@ -237,33 +239,56 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
     this.isResolvingPair = false;
     this.revealedCardIds = [];
     this.isGameOver = true;
+    this.emitResultOnce();
   }
 
-  private buildShuffledCards(sourceCards: DeckCard[]): MemoryCard[] {
-    const deck = sourceCards.flatMap((card, index) => [
+  private buildShuffledCards(): MemoryCard[] {
+    const deck = MEMORY_PAIR_LIBRARY.flatMap((card, index) => [
       {
         id: index * 2,
         pairKey: card.code,
-        image: card.image,
-        label: `${card.value} de ${card.suit}`,
+        image: this.buildCardImage(card),
+        label: card.label,
         state: 'hidden' as const,
       },
       {
         id: index * 2 + 1,
         pairKey: card.code,
-        image: card.image,
-        label: `${card.value} de ${card.suit}`,
+        image: this.buildCardImage(card),
+        label: card.label,
         state: 'hidden' as const,
       },
     ]);
 
     const shuffledDeck = [...deck];
+    const nextRandom = this.createSeededRandom(this.seedKey() || 'memory-default');
     for (let index = shuffledDeck.length - 1; index > 0; index -= 1) {
-      const randomIndex = Math.floor(Math.random() * (index + 1));
+      const randomIndex = Math.floor(nextRandom() * (index + 1));
       [shuffledDeck[index], shuffledDeck[randomIndex]] = [shuffledDeck[randomIndex], shuffledDeck[index]];
     }
 
     return shuffledDeck;
+  }
+
+  private buildCardImage(card: MemoryPairTemplate): string {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 420">
+        <defs>
+          <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+            <stop offset="0%" stop-color="${card.color}" stop-opacity="0.95" />
+            <stop offset="100%" stop-color="#1f2430" stop-opacity="1" />
+          </linearGradient>
+        </defs>
+        <rect width="320" height="420" rx="28" fill="url(#bg)" />
+        <circle cx="160" cy="150" r="72" fill="rgba(255,255,255,0.18)" />
+        <circle cx="160" cy="150" r="46" fill="rgba(255,255,255,0.28)" />
+        <text x="160" y="285" text-anchor="middle" fill="#ffffff" font-size="28" font-family="Arial, sans-serif">
+          ${card.label}
+        </text>
+      </svg>
+    `.trim();
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
   private clearTimers(): void {
@@ -280,5 +305,44 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
       clearInterval(this.timerIntervalId);
       this.timerIntervalId = null;
     }
+  }
+
+  private resolveInitialTimeLeft(): number {
+    const durationMs = this.durationMs();
+    if (!Number.isFinite(durationMs)) {
+      return 20;
+    }
+
+    return Math.max(5, Math.ceil(durationMs / 1000));
+  }
+
+  private calculateResultScore(): number {
+    const winBonus = this.isGameWon ? this.timeLeft : 0;
+    return Math.max(0, this.matchedPairs + winBonus);
+  }
+
+  private createSeededRandom(seedSource: string): () => number {
+    let seed = 2166136261;
+    for (let index = 0; index < seedSource.length; index += 1) {
+      seed ^= seedSource.charCodeAt(index);
+      seed = Math.imul(seed, 16777619);
+    }
+
+    return () => {
+      seed += 0x6d2b79f5;
+      let nextValue = seed;
+      nextValue = Math.imul(nextValue ^ (nextValue >>> 15), nextValue | 1);
+      nextValue ^= nextValue + Math.imul(nextValue ^ (nextValue >>> 7), nextValue | 61);
+      return ((nextValue ^ (nextValue >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  private emitResultOnce(): void {
+    if (this.hasEmittedResult) {
+      return;
+    }
+
+    this.hasEmittedResult = true;
+    this.finished.emit({ score: this.calculateResultScore() });
   }
 }

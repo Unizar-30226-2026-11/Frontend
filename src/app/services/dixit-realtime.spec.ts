@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 
 import { vi } from 'vitest';
 import { ApiRequestError } from '../interfaces/api';
@@ -13,7 +13,10 @@ describe('DixitRealtime', () => {
   let authStub: {
     token: jasmine.Spy<() => string | null>;
     activeGameId: jasmine.Spy<() => string | null>;
-    setActiveGameId: jasmine.Spy<(activeGameId: string | null) => void>;
+    activeGameEngine: jasmine.Spy<() => 'Classic' | 'Stella' | null>;
+    setActiveGameId: jasmine.Spy<
+      (activeGameId: string | null, activeGameEngine?: 'Classic' | 'Stella' | null) => void
+    >;
   };
   let originalIo: typeof window.io;
 
@@ -25,6 +28,7 @@ describe('DixitRealtime', () => {
     authStub = {
       token: jasmine.createSpy().and.returnValue('auth-token'),
       activeGameId: jasmine.createSpy().and.returnValue(null),
+      activeGameEngine: jasmine.createSpy().and.returnValue(null),
       setActiveGameId: jasmine.createSpy(),
     };
   });
@@ -180,7 +184,7 @@ describe('DixitRealtime', () => {
         storytellerId: 'u_story',
       })
     );
-    expect(authStub.setActiveGameId).toHaveBeenCalledWith('A1B2');
+    expect(authStub.setActiveGameId).toHaveBeenCalledWith('A1B2', 'Classic');
     expect(
       JSON.parse(localStorage.getItem('ator.dixit.realtime.game-state') ?? '{}')
     ).toEqual(
@@ -194,6 +198,55 @@ describe('DixitRealtime', () => {
       })
     );
   });
+
+  it('keeps the stella engine when game started arrives without state.mode but with game.engine', fakeAsync(() => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
+    socket.trigger('connect');
+    tick();
+
+    socket.trigger('server:game:started', {
+      lobbyCode: 'A1B2',
+      game: {
+        engine: 'Stella',
+      },
+      state: {
+        currentRound: {
+          storytellerId: 'u_story',
+        },
+      },
+    });
+
+    expect(authStub.setActiveGameId).toHaveBeenCalledWith('A1B2', 'Stella');
+    expect(service.gameStarted()).toEqual(
+      jasmine.objectContaining({
+        lobbyCode: 'A1B2',
+        engine: 'Stella',
+      })
+    );
+  }));
 
   it('stores private hand updates from the documented server event', async () => {
     const socket = new FakeSocketIoClient();
@@ -234,7 +287,7 @@ describe('DixitRealtime', () => {
     );
   });
 
-  it('stores the active minigame when server:game:minigame_start arrives', async () => {
+  it('syncs the active game engine from state_updated when the mode is STELLA', fakeAsync(() => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
       .createSpy('socketFactory')
@@ -256,69 +309,86 @@ describe('DixitRealtime', () => {
     });
 
     const service = TestBed.inject(DixitRealtime);
-    const connectionPromise = service.ensureLobbyConnection('A1B2');
-    await flushMicrotasks();
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
     socket.trigger('connect');
-    await connectionPromise;
+    tick();
+
+    socket.trigger('server:game:state_updated', {
+      state: {
+        lobbyCode: 'A1B2',
+        mode: 'STELLA',
+        phase: 'STELLA_MARKING',
+        currentRound: {
+          boardCards: [1, 2, 3],
+        },
+      },
+      lastAction: 'STELLA_SUBMIT_MARKS',
+    });
+
+    expect(authStub.setActiveGameId).toHaveBeenCalledWith('A1B2', 'Stella');
+    expect(service.gameState()?.state['mode']).toBe('STELLA');
+  }));
+
+  it('exposes server minigame starts and emits local minigame scores', fakeAsync(() => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
+    socket.trigger('connect');
+    tick();
 
     socket.trigger('server:game:minigame_start', {
+      player1: 'u_1',
+      player2: 'u_2',
       type: 1,
+      duration: 15000,
       isDuel: true,
-      durationSeconds: 15,
     });
 
-    expect(service.activeMinigame()).toEqual(
+    expect(service.minigameStart()).toEqual(
       jasmine.objectContaining({
+        player1: 'u_1',
+        player2: 'u_2',
         type: 1,
+        duration: 15000,
         isDuel: true,
-        durationSeconds: 15,
       })
     );
-  });
 
-  it('clears the active minigame when CONFLICT_CANCELLED arrives', async () => {
-    const socket = new FakeSocketIoClient();
-    const socketFactory = jasmine
-      .createSpy('socketFactory')
-      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
-    window.io = socketFactory as typeof window.io;
+    service.sendMinigameScore(12.7);
 
-    apiClientSpy.request.and.resolveTo({
-      ticket: 'fresh-ticket',
-      socketUrl: 'http://fresh-socket.test',
-    });
-
-    TestBed.configureTestingModule({
-      providers: [
-        DixitRealtime,
-        { provide: ApiClient, useValue: apiClientSpy },
-        { provide: Auth, useValue: authStub },
-        { provide: PlayerStore, useValue: playerStoreSpy },
-      ],
-    });
-
-    const service = TestBed.inject(DixitRealtime);
-    const connectionPromise = service.ensureLobbyConnection('A1B2');
-    await flushMicrotasks();
-    socket.trigger('connect');
-    await connectionPromise;
-
-    socket.trigger('server:game:minigame_start', {
-      type: 0,
-      isDuel: false,
-      durationSeconds: 15,
-    });
-    socket.trigger('CONFLICT_CANCELLED', {
-      message: 'El rival se ha desconectado.',
-    });
-
-    expect(service.activeMinigame()).toBeNull();
-    expect(service.toast()).toEqual(
+    expect(socket.emissions).toContain(
       jasmine.objectContaining({
-        message: 'El rival se ha desconectado.',
+        event: 'client:game:minigame_score',
+        payload: jasmine.objectContaining({
+          lobbyCode: 'A1B2',
+          score: 12,
+        }),
       })
     );
-  });
+  }));
 
   it('keeps the final ranking available after server:game:ended and clears the active game id', async () => {
     const socket = new FakeSocketIoClient();

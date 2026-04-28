@@ -7,10 +7,13 @@ import {
   RegisterPayload,
   RegisterResponse,
 } from '../interfaces/auth';
+import { isApiRequestErrorStatus } from '../interfaces/api';
+import { buildGameRoute, type LobbyEngine } from '../interfaces/game';
 import { ApiClient } from './api-client';
 
 const AUTH_STORAGE_KEY = 'ator.auth.session';
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
+const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
 
 @Injectable({
   providedIn: 'root',
@@ -27,7 +30,16 @@ export class Auth {
   readonly username = computed(() => this.sessionState()?.user.username ?? '');
   readonly email = computed(() => this.sessionState()?.user.email ?? '');
   readonly activeGameId = computed(() => this.sessionState()?.activeGameId ?? null);
+  readonly activeGameEngine = computed(() => this.sessionState()?.activeGameEngine ?? null);
   readonly hasActiveGame = computed(() => !!this.activeGameId());
+  readonly activeGameRoute = computed(() => {
+    const activeGameId = this.activeGameId();
+    if (!activeGameId) {
+      return null;
+    }
+
+    return buildGameRoute(activeGameId, this.activeGameEngine() ?? 'Classic');
+  });
   readonly isInitialized = computed(() => this.initializedState());
 
   async register(email: string, username: string, password: string): Promise<RegisterResponse> {
@@ -92,6 +104,11 @@ export class Auth {
         return session;
       })
       .catch((error: unknown) => {
+        if (isApiRequestErrorStatus(error, 401) || isApiRequestErrorStatus(error, 403)) {
+          this.clearSessionState();
+          return null;
+        }
+
         console.warn(
           '[Auth] /auth/refresh no pudo completarse. Se mantiene la sesion local existente.',
           error
@@ -128,20 +145,29 @@ export class Auth {
     this.applySession(nextSession);
   }
 
-  setActiveGameId(activeGameId: string | null): void {
+  setActiveGameId(activeGameId: string | null, activeGameEngine?: LobbyEngine | null): void {
     const currentSession = this.sessionState();
     if (!currentSession) {
       return;
     }
 
     const normalizedActiveGameId = this.normalizeOptionalString(activeGameId);
-    if (currentSession.activeGameId === normalizedActiveGameId) {
+    const normalizedActiveGameEngine =
+      normalizedActiveGameId === null
+        ? null
+        : this.normalizeActiveGameEngine(activeGameEngine) ?? currentSession.activeGameEngine;
+
+    if (
+      currentSession.activeGameId === normalizedActiveGameId &&
+      currentSession.activeGameEngine === normalizedActiveGameEngine
+    ) {
       return;
     }
 
     this.applySession({
       ...currentSession,
       activeGameId: normalizedActiveGameId,
+      activeGameEngine: normalizedActiveGameEngine,
     });
   }
 
@@ -190,6 +216,15 @@ export class Auth {
         this.normalizeOptionalString(response.activeGameId) ??
         options.existingSession?.activeGameId ??
         null,
+      activeGameEngine:
+        this.normalizeActiveGameEngine(response.activeGameEngine) ??
+        this.restoreActiveGameEngine(
+          this.normalizeOptionalString(response.activeGameId) ??
+            options.existingSession?.activeGameId ??
+            null
+        ) ??
+        options.existingSession?.activeGameEngine ??
+        null,
     };
   }
 
@@ -235,6 +270,11 @@ export class Auth {
         return null;
       }
 
+      if (this.isTokenExpired(parsed.token)) {
+        this.clearPersistedSession();
+        return null;
+      }
+
       return {
         token: parsed.token,
         user: {
@@ -246,6 +286,13 @@ export class Auth {
           typeof parsed.activeGameId === 'string' && parsed.activeGameId.trim()
             ? parsed.activeGameId.trim()
             : null,
+        activeGameEngine:
+          this.normalizeActiveGameEngine(parsed.activeGameEngine) ??
+          this.restoreActiveGameEngine(
+            typeof parsed.activeGameId === 'string' && parsed.activeGameId.trim()
+              ? parsed.activeGameId.trim()
+              : null
+          ),
       };
     } catch {
       this.clearPersistedSession();
@@ -260,6 +307,45 @@ export class Auth {
   private clearPersistedSession(): void {
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+  }
+
+  private normalizeActiveGameEngine(value: unknown): LobbyEngine | null {
+    return value === 'Classic' || value === 'Stella' ? value : null;
+  }
+
+  private restoreActiveGameEngine(lobbyCode: string | null): LobbyEngine | null {
+    if (!lobbyCode) {
+      return null;
+    }
+
+    try {
+      const rawGameState = localStorage.getItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      if (!rawGameState) {
+        return null;
+      }
+
+      const parsedGameState = JSON.parse(rawGameState) as {
+        lobbyCode?: unknown;
+        state?: { mode?: unknown } | null;
+      };
+
+      if (parsedGameState.lobbyCode !== lobbyCode) {
+        return null;
+      }
+
+      const mode = parsedGameState.state?.mode;
+      if (mode === 'STELLA') {
+        return 'Stella';
+      }
+
+      if (mode === 'STANDARD') {
+        return 'Classic';
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   private decodeJwtPayload(token: string): Record<string, unknown> {
@@ -294,6 +380,16 @@ export class Auth {
 
   private normalizeOptionalString(value: string | null | undefined): string | null {
     return typeof value === 'string' && value.trim() ? value.trim() : null;
+  }
+
+  private isTokenExpired(token: string): boolean {
+    const payload = this.decodeJwtPayload(token);
+    const exp = payload['exp'];
+    if (typeof exp !== 'number' || !Number.isFinite(exp)) {
+      return false;
+    }
+
+    return exp * 1000 <= Date.now();
   }
 
   private resolveRegisterError(error: unknown): Error {

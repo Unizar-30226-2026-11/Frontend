@@ -19,7 +19,7 @@ describe('Login', () => {
     }).compileComponents();
 
     router = TestBed.inject(Router);
-    spyOn(router, 'navigate').and.resolveTo(true);
+    spyOn(router, 'navigateByUrl').and.resolveTo(true);
 
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
@@ -31,6 +31,7 @@ describe('Login', () => {
     authSpy.logIn.and.resolveTo({
       token: 'token-123',
       activeGameId: null,
+      activeGameEngine: null,
       user: {
         id: 'u_1',
         username: 'tester',
@@ -41,7 +42,7 @@ describe('Login', () => {
     await component.logIn('tester@example.com', 'secret');
 
     expect(authSpy.logIn).toHaveBeenCalledWith('tester@example.com', 'secret');
-    expect(router.navigate).toHaveBeenCalledWith(['/games']);
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/menu');
     expect(component.error).toBeNull();
     expect(component.submitting).toBeFalse();
   });
@@ -50,6 +51,7 @@ describe('Login', () => {
     authSpy.logIn.and.resolveTo({
       token: 'token-123',
       activeGameId: 'A1B2',
+      activeGameEngine: 'Stella',
       user: {
         id: 'u_1',
         username: 'tester',
@@ -59,7 +61,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'secret');
 
-    expect(router.navigate).toHaveBeenCalledWith(['/dixit', 'A1B2']);
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/dixit-stella/A1B2');
   });
 
   it('shows the API error when authentication fails', async () => {
@@ -67,7 +69,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'wrong');
 
-    expect(router.navigate).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(component.error).toBe('Credenciales invalidas');
     expect(component.submitting).toBeFalse();
   });

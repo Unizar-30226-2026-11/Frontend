@@ -114,7 +114,7 @@ export function runStartAnnouncePhase(runtime: StellaRuntimeHost): void {
     return;
   }
 
-  runtime.phase = 'announce';
+  runtime.phase = 'STELLA_WORD_REVEAL';
   runtime.darkPlayerId = resolveDarknessState(runtime.players);
   runtime.lastResolutionTitle = 'Conteos cerrados';
 
@@ -129,11 +129,11 @@ export function runStartAnnouncePhase(runtime: StellaRuntimeHost): void {
 }
 
 export function runStartRevealPhase(runtime: StellaRuntimeHost): void {
-  if (runtime.phase !== 'announce') {
+  if (runtime.phase !== 'STELLA_WORD_REVEAL') {
     return;
   }
 
-  runtime.phase = 'reveal';
+  runtime.phase = 'STELLA_REVEAL';
   runtime.activeExplorerId = resolveNextExplorerId(
     runtime.players,
     runtime.firstExplorerIndex - 1,
@@ -153,7 +153,7 @@ export function runStartRevealPhase(runtime: StellaRuntimeHost): void {
 }
 
 export function runResolveExplorerTurn(runtime: StellaRuntimeHost, cardCode?: string): void {
-  if (runtime.phase !== 'reveal') {
+  if (runtime.phase !== 'STELLA_REVEAL') {
     return;
   }
 
@@ -247,12 +247,12 @@ export function runResolveExplorerTurn(runtime: StellaRuntimeHost, cardCode?: st
 }
 
 export function runAdvanceAfterScoring(runtime: StellaRuntimeHost): void {
-  if (runtime.phase !== 'scoring') {
+  if (runtime.phase !== 'SCORING') {
     return;
   }
 
   if (runtime.roundNumber === TOTAL_ROUNDS) {
-    runtime.phase = 'finished';
+    runtime.phase = 'FINISHED';
     runtime.finalWinners = resolveWinners(runtime.players);
     const winner = runtime.finalWinners[0];
     runtime.selectionMessage = winner

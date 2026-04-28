@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, output } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, input, output } from '@angular/core';
 
 interface MoleHole {
   id: number;
@@ -11,7 +11,7 @@ type MoleVariant = 'normal' | 'gold';
   selector: 'app-dixit-minijuego-1',
   standalone: true,
   template: `
-    <div class="minigame-backdrop" (click)="close.emit()">
+    <div class="minigame-backdrop" (click)="closable() ? close.emit() : null">
       <article
         class="minigame-shell"
         role="dialog"
@@ -23,12 +23,14 @@ type MoleVariant = 'normal' | 'gold';
           <div class="minigame-copy">
             <p class="eyebrow">Minijuego 1</p>
             <h2 id="minigame-1-title">Golpea al topo</h2>
-            <p>Tienes 15 segundos. Cada topo acertado suma 1 punto.</p>
+            <p>Tienes {{ initialTimeLeft }} segundos. Cada topo acertado suma 1 punto.</p>
           </div>
 
-          <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
-            Cerrar
-          </button>
+          @if (closable()) {
+            <button type="button" class="close-button" aria-label="Cerrar minijuego" (click)="close.emit()">
+              Cerrar
+            </button>
+          }
         </header>
 
         <section class="minigame-stats" aria-label="Marcador del minijuego">
@@ -44,7 +46,7 @@ type MoleVariant = 'normal' | 'gold';
 
           <article class="stat-card">
             <span>Contra</span>
-            <strong>{{ opponentNickname }}</strong>
+            <strong>{{ opponentNickname() }}</strong>
           </article>
         </section>
 
@@ -72,7 +74,9 @@ type MoleVariant = 'normal' | 'gold';
         <footer class="minigame-footer">
           @if (isGameOver) {
             <p>Tiempo terminado. Has conseguido {{ score }} punto{{ score === 1 ? '' : 's' }}.</p>
-            <button type="button" class="restart-button" (click)="restartGame()">Jugar otra vez</button>
+            @if (allowRestart()) {
+              <button type="button" class="restart-button" (click)="restartGame()">Jugar otra vez</button>
+            }
           } @else {
             <p>Haz clic en los topos al salir. Los dorados valen 3 puntos.</p>
           }
@@ -83,17 +87,22 @@ type MoleVariant = 'normal' | 'gold';
   styleUrl: './minijuego-1.css',
 })
 export class DixitMinijuego1 implements OnInit, OnDestroy {
+  readonly durationMs = input(15_000);
+  readonly opponentNickname = input('Azzal-e');
+  readonly allowRestart = input(true);
+  readonly closable = input(true);
   readonly close = output<void>();
+  readonly finished = output<{ score: number }>();
   readonly holes: readonly MoleHole[] = Array.from({ length: 9 }, (_, index) => ({
     id: index,
     label: `Hueco ${index + 1}`,
   }));
-  readonly opponentNickname = 'Azzal-e';
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly moleFadeOutGraceMs = 180;
   private timerIntervalId: ReturnType<typeof setInterval> | null = null;
   private moleIntervalId: ReturnType<typeof setInterval> | null = null;
+  private hasEmittedResult = false;
 
   timeLeft = 15;
   score = 0;
@@ -103,6 +112,10 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
   previousMoleVariant: MoleVariant = 'normal';
   previousMoleExpiresAt = 0;
   isGameOver = false;
+
+  get initialTimeLeft(): number {
+    return this.resolveInitialTimeLeft();
+  }
 
   ngOnInit(): void {
     this.startGame();
@@ -145,9 +158,10 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
 
   private startGame(): void {
     this.clearGameIntervals();
-    this.timeLeft = 15;
+    this.timeLeft = this.resolveInitialTimeLeft();
     this.score = 0;
     this.isGameOver = false;
+    this.hasEmittedResult = false;
     this.showRandomMole();
 
     this.timerIntervalId = setInterval(() => {
@@ -164,7 +178,7 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
     this.moleIntervalId = setInterval(() => {
       this.showRandomMole();
       this.cdr.detectChanges();
-    }, 875);
+    }, 620);
   }
 
   private finishGame(): void {
@@ -176,6 +190,7 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
     this.previousMoleVariant = 'normal';
     this.previousMoleExpiresAt = 0;
     this.isGameOver = true;
+    this.emitResultOnce();
   }
 
   private showRandomMole(): void {
@@ -214,5 +229,23 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
       clearInterval(this.moleIntervalId);
       this.moleIntervalId = null;
     }
+  }
+
+  private resolveInitialTimeLeft(): number {
+    const durationMs = this.durationMs();
+    if (!Number.isFinite(durationMs)) {
+      return 15;
+    }
+
+    return Math.max(5, Math.ceil(durationMs / 1000));
+  }
+
+  private emitResultOnce(): void {
+    if (this.hasEmittedResult) {
+      return;
+    }
+
+    this.hasEmittedResult = true;
+    this.finished.emit({ score: this.score });
   }
 }

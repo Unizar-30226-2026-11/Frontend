@@ -1,4 +1,9 @@
-export type StellaPhase = 'association' | 'announce' | 'reveal' | 'scoring' | 'finished';
+export type StellaPhase =
+  | 'STELLA_WORD_REVEAL'
+  | 'STELLA_MARKING'
+  | 'STELLA_REVEAL'
+  | 'SCORING'
+  | 'FINISHED';
 export type LanternState = 'LIGHT' | 'DARK';
 export type RevealOutcome = 'super-spark' | 'spark' | 'fall';
 
@@ -51,25 +56,25 @@ export const MIN_SELECTIONS = 1;
 export const MAX_SELECTIONS = 10;
 
 export const PHASE_META: Record<StellaPhase, PhaseMeta> = {
-  association: {
-    title: 'Asociacion',
-    description: 'Selecciona entre 1 y 10 cartas que conecten con la palabra activa.',
+  STELLA_WORD_REVEAL: {
+    title: 'Palabra',
+    description: 'La palabra de la ronda ya es publica. Espera al marcado oficial del servidor.',
   },
-  announce: {
-    title: 'Anuncio',
-    description: 'Solo se revela cuantas cartas ha marcado cada jugador.',
+  STELLA_MARKING: {
+    title: 'Marcado',
+    description: 'Selecciona entre 1 y 10 cartas y confirma tus marcas por socket.',
   },
-  reveal: {
+  STELLA_REVEAL: {
     title: 'Revelado',
     description: 'El explorador resuelve una carta cada vez hasta caer o vaciar su seleccion.',
   },
-  scoring: {
+  SCORING: {
     title: 'Puntuacion',
-    description: 'Se consolidan las chispas, se aplica Oscuridad y se limpia la ronda.',
+    description: 'El servidor ya ha consolidado la ronda y espera el avance a la siguiente.',
   },
-  finished: {
+  FINISHED: {
     title: 'Final',
-    description: 'Tras cuatro rondas se decide la victoria, incluso compartida si hay empate.',
+    description: 'La partida ha terminado y el servidor ya ha cerrado la clasificacion final.',
   },
 };
 
