@@ -420,10 +420,13 @@ describe('DixitRealtime', () => {
 
     expect(socket.emissions).toContain(
       jasmine.objectContaining({
-        event: 'client:game:minigame_score',
+        event: 'client:game:action',
         payload: jasmine.objectContaining({
           lobbyCode: 'A1B2',
-          score: 12,
+          actionType: 'SUBMIT_MINIGAME_SCORE',
+          payload: jasmine.objectContaining({
+            score: 12,
+          }),
         }),
       })
     );

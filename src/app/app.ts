@@ -48,6 +48,7 @@ export class App {
       currentPath.startsWith('/dixit/') ||
       currentPath.startsWith('/test/dixit') ||
       currentPath.startsWith('/test/stella') ||
+      currentPath.startsWith('/test/unif') ||
       currentPath.startsWith('/dixit-stella/') ||
       currentPath === '/stella-test'
     ) {
@@ -67,6 +68,7 @@ export class App {
       !this.currentPath().startsWith('/dixit/') &&
       !this.currentPath().startsWith('/test/dixit') &&
       !this.currentPath().startsWith('/test/stella') &&
+      !this.currentPath().startsWith('/test/unif') &&
       !this.currentPath().startsWith('/dixit-stella/')
     );
   }

@@ -43,6 +43,7 @@ describe('Dixit', () => {
       'specialEvent',
       'clearSpecialEvent',
       'clearMinigameStart',
+      'clearDuelChallenge',
     ]);
     realtimeSpy.ensureLobbyConnection.and.resolveTo();
     realtimeSpy.lobbyState.and.returnValue(null);
@@ -130,6 +131,42 @@ describe('Dixit', () => {
 
     expect(component.phase).toBe('points');
     expect(component.pointsStage).toBe('ranking');
+  });
+
+  it('hydrates players and scores from state player ids plus state.scores', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeLobbyState']({
+      id: 'lobby-1',
+      code: 'A1B2',
+      hostId: 'u_18',
+      players: [
+        { id: 'u_18', username: 'Ada' },
+        { id: 'u_19', username: 'Bruno' },
+        { id: 'u_53', username: 'Carla' },
+      ],
+    });
+
+    component['applyRealtimeGameState']({
+      state: {
+        players: ['u_18', 'u_19', 'u_53'],
+        scores: {
+          u_18: 4,
+          u_19: 1,
+          u_53: 7,
+        },
+        currentRound: {},
+      },
+      receivedAt: Date.now(),
+    });
+
+    expect(component.playerRows.map((player) => player.name)).toEqual(['Ada', 'Bruno', 'Carla']);
+    expect(component.playerRows.map((player) => player.points)).toEqual([4, 1, 7]);
+    expect(component.boardTokens.map((token) => ({ id: token.id, position: token.position }))).toEqual([
+      { id: 'u_18', position: 4 },
+      { id: 'u_19', position: 1 },
+      { id: 'u_53', position: 7 },
+    ]);
   });
 
   it('requests game end when the server marks the match as finished', async () => {
@@ -242,6 +279,40 @@ describe('Dixit', () => {
     expect(text).not.toContain('Esperando a que el servidor envie tu mano.');
   });
 
+  it('uses currentRound.boardCardsDetailed image urls during voting when the backend sends detailed board metadata', async () => {
+    await initializeComponent(fixture);
+
+    component.cards = [];
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'VOTING',
+        currentRound: {
+          boardCards: [17, 42, 89, 5],
+          boardCardsDetailed: [
+            { id: 'c_17', url_image: 'https://cdn.example.com/card-17.webp', name: 'Carta 17' },
+            { id: 'c_42', url_image: 'https://cdn.example.com/card-42.webp', name: 'Carta 42' },
+            { id: 'c_89', url_image: 'https://cdn.example.com/card-89.webp', name: 'Carta 89' },
+            { id: 'c_5', url_image: 'https://cdn.example.com/card-5.webp', name: 'Carta 5' },
+          ],
+          playedCards: {
+            u_self: 42,
+          },
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    expect(component.phase).toBe('choice');
+    expect(component.choiceCards.map((card) => card.code)).toEqual(['c_17', 'c_42', 'c_89', 'c_5']);
+    expect(component.choiceCards[0]?.image).toBe('https://cdn.example.com/card-17.webp');
+    expect(component.choiceCards[1]?.image).toBe('https://cdn.example.com/card-42.webp');
+    expect(component.currentPlayerPlayedCardCode).toBe('c_42');
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Tu carta');
+  });
+
   it('does not allow selecting your own board card during voting', async () => {
     await initializeComponent(fixture);
 
@@ -261,6 +332,60 @@ describe('Dixit', () => {
     component.onChoiceCardSelected(component.choiceCards[1]);
 
     expect(component.selectedChoiceCardCode).toBe('');
+  });
+
+  it('does not allow selecting your own board card when the board uses prefixed codes and playedCards uses numbers', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'VOTING',
+        currentRound: {
+          boardCards: [17, 42, 89],
+          boardCardsDetailed: [
+            { id: 'c_17', url_image: 'https://cdn.example.com/card-17.webp', name: 'Carta 17' },
+            { id: 'c_42', url_image: 'https://cdn.example.com/card-42.webp', name: 'Carta 42' },
+            { id: 'c_89', url_image: 'https://cdn.example.com/card-89.webp', name: 'Carta 89' },
+          ],
+          playedCards: {
+            u_self: 42,
+          },
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    component.onChoiceCardSelected(component.choiceCards[1]);
+
+    expect(component.currentPlayerPlayedCardCode).toBe('c_42');
+    expect(component.selectedChoiceCardCode).toBe('');
+  });
+
+  it('restores the selected vote from currentRound.selectedVoteCardId using the displayed board code', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'VOTING',
+        currentRound: {
+          boardCards: [17, 42, 89],
+          boardCardsDetailed: [
+            { id: 'c_17', url_image: 'https://cdn.example.com/card-17.webp', name: 'Carta 17' },
+            { id: 'c_42', url_image: 'https://cdn.example.com/card-42.webp', name: 'Carta 42' },
+            { id: 'c_89', url_image: 'https://cdn.example.com/card-89.webp', name: 'Carta 89' },
+          ],
+          playedCards: {
+            u_self: 17,
+          },
+          selectedVoteCardId: 'c_42',
+        },
+      },
+      lastAction: 'SESSION_RECOVERED',
+      receivedAt: Date.now(),
+    });
+
+    expect(component.selectedChoiceCardCode).toBe('c_42');
+    expect(component.voteSubmitted).toBeTrue();
   });
 
   it('does not send a vote for the current player own card', async () => {
@@ -441,6 +566,25 @@ describe('Dixit', () => {
     expect(component.voteSubmitted).toBeTrue();
   });
 
+  it('sends the local minigame score to the realtime service when the minigame ends', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
+      type: 0,
+      isDuel: false,
+      duration: 15_000,
+      receivedAt: Date.now(),
+    });
+
+    component.onMinigameFinished({ score: 250 });
+
+    expect(realtimeSpy.sendMinigameScore).toHaveBeenCalledOnceWith(250);
+    expect(component.minigameUiState).toBe('waiting');
+    expect(component.minigameStatusMessage).toBe('Puntuacion enviada. Esperando al rival...');
+  });
+
   it('uses scoring phase data to reveal cards and ranking instead of waiting for votes', async () => {
     await initializeComponent(fixture);
 
@@ -473,6 +617,47 @@ describe('Dixit', () => {
     expect(component.pointsStage).toBe('reveal');
     expect(component.pointsRevealedCards.length).toBe(3);
     expect(component.pointsRanking[0].playerId).toBe('cpu_1');
+  });
+
+  it('uses currentRound.boardCardsDetailed image urls during revealed scoring', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+        scores: {
+          u_self: 3,
+          cpu_1: 5,
+          cpu_2: 2,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: 17,
+          boardCards: [17, 42, 89],
+          boardCardsDetailed: [
+            { id: 'c_17', url_image: 'https://cdn.example.com/revealed-17.webp' },
+            { id: 'c_42', url_image: 'https://cdn.example.com/revealed-42.webp' },
+            { id: 'c_89', url_image: 'https://cdn.example.com/revealed-89.webp' },
+          ],
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+            cpu_2: 89,
+          },
+          votes: [
+            { voterId: 'u_self', targetCardId: 17 },
+            { voterId: 'cpu_2', targetCardId: 17 },
+          ],
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    expect(component.pointsRevealedCards.map((entry) => entry.card.image)).toEqual([
+      'https://cdn.example.com/revealed-17.webp',
+      'https://cdn.example.com/revealed-42.webp',
+      'https://cdn.example.com/revealed-89.webp',
+    ]);
   });
 
   it('asks the host to advance automatically after scoring', async () => {

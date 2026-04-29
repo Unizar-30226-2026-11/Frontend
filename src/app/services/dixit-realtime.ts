@@ -262,10 +262,13 @@ export class DixitRealtime {
   // los resultados de los dos jugadores y desbloquear la partida.
   sendMinigameScore(score: number): void {
     const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.floor(score)) : 0;
-    this.debug('emit client:game:minigame_score', { score: normalizedScore });
-    this.emit('client:game:minigame_score', {
+    this.debug('emit client:game:action SUBMIT_MINIGAME_SCORE', { score: normalizedScore });
+    this.emit('client:game:action', {
       lobbyCode: this.requireSession().lobbyCode,
-      score: normalizedScore,
+      actionType: 'SUBMIT_MINIGAME_SCORE',
+      payload: {
+        score: normalizedScore,
+      },
     });
   }
 

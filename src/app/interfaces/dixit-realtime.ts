@@ -11,6 +11,7 @@ export type DixitConnectionStatus =
 export type DixitGameActionType =
   | 'SEND_STORY'
   | 'SUBMIT_CARD'
+  | 'SUBMIT_MINIGAME_SCORE'
   | 'CAST_VOTE'
   | 'NEXT_ROUND'
   | 'RESOLVE_DUEL'

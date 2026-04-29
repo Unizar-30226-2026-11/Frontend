@@ -854,32 +854,53 @@ export class Dixit implements OnInit, OnDestroy {
     const shouldApplyRealtimeScores =
       this.phase !== 'points' || this.pointsStage === 'ranking';
     const playerEntries = this.readArrayFromCandidates(state, ['players', 'participants']);
+    const existingRosterById = new Map(this.playerRoster.map((player) => [player.id, player]));
+    const scoresRecord = asRecord(state['scores']);
     if (!playerEntries.length) {
+      if (scoresRecord) {
+        for (const [playerId, scoreValue] of Object.entries(scoresRecord)) {
+          if (
+            !playerId.trim() ||
+            typeof scoreValue !== 'number' ||
+            !Number.isFinite(scoreValue) ||
+            this.pointsByPlayer.has(playerId)
+          ) {
+            continue;
+          }
+
+          this.pointsByPlayer.set(playerId, scoreValue);
+        }
+      }
+
       this.boardTokens = this.buildBoardTokensFromScores();
       return;
     }
 
     const resolvedRoster: RosterPlayer[] = [];
     for (let index = 0; index < playerEntries.length; index += 1) {
-      const entry = asRecord(playerEntries[index]);
-      if (!entry) {
-        continue;
-      }
-
+      const rawEntry = playerEntries[index];
+      const entry = asRecord(rawEntry);
       const playerId =
-        this.readStringFromCandidates(entry, ['id', 'playerId', 'userId']) ?? `player-${index + 1}`;
+        typeof rawEntry === 'string' && rawEntry.trim()
+          ? rawEntry.trim()
+          : this.readStringFromCandidates(entry ?? {}, ['id', 'playerId', 'userId']) ??
+            `player-${index + 1}`;
+      const existingPlayer = existingRosterById.get(playerId);
       const playerName =
-        this.readStringFromCandidates(entry, ['username', 'name']) ?? playerId;
+        this.readStringFromCandidates(entry ?? {}, ['username', 'name']) ??
+        existingPlayer?.name ??
+        (playerId === this.currentUserId ? this.auth.username() || playerId : playerId);
 
       resolvedRoster.push({
         id: playerId,
         name: playerName,
-        color: DEFAULT_PLAYER_COLORS[index % DEFAULT_PLAYER_COLORS.length],
+        color: existingPlayer?.color ?? DEFAULT_PLAYER_COLORS[index % DEFAULT_PLAYER_COLORS.length],
       });
 
       const score =
-        this.readNumber(entry, ['score', 'points', 'totalPoints']) ??
-        this.readNumber(asRecord(entry['stats']) ?? {}, ['score', 'points', 'totalPoints']);
+        this.readNumber(entry ?? {}, ['score', 'points', 'totalPoints']) ??
+        this.readNumber(asRecord(entry?.['stats']) ?? {}, ['score', 'points', 'totalPoints']) ??
+        this.readNumber(scoresRecord ?? {}, [playerId]);
 
       if (shouldApplyRealtimeScores) {
         this.pointsByPlayer.set(playerId, score ?? this.pointsByPlayer.get(playerId) ?? 0);
@@ -932,7 +953,12 @@ export class Dixit implements OnInit, OnDestroy {
       }
     }
 
-    const boardCardEntries = this.readArrayFromCandidates(currentRoundState, ['boardCards']);
+    const detailedBoardCardEntries = this.readArrayFromCandidates(currentRoundState, [
+      'boardCardsDetailed',
+    ]);
+    const boardCardEntries = detailedBoardCardEntries.length > 0
+      ? detailedBoardCardEntries
+      : this.readArrayFromCandidates(currentRoundState, ['boardCards']);
     const roundChoiceEntries = this.collectRoundChoiceEntries(currentRoundState);
     const fallbackChoiceEntries = this.readArrayFromCandidates(state, [
       'choiceCards',
@@ -955,9 +981,8 @@ export class Dixit implements OnInit, OnDestroy {
     if (!this.areCardArraysIdentical(this.choiceCards, nextChoiceCards)) {
       this.choiceCards = nextChoiceCards;
     }
-    this.currentPlayerPlayedCardCode = this.resolveCurrentPlayerPlayedCardCode(
-      currentRoundState,
-      currentPlayerState
+    this.currentPlayerPlayedCardCode = this.resolveDisplayedChoiceCardCode(
+      this.resolveCurrentPlayerPlayedCardCode(currentRoundState, currentPlayerState)
     );
 
     const selectedHandCardCode =
@@ -983,7 +1008,7 @@ export class Dixit implements OnInit, OnDestroy {
     if (
       this.phase === 'choice' &&
       !this.voteSubmitted &&
-      this.selectedChoiceCardCode === this.currentPlayerPlayedCardCode
+      this.areEquivalentCardCodes(this.selectedChoiceCardCode, this.currentPlayerPlayedCardCode)
     ) {
       this.selectedChoiceCardCode = '';
     }
@@ -1047,13 +1072,15 @@ export class Dixit implements OnInit, OnDestroy {
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
     // Reconstruye la selección/voto del jugador actual si el backend ya lo conoce,
     // por ejemplo tras un refresh y recovered.
+    const currentRoundState = this.resolveCurrentRoundState(state);
     const currentPlayerState = this.resolveCurrentPlayerState(state);
     const selectedVoteCode =
+      this.readStringFromCandidates(currentRoundState, ['selectedVoteCardId']) ??
       this.readStringFromCandidates(currentPlayerState, ['voteCardCode', 'selectedVoteCardCode']) ??
       this.readStringFromCandidates(asRecord(currentPlayerState['vote']) ?? {}, ['code', 'cardId', 'id']);
 
     if (selectedVoteCode) {
-      this.selectedChoiceCardCode = selectedVoteCode;
+      this.selectedChoiceCardCode = this.resolveDisplayedChoiceCardCode(selectedVoteCode);
       this.voteSubmitted = true;
     }
   }
@@ -1603,6 +1630,9 @@ export class Dixit implements OnInit, OnDestroy {
     this.dynamicCardUrls.clear();
     this.collectDynamicCardUrls(this.readRecordFromCandidates(state, ['cardUrls']));
     this.collectDynamicCardUrls(this.readRecordFromCandidates(currentRoundState, ['cardUrls']));
+    this.collectDynamicCardUrlsFromEntries(
+      this.readArrayFromCandidates(currentRoundState, ['boardCardsDetailed', 'boardCards'])
+    );
   }
 
   private collectDynamicCardUrls(source: Record<string, unknown> | null): void {
@@ -1626,8 +1656,46 @@ export class Dixit implements OnInit, OnDestroy {
         ? this.readStringFromCandidates(cardData, ['url_image', 'image', 'imageUrl', 'image_url', 'url'])
         : null;
       if (url) {
-        this.dynamicCardUrls.set(normalizedCode, url);
+        this.registerDynamicCardUrl(normalizedCode, url);
       }
+    }
+  }
+
+  private collectDynamicCardUrlsFromEntries(entries: unknown[]): void {
+    for (const entry of entries) {
+      const cardData = asRecord(entry);
+      if (!cardData) {
+        continue;
+      }
+
+      const cardCode =
+        this.readStringFromCandidates(cardData, ['code', 'cardId', 'card_id', 'id']) ??
+        this.readNumber(cardData, ['cardId', 'card_id', 'id'])?.toString() ??
+        '';
+      const url = this.readStringFromCandidates(cardData, [
+        'url_image',
+        'image',
+        'imageUrl',
+        'image_url',
+        'url',
+      ]);
+      if (!cardCode || !url) {
+        continue;
+      }
+
+      this.registerDynamicCardUrl(cardCode, url);
+    }
+  }
+
+  private registerDynamicCardUrl(cardCode: string, url: string): void {
+    const normalizedCardCode = cardCode.trim();
+    const normalizedUrl = url.trim();
+    if (!normalizedCardCode || !normalizedUrl) {
+      return;
+    }
+
+    for (const equivalentCode of this.buildEquivalentCardCodes(normalizedCardCode)) {
+      this.dynamicCardUrls.set(equivalentCode, normalizedUrl);
     }
   }
 
@@ -1651,6 +1719,53 @@ export class Dixit implements OnInit, OnDestroy {
       this.normalizeDynamicCardCode(asRecord(currentPlayerState['selectedCard'])?.['code']);
 
     return ownPlayedCard ?? '';
+  }
+
+  private resolveDisplayedChoiceCardCode(cardCode: string): string {
+    const normalizedCardCode = cardCode.trim();
+    if (!normalizedCardCode) {
+      return '';
+    }
+
+    if (this.choiceCards.some((card) => card.code === normalizedCardCode)) {
+      return normalizedCardCode;
+    }
+
+    const equivalentCard = this.choiceCards.find((card) =>
+      this.areEquivalentCardCodes(card.code, normalizedCardCode)
+    );
+    return equivalentCard?.code ?? normalizedCardCode;
+  }
+
+  private areEquivalentCardCodes(leftCode: string, rightCode: string): boolean {
+    const normalizedLeftCode = leftCode.trim();
+    const normalizedRightCode = rightCode.trim();
+    if (!normalizedLeftCode || !normalizedRightCode) {
+      return false;
+    }
+
+    if (normalizedLeftCode === normalizedRightCode) {
+      return true;
+    }
+
+    return this.buildEquivalentCardCodes(normalizedLeftCode).includes(normalizedRightCode);
+  }
+
+  private buildEquivalentCardCodes(cardCode: string): string[] {
+    const normalizedCardCode = cardCode.trim();
+    if (!normalizedCardCode) {
+      return [];
+    }
+
+    const equivalents = new Set<string>([normalizedCardCode]);
+    const numericSuffix = normalizedCardCode.match(/(\d+)$/)?.[1];
+    if (numericSuffix) {
+      equivalents.add(numericSuffix);
+      equivalents.add(`c_${numericSuffix}`);
+      equivalents.add(`C_${numericSuffix}`);
+    }
+
+    return [...equivalents];
   }
 
   private normalizeDynamicCardCode(value: unknown): string | null {
@@ -2032,7 +2147,7 @@ export class Dixit implements OnInit, OnDestroy {
       this.phase !== 'choice' ||
       this.voteSubmitted ||
       this.isCurrentPlayerStoryteller ||
-      card.code === this.currentPlayerPlayedCardCode
+      this.areEquivalentCardCodes(card.code, this.currentPlayerPlayedCardCode)
     ) {
       return;
     }
@@ -2052,7 +2167,7 @@ export class Dixit implements OnInit, OnDestroy {
       this.phase !== 'choice' ||
       this.isCurrentPlayerStoryteller ||
       !this.selectedChoiceCardCode ||
-      this.selectedChoiceCardCode === this.currentPlayerPlayedCardCode
+      this.areEquivalentCardCodes(this.selectedChoiceCardCode, this.currentPlayerPlayedCardCode)
     ) {
       return;
     }

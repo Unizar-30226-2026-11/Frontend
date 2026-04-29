@@ -13,6 +13,7 @@ import { Profile } from './profile/profile';
 import { DixitTestShell } from './test/dixit/dixit-test-shell';
 import { StellaTestShell } from './test/stella/stella-test-shell';
 import { StarTest } from './test/star/star-test';
+import { UnifiedTestShell } from './test/unified/unified-test-shell';
 import { Auth } from './services/auth';
 import { GameShell } from './game-shell/game-shell';
 
@@ -163,6 +164,16 @@ export const routes: Routes = [
         path: 'test/stella/:id',
         title: 'Stella Test',
         component: StellaTestShell,
+    },
+    {
+        path: 'test/unif',
+        pathMatch: 'full',
+        redirectTo: 'test/unif/TEST-UNIF',
+    },
+    {
+        path: 'test/unif/:id',
+        title: 'Unified Test',
+        component: UnifiedTestShell,
     },
     {
         path: 'test/star',

@@ -86,6 +86,7 @@ describe('App', () => {
           { path: 'dixit/:id', component: TestDixit },
           { path: 'dixit-stella/:id', component: TestDixitStella },
           { path: 'test/stella/:id', component: TestDixitStella },
+          { path: 'test/unif/:id', component: TestGameShell },
         ]),
         {
           provide: Auth,
@@ -159,6 +160,16 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const router = TestBed.inject(Router);
     await router.navigateByUrl('/test/stella/TEST-STELLA');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('app-navigation-bar')).toBeNull();
+  });
+
+  it('should hide the navigation bar on the unified test route', async () => {
+    const fixture = TestBed.createComponent(App);
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/test/unif/TEST-UNIF');
     fixture.detectChanges();
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

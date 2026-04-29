@@ -48,8 +48,11 @@ export class DixitStella implements OnInit {
   private readonly injector = inject(Injector);
 
   private readonly playerNames = new Map<string, string>();
+  private readonly cardCatalogByCode = new Map<string, DeckCard>();
   private readonly cardCatalog = new Map<number, DeckCard>();
   private readonly boardCardIdsByCode = new Map<string, number>();
+  private readonly dynamicCardUrls = new Map<string, string>();
+  private ownedCards: DeckCard[] = [];
   private lastAppliedGameStateReceivedAt = 0;
   private lastBoardSignature = '';
   private revealLogSequence = 0;
@@ -137,6 +140,7 @@ export class DixitStella implements OnInit {
     ]);
 
     if (cardsResult.status === 'fulfilled') {
+      this.ownedCards = [...cardsResult.value];
       this.hydrateCardCatalog(cardsResult.value);
     } else {
       this.errorMessage =
@@ -395,10 +399,26 @@ export class DixitStella implements OnInit {
   }
 
   private hydrateCardCatalog(cards: DeckCard[]): void {
+    this.cardCatalogByCode.clear();
     this.cardCatalog.clear();
 
     cards.forEach((card) => {
-      const numericCode = Number(card.code);
+      const normalizedCode = card.code.trim();
+      if (normalizedCode) {
+        this.cardCatalogByCode.set(normalizedCode, card);
+        const alternateCode = this.buildAlternateCardCode(normalizedCode);
+        if (alternateCode) {
+          this.cardCatalogByCode.set(alternateCode, card);
+        }
+        if (card.image && card.image !== DEFAULT_CARD_IMAGE) {
+          this.dynamicCardUrls.set(normalizedCode, card.image);
+          if (alternateCode) {
+            this.dynamicCardUrls.set(alternateCode, card.image);
+          }
+        }
+      }
+
+      const numericCode = this.extractNumericCardId(card.code);
       if (Number.isFinite(numericCode)) {
         this.cardCatalog.set(numericCode, card);
       }
@@ -431,8 +451,13 @@ export class DixitStella implements OnInit {
 
     const phase = this.normalizePhase(this.readString(state, 'phase'));
     const currentRound = this.asRecord(state['currentRound']) ?? {};
-    const boardCardIds = this.readNumberArray(currentRound, 'boardCards');
-    const boardSignature = boardCardIds.join(',');
+    this.syncDynamicCardUrls(state, currentRound);
+    const boardCardEntries = this.readArray(currentRound, 'boardCards');
+    const detailedBoardCardEntries = this.readArray(currentRound, 'boardCardsDetailed');
+    const nextBoardCards = boardCardEntries
+      .map((entry, index) => this.resolveBoardCard(detailedBoardCardEntries[index] ?? entry, index, entry))
+      .filter((card): card is DeckCard => card !== null);
+    const boardSignature = nextBoardCards.map((card) => card.code).join(',');
     const playerMarks = this.readPlayerMarks(currentRound);
     const revealedCards = this.readNumberArray(currentRound, 'revealedCards');
     const currentScoutId = this.readString(currentRound, 'currentScoutId') ?? '';
@@ -471,10 +496,10 @@ export class DixitStella implements OnInit {
       : null;
 
     this.boardCardIdsByCode.clear();
-    this.boardCards = boardCardIds.map((cardId) => {
-      const card = this.resolveBoardCard(cardId);
+    this.boardCards = nextBoardCards;
+    this.boardCards.forEach((card, index) => {
+      const cardId = this.resolveNumericCardId(boardCardEntries[index], card.code);
       this.boardCardIdsByCode.set(card.code, cardId);
-      return card;
     });
 
     const revealedCardSet = new Set(revealedCards.map((cardId) => String(cardId)));
@@ -554,7 +579,7 @@ export class DixitStella implements OnInit {
         id: ++this.revealLogSequence,
         explorerName: this.playerNames.get(explorerId) ?? explorerId ?? 'Scout',
         cardCode: String(cardId),
-        cardLabel: this.resolveBoardCard(cardId).value,
+        cardLabel: this.resolveBoardCard(cardId)?.value ?? String(cardId),
         matchingPlayerNames,
         outcome,
         outcomeLabel:
@@ -648,15 +673,42 @@ export class DixitStella implements OnInit {
     this.draftSelectionIds = [...this.draftSelectionIds, cardId];
   }
 
-  private resolveBoardCard(cardId: number): DeckCard {
-    return (
-      this.cardCatalog.get(cardId) ?? {
-        code: String(cardId),
-        image: DEFAULT_CARD_IMAGE,
-        value: `Carta ${cardId}`,
-        suit: 'STELLA',
-      }
-    );
+  private resolveBoardCard(entry: unknown, index = 0, fallbackEntry?: unknown): DeckCard | null {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      return this.buildBoardCardFromCode(String(entry), `Carta ${entry}`);
+    }
+
+    if (typeof entry === 'string' && entry.trim()) {
+      const normalizedCode = entry.trim();
+      return this.buildBoardCardFromCode(normalizedCode, `Carta ${normalizedCode}`);
+    }
+
+    const card = this.asRecord(entry);
+    if (!card) {
+      return null;
+    }
+
+    const fallbackCode = this.resolveFallbackBoardCardCode(fallbackEntry);
+    const code = fallbackCode ?? this.resolveBoardCardCodeFromRecord(card, index);
+    const knownCard = this.findKnownCardByCode(code);
+    const image =
+      this.preferKnownCardImage(
+        this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+          this.dynamicCardUrls.get(code) ??
+          DEFAULT_CARD_IMAGE,
+        knownCard
+      );
+    const value =
+      this.readStringFromCandidates(card, ['title', 'name', 'value']) ?? knownCard?.value ?? `Carta ${code}`;
+    const suit =
+      this.readStringFromCandidates(card, ['suit', 'collection']) ?? knownCard?.suit ?? 'STELLA';
+
+    return {
+      code,
+      image,
+      value,
+      suit,
+    };
   }
 
   private resolvePlayerIds(
@@ -726,14 +778,14 @@ export class DixitStella implements OnInit {
   }
 
   private readNumberArray(source: Record<string, unknown>, key: string): number[] {
-    const value = source[key];
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    return value
+    return this.readArray(source, key)
       .map((entry) => (typeof entry === 'number' ? entry : typeof entry === 'string' ? Number(entry) : NaN))
       .filter((entry) => Number.isFinite(entry));
+  }
+
+  private readArray(source: Record<string, unknown>, key: string): unknown[] {
+    const value = source[key];
+    return Array.isArray(value) ? value : [];
   }
 
   private readNumberRecord(source: Record<string, unknown>, key: string): Record<string, number> {
@@ -756,6 +808,209 @@ export class DixitStella implements OnInit {
 
       return accumulator;
     }, {});
+  }
+
+  private syncDynamicCardUrls(
+    state: Record<string, unknown>,
+    currentRound: Record<string, unknown>
+  ): void {
+    this.collectDynamicCardUrls(this.asRecord(state['cardUrls']));
+    this.collectDynamicCardUrls(this.asRecord(currentRound['cardUrls']));
+  }
+
+  private collectDynamicCardUrls(source: Record<string, unknown> | null): void {
+    if (!source) {
+      return;
+    }
+
+    for (const [rawCode, value] of Object.entries(source)) {
+      const normalizedCode = rawCode.trim();
+      if (!normalizedCode) {
+        continue;
+      }
+
+      if (typeof value === 'string' && value.trim()) {
+        this.dynamicCardUrls.set(normalizedCode, value.trim());
+        const alternateCode = this.buildAlternateCardCode(normalizedCode);
+        if (alternateCode) {
+          this.dynamicCardUrls.set(alternateCode, value.trim());
+        }
+        continue;
+      }
+
+      const cardData = this.asRecord(value);
+      const url = cardData
+        ? this.readStringFromCandidates(cardData, ['url_image', 'image', 'imageUrl', 'image_url', 'url'])
+        : null;
+      if (url) {
+        this.dynamicCardUrls.set(normalizedCode, url);
+        const alternateCode = this.buildAlternateCardCode(normalizedCode);
+        if (alternateCode) {
+          this.dynamicCardUrls.set(alternateCode, url);
+        }
+      }
+    }
+  }
+
+  private buildBoardCardFromCode(code: string, fallbackValue: string): DeckCard {
+    const knownCard = this.findKnownCardByCode(code);
+    return {
+      code,
+      image: this.preferKnownCardImage(this.dynamicCardUrls.get(code) ?? DEFAULT_CARD_IMAGE, knownCard),
+      value: knownCard?.value ?? fallbackValue,
+      suit: knownCard?.suit ?? 'STELLA',
+    };
+  }
+
+  private findKnownCardByCode(code: string): DeckCard | null {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
+      return null;
+    }
+
+    return (
+      this.cardCatalogByCode.get(normalizedCode) ??
+      this.boardCards.find((card) => card.code === normalizedCode) ??
+      this.ownedCards.find((card) => card.code === normalizedCode) ??
+      null
+    );
+  }
+
+  private preferKnownCardImage(image: string, knownCard: DeckCard | null): string {
+    if (!knownCard || !knownCard.image || knownCard.image === DEFAULT_CARD_IMAGE) {
+      return image;
+    }
+
+    return knownCard.image;
+  }
+
+  private resolveNumericCardId(entry: unknown, fallbackCode: string): number {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      return entry;
+    }
+
+    if (typeof entry === 'string') {
+      const parsed = this.extractNumericCardId(entry);
+      return Number.isFinite(parsed) ? parsed : Number(fallbackCode) || 0;
+    }
+
+    const record = this.asRecord(entry);
+    const numericId = record
+      ? this.readNumberFromCandidates(record, ['cardId', 'card_id', 'id', 'idCard', 'id_card'])
+      : null;
+    if (numericId !== null) {
+      return numericId;
+    }
+
+    const codeFromRecord = record
+      ? this.readStringFromCandidates(record, ['code', 'cardId', 'card_id', 'id', 'idCard', 'id_card'])
+      : null;
+    const parsedFallback = this.extractNumericCardId(codeFromRecord ?? fallbackCode);
+    return Number.isFinite(parsedFallback) ? parsedFallback : 0;
+  }
+
+  private resolveFallbackBoardCardCode(entry: unknown): string | null {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      return String(entry);
+    }
+
+    if (typeof entry === 'string' && entry.trim()) {
+      const numericId = this.extractNumericCardId(entry);
+      return Number.isFinite(numericId) ? String(numericId) : entry.trim();
+    }
+
+    const record = this.asRecord(entry);
+    if (!record) {
+      return null;
+    }
+
+    const numericId = this.readNumberFromCandidates(record, ['cardId', 'card_id', 'id', 'idCard', 'id_card']);
+    if (numericId !== null) {
+      return String(numericId);
+    }
+
+    const code = this.readStringFromCandidates(record, ['code', 'cardId', 'card_id', 'id', 'idCard', 'id_card']);
+    if (!code) {
+      return null;
+    }
+
+    const parsedCode = this.extractNumericCardId(code);
+    return Number.isFinite(parsedCode) ? String(parsedCode) : code;
+  }
+
+  private resolveBoardCardCodeFromRecord(card: Record<string, unknown>, index: number): string {
+    return (
+      this.readStringFromCandidates(card, ['code', 'cardId', 'card_id', 'id', 'idCard', 'id_card']) ??
+      this.readNumberFromCandidates(card, ['cardId', 'card_id', 'id', 'idCard', 'id_card'])?.toString() ??
+      `card-${index + 1}`
+    );
+  }
+
+  private extractNumericCardId(value: string): number {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return NaN;
+    }
+
+    const directValue = Number(trimmedValue);
+    if (Number.isFinite(directValue)) {
+      return directValue;
+    }
+
+    const suffixMatch = trimmedValue.match(/(\d+)$/);
+    return suffixMatch ? Number(suffixMatch[1]) : NaN;
+  }
+
+  private buildAlternateCardCode(code: string): string | null {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
+      return null;
+    }
+
+    if (/^c_\d+$/i.test(normalizedCode)) {
+      return normalizedCode.replace(/^c_/i, '');
+    }
+
+    if (/^\d+$/.test(normalizedCode)) {
+      return `c_${normalizedCode}`;
+    }
+
+    return null;
+  }
+
+  private readStringFromCandidates(
+    source: Record<string, unknown>,
+    keys: readonly string[]
+  ): string | null {
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    return null;
+  }
+
+  private readNumberFromCandidates(
+    source: Record<string, unknown>,
+    keys: readonly string[]
+  ): number | null {
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+
+      if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    }
+
+    return null;
   }
 
   private readPlayerMarks(source: Record<string, unknown>): Record<string, number[]> {

@@ -129,6 +129,54 @@ describe('DixitStella', () => {
       cardId: 2,
     });
   });
+
+  it('uses boardCardsDetailed image urls when Stella sends numeric boardCards plus detailed metadata', async () => {
+    realtimeStub.gameState.and.returnValue(
+      createRealtimeState({
+        currentRound: {
+          boardCards: [112, 129, 94],
+          boardCardsDetailed: [
+            {
+              id: 'c_112',
+              url_image: 'https://cdn.example.com/stella-112.webp',
+              name: 'Carta URL 112',
+            },
+            {
+              id: 'c_129',
+              url_image: 'https://cdn.example.com/stella-129.webp',
+              name: 'Carta URL 129',
+            },
+            {
+              id: 'c_94',
+              url_image: 'https://cdn.example.com/stella-94.webp',
+              name: 'Carta URL 94',
+            },
+          ],
+        },
+      })
+    );
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.boardCards[0]).toEqual(
+      jasmine.objectContaining({
+        code: '112',
+        image: 'https://cdn.example.com/stella-112.webp',
+        value: 'Carta URL 112',
+      })
+    );
+    expect(component.boardCards[1]).toEqual(
+      jasmine.objectContaining({
+        code: '129',
+        image: 'https://cdn.example.com/stella-129.webp',
+        value: 'Carta URL 129',
+      })
+    );
+  });
 });
 
 function createCardsFixture(count: number): DeckCard[] {
