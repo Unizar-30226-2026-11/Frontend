@@ -1,16 +1,7 @@
 <section class="dixit-table">
       <nav class="dixit-topbar" aria-label="Barra de partida">
         <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
-
-        <div class="phase-banner">
-          <p class="eyebrow">Sala {{ id || 'demo' }}</p>
-          <div class="phase-current">
-            <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
-            <p>{{ currentPhaseInstruction }}</p>
-            <p class="storyteller-debug">{{ storytellerStatusText }}</p>
-          </div>
-          <span class="status-pill">{{ connectionStatusLabel }}</span>
-        </div>
+        <div class="topbar-spacer" aria-hidden="true"></div>
 
         <div class="topbar-actions">
           <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>

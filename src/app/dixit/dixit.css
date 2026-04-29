@@ -25,11 +25,15 @@
     }
 
     .dixit-topbar {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
       gap: 12px;
-      padding: 10px 12px;
+      min-height: 60px;
+      max-height: 60px;
+      padding: 8px 12px;
+      box-sizing: border-box;
+      overflow: hidden;
       border-radius: 18px;
       background: rgba(8, 20, 29, 0.56);
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -51,50 +55,16 @@
       color: #fff6d7;
     }
 
-    .phase-banner {
+    .topbar-spacer {
+      flex: 1 1 auto;
       min-width: 0;
-      display: grid;
-      gap: 6px;
-      justify-items: center;
-      text-align: center;
-    }
-
-    .phase-current {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .phase-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(255, 238, 194, 0.16);
-      border: 1px solid rgba(255, 214, 117, 0.42);
-      color: #fff8e2;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-    }
-
-    .phase-current p {
-      margin: 0;
-      color: rgba(244, 239, 228, 0.88);
-      font-weight: 600;
-    }
-
-    .storyteller-debug {
-      width: 100%;
-      color: #ffe4a8;
-      font-size: 0.92rem;
     }
 
     .topbar-actions {
       display: inline-flex;
       align-items: center;
       gap: 12px;
+      flex: 0 0 auto;
     }
 
     .topbar-button,
@@ -103,7 +73,7 @@
     .sim-drawer-toggle {
       border: 0;
       border-radius: 999px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       font-weight: 700;
       cursor: pointer;
       transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
