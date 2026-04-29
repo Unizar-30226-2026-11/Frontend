@@ -1,0 +1,48 @@
+@media (max-width: 1160px) {
+}
+
+@media (max-width: 900px) {
+  .dixit-topbar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .topbar-actions {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .dixit-table {
+    --table-pad-top: 10px;
+    --table-pad-x: 10px;
+    --table-pad-bottom: 18px;
+  }
+
+  .final-results-actions {
+    flex-direction: column;
+  }
+
+  .final-results-actions > button {
+    width: 100%;
+  }
+
+  .final-ranking-row {
+    grid-template-columns: 1fr;
+  }
+
+  .final-ranking-coins,
+  .final-ranking-place {
+    justify-self: start;
+  }
+
+  .sim-drawer-toggle {
+    top: auto;
+    bottom: 14px;
+    transform: none;
+  }
+
+  .final-results-overlay {
+    padding: 22px;
+  }
+}

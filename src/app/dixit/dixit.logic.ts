@@ -1,32 +1,14 @@
 import type { DeckCard } from '../services/card-pull';
 import type { TrackBoardToken } from './components/track-board';
-import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 import type {
   BoardEffectPopup,
-  DixitPhase,
-  PointsStage,
   RosterPlayer,
   RoundPlayer,
 } from './dixit.constants';
+import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
 
-export function getCurrentPhaseInstruction(phase: DixitPhase, pointsStage: PointsStage): string {
-  if (phase === 'hand') {
-    return 'Elige una carta y colocala en la mesa.';
-  }
-
-  if (phase === 'choice') {
-    return 'Vota arriba y confirma tu decision.';
-  }
-
-  if (pointsStage === 'waiting') {
-    return 'Esperando votos para resolver la ronda.';
-  }
-
-  if (pointsStage === 'reveal') {
-    return 'Revisa cartas, votos y dueños.';
-  }
-
-  return 'Tablero actualizado. Prepara la siguiente ronda.';
+export function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
 }
 
 export function getRoundPlayers(
@@ -52,6 +34,8 @@ export function buildRevealAndRanking(
   revealedCards: DixitRevealedCard[];
   ranking: DixitRankingRow[];
 } {
+  // Esta funcion reconstruye la resolucion de una ronda cuando el backend
+  // todavia no ha enviado el detalle final y necesitamos mantener la UI viva.
   const cardsInRound = choiceCards.slice(0, roundPlayers.length);
   if (cardsInRound.length === 0) {
     return {
@@ -108,6 +92,90 @@ export function buildRevealAndRanking(
   return { revealedCards, ranking };
 }
 
+export function rotateCards(cards: DeckCard[]): DeckCard[] {
+  if (cards.length <= 1) {
+    return [...cards];
+  }
+
+  const [firstCard, ...rest] = cards;
+  return [...rest, firstCard];
+}
+
+export function buildBoardTokensFromScores(
+  playerRoster: readonly RosterPlayer[],
+  pointsByPlayer: Map<string, number>
+): TrackBoardToken[] {
+  return playerRoster.map((player) => ({
+    id: player.id,
+    name: player.name,
+    color: player.color,
+    position: pointsByPlayer.get(player.id) ?? 0,
+  }));
+}
+
+interface ResolveSpecialCellsParams {
+  previousPoints: number;
+  nextPoints: number;
+  eventBackCellPositions: readonly number[];
+  eventForwardCellPositions: readonly number[];
+  roundNumber: number;
+  onPopup: (popup: BoardEffectPopup) => void;
+}
+
+export function resolveCurrentPlayerSpecialCells(
+  params: ResolveSpecialCellsParams
+): number {
+  const {
+    previousPoints,
+    nextPoints,
+    eventBackCellPositions,
+    eventForwardCellPositions,
+    roundNumber,
+    onPopup,
+  } = params;
+
+  if (nextPoints === previousPoints) {
+    return nextPoints;
+  }
+
+  let resolvedPoints = nextPoints;
+  const visitedPositions = new Set<number>();
+  let safety = 0;
+
+  // El bucle se corta si repetimos casilla para evitar cadenas infinitas
+  // entre eventos de avanzar y retroceder.
+  while (safety < 8 && !visitedPositions.has(resolvedPoints)) {
+    visitedPositions.add(resolvedPoints);
+    safety += 1;
+
+    if (eventBackCellPositions.includes(resolvedPoints)) {
+      resolvedPoints = Math.max(0, resolvedPoints - 1);
+      onPopup({
+        id: `event-back-${roundNumber}-${safety}`,
+        title: 'Casilla de evento',
+        description: 'Has caido en una casilla de evento y retrocedes 1 casilla.',
+        icon: '-1',
+      });
+      continue;
+    }
+
+    if (eventForwardCellPositions.includes(resolvedPoints)) {
+      resolvedPoints += 1;
+      onPopup({
+        id: `event-forward-${roundNumber}-${safety}`,
+        title: 'Casilla de evento',
+        description: 'Has caido en una casilla de evento y avanzas 1 casilla extra.',
+        icon: '+1',
+      });
+      continue;
+    }
+
+    break;
+  }
+
+  return resolvedPoints;
+}
+
 function resolveVoteCardCode(
   cardsInRound: DeckCard[],
   voterIndex: number,
@@ -137,95 +205,4 @@ function resolveVoteCardCode(
 
   const candidate = cardsInRound[targetIndex];
   return candidate.code === ownCardCode ? null : candidate.code;
-}
-
-export function rotateCards(cards: DeckCard[]): DeckCard[] {
-  if (cards.length <= 1) {
-    return [...cards];
-  }
-
-  const [firstCard, ...rest] = cards;
-  return [...rest, firstCard];
-}
-
-export function buildBoardTokensFromScores(
-  playerRoster: readonly RosterPlayer[],
-  pointsByPlayer: Map<string, number>
-): TrackBoardToken[] {
-  return playerRoster.map((player) => ({
-    id: player.id,
-    name: player.name,
-    color: player.color,
-    position: pointsByPlayer.get(player.id) ?? 0,
-  }));
-}
-
-interface ResolveSpecialCellsParams {
-  previousPoints: number;
-  nextPoints: number;
-  wildcardCellPositions: readonly number[];
-  eventBackCellPositions: readonly number[];
-  eventForwardCellPositions: readonly number[];
-  roundNumber: number;
-  allowWildcardReward?: boolean;
-  onWildcardReward: () => void;
-  onPopup: (popup: BoardEffectPopup) => void;
-}
-
-export function resolveCurrentPlayerSpecialCells(params: ResolveSpecialCellsParams): number {
-  const {
-    previousPoints,
-    nextPoints,
-    wildcardCellPositions,
-    eventBackCellPositions,
-    eventForwardCellPositions,
-    roundNumber,
-    onWildcardReward,
-    onPopup,
-    allowWildcardReward = true,
-  } = params;
-
-  if (nextPoints === previousPoints) {
-    return nextPoints;
-  }
-
-  let resolvedPoints = nextPoints;
-  const visitedPositions = new Set<number>();
-  let safety = 0;
-
-  while (safety < 8 && !visitedPositions.has(resolvedPoints)) {
-    visitedPositions.add(resolvedPoints);
-    safety += 1;
-
-    if (allowWildcardReward && wildcardCellPositions.includes(resolvedPoints)) {
-      onWildcardReward();
-      break;
-    }
-
-    if (eventBackCellPositions.includes(resolvedPoints)) {
-      resolvedPoints = Math.max(0, resolvedPoints - 1);
-      onPopup({
-        id: `event-back-${roundNumber}-${safety}`,
-        title: 'Casilla de evento',
-        description: 'Has caido en una casilla de evento y retrocedes 1 casilla.',
-        icon: '-1',
-      });
-      continue;
-    }
-
-    if (eventForwardCellPositions.includes(resolvedPoints)) {
-      resolvedPoints += 1;
-      onPopup({
-        id: `event-forward-${roundNumber}-${safety}`,
-        title: 'Casilla de evento',
-        description: 'Has caido en una casilla de evento y avanzas 1 casilla extra.',
-        icon: '+1',
-      });
-      continue;
-    }
-
-    break;
-  }
-
-  return resolvedPoints;
 }

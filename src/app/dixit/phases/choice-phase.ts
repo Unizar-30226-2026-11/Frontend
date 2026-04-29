@@ -13,6 +13,8 @@ import { DeckCard } from '../../services/card-pull';
           <p>
             @if (!canVote) {
               Eres el cuenta-cuentos. Espera a que el resto de jugadores vote.
+            } @else if (voteSubmitted) {
+              Tu voto ya esta registrado. Esperando a que el resto de jugadores termine.
             } @else if (selectedCard) {
               Has elegido {{ selectedCard.code }}. Puedes cambiarla antes de confirmar.
             } @else {
@@ -26,59 +28,73 @@ import { DeckCard } from '../../services/card-pull';
         }
       </div>
 
-      <div class="choice-stage-grid">
-        @for (card of cards; track card.code) {
+      @if (voteSubmitted) {
+        <div class="vote-waiting-state">
+          <strong>Esperando votos</strong>
+          <p>
+            @if (selectedCard) {
+              Tu voto actual es {{ selectedCard.code }}.
+            } @else {
+              Tu voto ya fue enviado al servidor.
+            }
+          </p>
+          <p>La ronda continuara automaticamente cuando el backend resuelva la votacion.</p>
+        </div>
+      } @else {
+        <div class="choice-stage-grid">
+          @for (card of cards; track card.code) {
+            <button
+              type="button"
+              class="vote-card stage-vote-card"
+              [class.selected]="card.code === selectedCardCode"
+              [class.locked]="voteSubmitted"
+              [class.own-card]="card.code === disabledCardCode"
+              [disabled]="isCardDisabled(card)"
+              (click)="cardSelected.emit(card)"
+            >
+              <img
+                draggable="false"
+                [src]="card.image"
+                [alt]="card.value + ' de ' + card.suit"
+              />
+              @if (card.code === disabledCardCode) {
+                <div class="vote-card-copy own-only">
+                  <span class="vote-card-badge own">Tu carta</span>
+                </div>
+              }
+            </button>
+          }
+        </div>
+
+        <div class="phase-stage-footer">
+          <p>
+            @if (!canVote) {
+              El cuenta-cuentos no participa en la votacion.
+            } @else if (selectedCard) {
+              Tu voto actual es {{ selectedCard.code }}.
+            } @else {
+              Selecciona una de las cartas para continuar.
+            }
+          </p>
+
           <button
             type="button"
-            class="vote-card stage-vote-card"
-            [class.selected]="card.code === selectedCardCode"
-            [class.locked]="voteSubmitted"
-            [class.own-card]="card.code === disabledCardCode"
-            [disabled]="isCardDisabled(card)"
-            (click)="cardSelected.emit(card)"
+            class="sidebar-action"
+            [disabled]="!selectedCardCode || voteSubmitted || !canVote || selectedCardCode === disabledCardCode"
+            (click)="voteSubmitRequested.emit()"
           >
-            <img
-              draggable="false"
-              [src]="card.image"
-              [alt]="card.value + ' de ' + card.suit"
-            />
-            <div class="vote-card-copy">
-              <strong>{{ card.value }}</strong>
-              @if (card.code === disabledCardCode) {
-                <span class="vote-card-badge own">Tu carta</span>
-              } @else {
-                <span class="vote-card-code">{{ card.code }}</span>
-              }
-            </div>
+            Confirmar voto
           </button>
-        }
-      </div>
-
-      <div class="phase-stage-footer">
-        <p>
-          @if (!canVote) {
-            El cuenta-cuentos no participa en la votacion.
-          } @else if (selectedCard) {
-            Tu voto actual es {{ selectedCard.code }}.
-          } @else {
-            Selecciona una de las cartas para continuar.
-          }
-        </p>
-
-        <button
-          type="button"
-          class="sidebar-action"
-          [disabled]="!selectedCardCode || voteSubmitted || !canVote || selectedCardCode === disabledCardCode"
-          (click)="voteSubmitRequested.emit()"
-        >
-          Confirmar voto
-        </button>
-      </div>
+        </div>
+      }
     </section>
   `,
   styles: `
     :host {
       display: block;
+      flex: 1 1 auto;
+      height: 100%;
+      min-height: 0;
     }
 
     .overlay-label {
@@ -99,10 +115,13 @@ import { DeckCard } from '../../services/card-pull';
 
     .phase-stage-screen {
       width: 100%;
-      padding: 20px 22px;
+      max-height: none;
+      margin-inline: 0;
+      padding: 16px 20px 18px;
       border-radius: 28px;
       display: grid;
-      gap: 18px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 12px;
       background:
         radial-gradient(circle at top left, rgba(255, 226, 158, 0.16), transparent 28%),
         linear-gradient(145deg, rgba(8, 20, 29, 0.76), rgba(14, 42, 68, 0.84));
@@ -122,9 +141,13 @@ import { DeckCard } from '../../services/card-pull';
       flex-wrap: wrap;
     }
 
+    .phase-stage-footer {
+      align-items: center;
+    }
+
     .phase-stage-copy {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       max-width: 48rem;
     }
 
@@ -137,9 +160,41 @@ import { DeckCard } from '../../services/card-pull';
 
     .choice-stage-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-      gap: 16px;
-      align-content: start;
+      grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+      justify-content: stretch;
+      align-items: start;
+      gap: 14px 20px;
+      align-content: center;
+      min-height: 0;
+      overflow-y: auto;
+      width: 100%;
+      max-width: 920px;
+      margin-inline: auto;
+      padding: 10px 22px 12px;
+      box-sizing: border-box;
+    }
+
+    .vote-waiting-state {
+      padding: 22px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      gap: 10px;
+      align-content: center;
+      min-height: 0;
+      width: 100%;
+    }
+
+    .vote-waiting-state strong {
+      color: #fff4d8;
+      font-size: 1.05rem;
+    }
+
+    .vote-waiting-state p {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.88);
+      line-height: 1.5;
     }
 
     .vote-card {
@@ -167,17 +222,21 @@ import { DeckCard } from '../../services/card-pull';
 
     .vote-card img {
       width: 100%;
+      aspect-ratio: 3 / 5;
       display: block;
-      border-radius: 18px;
+      border-radius: 16px;
+      object-fit: cover;
     }
 
     .stage-vote-card {
-      margin-top: 10px;
+      margin-top: 4px;
       display: block;
       width: 100%;
-      border-radius: 22px;
+      max-width: 100%;
+      border-radius: 18px;
       overflow: hidden;
       box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+      justify-self: stretch;
     }
 
     .stage-vote-card.locked {
@@ -191,20 +250,16 @@ import { DeckCard } from '../../services/card-pull';
 
     .vote-card-copy {
       display: grid;
-      gap: 6px;
-      padding: 12px 12px 14px;
+      gap: 4px;
+      padding: 8px 8px 10px;
       background: rgba(6, 17, 25, 0.88);
       text-align: left;
+      min-height: 46px;
+      align-content: center;
     }
 
-    .vote-card-copy strong {
-      color: #fff4d8;
-      line-height: 1.3;
-    }
-
-    .vote-card-code {
-      color: rgba(244, 239, 228, 0.78);
-      font-size: 0.9rem;
+    .vote-card-copy.own-only {
+      justify-items: start;
     }
 
     .vote-card-badge {
@@ -247,6 +302,39 @@ import { DeckCard } from '../../services/card-pull';
     .sidebar-action:disabled {
       opacity: 0.55;
       cursor: not-allowed;
+    }
+
+    @media (max-width: 900px) {
+      :host {
+        height: auto;
+      }
+
+      .phase-stage-screen {
+        width: 100%;
+        height: auto;
+        grid-template-rows: auto auto auto;
+      }
+
+      .choice-stage-grid {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(132px, 152px);
+        justify-content: start;
+        align-content: start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        width: 100%;
+        max-width: 100%;
+        padding: 6px 4px 10px;
+        margin-inline: 0;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+      }
+
+      .stage-vote-card {
+        min-width: 0;
+      }
     }
   `,
 })

@@ -10,6 +10,7 @@ import type {
   RealtimeLobbyState,
   RealtimeMinigameStart,
   RealtimePrivateHand,
+  RealtimeSpecialEvent,
   RealtimeStarClaim,
   RealtimeStarSpawn,
   RealtimeWalletUpdated,
@@ -98,6 +99,7 @@ export class DixitRealtimeSimulator {
   private readonly privateHandSignal = signal<RealtimePrivateHand | null>(null);
   private readonly duelChallengeSignal = signal<RealtimeDuelChallenge | null>(null);
   private readonly activeMinigameSignal = signal<RealtimeMinigameStart | null>(null);
+  private readonly specialEventSignal = signal<RealtimeSpecialEvent | null>(null);
   private readonly activeStarSignal = signal<RealtimeStarSpawn | null>(null);
   private readonly starClaimSignal = signal<RealtimeStarClaim | null>(null);
   private readonly gameEndedSignal = signal<RealtimeGameEnded | null>(null);
@@ -116,6 +118,7 @@ export class DixitRealtimeSimulator {
   private finalBalance = DEFAULT_FINAL_BALANCE;
   private logSequence = 0;
   private minigameTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private minigameResolutionEmitTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private revealTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private lastMinigameResolution: DixitSimulatorSnapshot['lastMinigameResolution'] = null;
 
@@ -139,8 +142,16 @@ export class DixitRealtimeSimulator {
     return this.duelChallengeSignal();
   }
 
+  minigameStart(): RealtimeMinigameStart | null {
+    return this.activeMinigameSignal();
+  }
+
   activeMinigame(): RealtimeMinigameStart | null {
     return this.activeMinigameSignal();
+  }
+
+  specialEvent(): RealtimeSpecialEvent | null {
+    return this.specialEventSignal();
   }
 
   activeStar(): RealtimeStarSpawn | null {
@@ -196,6 +207,7 @@ export class DixitRealtimeSimulator {
 
   disconnect(preserveSession = true): void {
     this.clearMinigameTimeout();
+    this.clearMinigameResolutionEmitTimeout();
     this.clearRevealTransitionTimeout();
     this.connectionStatusSignal.set(preserveSession ? 'disconnected' : 'idle');
     if (preserveSession) {
@@ -255,8 +267,33 @@ export class DixitRealtimeSimulator {
     this.gameEndedSignal.set(null);
   }
 
+  clearMinigameStart(): void {
+    this.activeMinigameSignal.set(null);
+  }
+
+  clearSpecialEvent(): void {
+    this.specialEventSignal.set(null);
+  }
+
   clearDuelChallenge(): void {
     this.duelChallengeSignal.set(null);
+  }
+
+  sendMinigameScore(score: number): void {
+    const activeMinigame = this.activeMinigameSignal();
+    if (!activeMinigame) {
+      return;
+    }
+
+    this.clearMinigameTimeout();
+    this.clearMinigameResolutionEmitTimeout();
+    this.pushLog(`Puntuacion local enviada al servidor simulado: ${score}.`);
+
+    const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.floor(score)) : 0;
+    this.minigameResolutionEmitTimeoutId = setTimeout(() => {
+      this.minigameResolutionEmitTimeoutId = null;
+      this.resolveMinigameFromScores(activeMinigame, normalizedScore);
+    }, 550);
   }
 
   claimStar(): void {
@@ -269,6 +306,7 @@ export class DixitRealtimeSimulator {
 
   resetDemo(): void {
     this.clearMinigameTimeout();
+    this.clearMinigameResolutionEmitTimeout();
     this.clearRevealTransitionTimeout();
     this.players = [
       {
@@ -314,6 +352,7 @@ export class DixitRealtimeSimulator {
     this.connectionStatusSignal.set('connected');
     this.duelChallengeSignal.set(null);
     this.activeMinigameSignal.set(null);
+    this.specialEventSignal.set(null);
     this.activeStarSignal.set(null);
     this.starClaimSignal.set(null);
     this.gameEndedSignal.set(null);
@@ -388,6 +427,7 @@ export class DixitRealtimeSimulator {
 
   startMinigame(type: number, isDuel = false): void {
     this.clearMinigameTimeout();
+    this.clearMinigameResolutionEmitTimeout();
     const opponentId =
       this.players.find((player) => player.id !== CURRENT_USER_ID)?.id ?? 'u_other';
     this.activeMinigameSignal.set({
@@ -399,6 +439,7 @@ export class DixitRealtimeSimulator {
       receivedAt: Date.now(),
     });
     this.duelChallengeSignal.set(null);
+    this.specialEventSignal.set(null);
     this.scheduleMinigameTimeout(15_000);
     this.pushLog(`Minijuego ${type} simulado${isDuel ? ' desde duelo' : ''}.`);
   }
@@ -803,6 +844,7 @@ export class DixitRealtimeSimulator {
     }
 
     this.clearMinigameTimeout();
+    this.clearMinigameResolutionEmitTimeout();
     this.activeMinigameSignal.set(null);
     this.duelChallengeSignal.set(null);
 
@@ -842,6 +884,58 @@ export class DixitRealtimeSimulator {
 
     clearTimeout(this.minigameTimeoutId);
     this.minigameTimeoutId = null;
+  }
+
+  private clearMinigameResolutionEmitTimeout(): void {
+    if (this.minigameResolutionEmitTimeoutId === null) {
+      return;
+    }
+
+    clearTimeout(this.minigameResolutionEmitTimeoutId);
+    this.minigameResolutionEmitTimeoutId = null;
+  }
+
+  private resolveMinigameFromScores(
+    activeMinigame: RealtimeMinigameStart,
+    currentPlayerScore: number
+  ): void {
+    if (this.activeMinigameSignal()?.receivedAt !== activeMinigame.receivedAt) {
+      return;
+    }
+
+    const opponentId =
+      activeMinigame.player1 === CURRENT_USER_ID ? activeMinigame.player2 : activeMinigame.player1;
+    const opponentScore = this.simulateOpponentMinigameScore(activeMinigame.type, currentPlayerScore);
+    const winnerId = currentPlayerScore >= opponentScore ? CURRENT_USER_ID : opponentId;
+    const loserId = winnerId === CURRENT_USER_ID ? opponentId : CURRENT_USER_ID;
+    const winnerName = this.playerName(winnerId);
+    const loserName = this.playerName(loserId);
+
+    if (activeMinigame.isDuel) {
+      const winner = this.requirePlayer(winnerId);
+      const loser = this.requirePlayer(loserId);
+      winner.score += 2;
+      loser.score = Math.max(0, loser.score - 2);
+      this.emitGameState('SIM_MINIGAME_STATE_UPDATED');
+    }
+
+    this.specialEventSignal.set({
+      effect: 'CONFLICT_RESOLVED',
+      message: `¡${winnerName} ha ganado el ${activeMinigame.isDuel ? 'Duelo' : 'desempate'} contra ${loserName}!`,
+      winnerId,
+      loserId,
+      isDuel: activeMinigame.isDuel,
+      receivedAt: Date.now(),
+    });
+    this.pushLog(
+      `Resolucion simulada del minijuego: ${winnerName} (${currentPlayerScore} vs ${opponentScore}).`
+    );
+  }
+
+  private simulateOpponentMinigameScore(type: number, currentPlayerScore: number): number {
+    const baseline = type === 1 ? 6 : 4;
+    const variance = (this.roundNumber + type + currentPlayerScore) % 5;
+    return Math.max(0, baseline + variance);
   }
 
   private hasAllExpectedVotes(): boolean {

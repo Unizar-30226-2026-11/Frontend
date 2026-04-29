@@ -604,6 +604,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       display: block;
       min-height: 0;
       height: 100%;
+      overflow: auto;
     }
 
     .hand-main {
@@ -640,7 +641,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
     .hand-card {
       width: 100%;
-      max-width: 120px;
+      max-width: 96px;
       aspect-ratio: 3 / 5;
       justify-self: center;
       appearance: none;
@@ -752,7 +753,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       }
 
       .hand-cards {
-        grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
       }
 
       .board-overlay-shell {

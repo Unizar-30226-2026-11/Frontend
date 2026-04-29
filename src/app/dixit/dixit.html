@@ -34,6 +34,7 @@
         <div class="table-main">
           @if (phase === 'choice') {
             <app-dixit-choice-phase
+              class="table-phase table-phase-choice"
               [currentClue]="currentClue"
               [cards]="choiceCards"
               [selectedCardCode]="selectedChoiceCardCode"
@@ -45,6 +46,7 @@
             />
           } @else if (phase === 'points') {
             <app-dixit-points-phase
+              class="table-phase"
               [boardTokens]="boardTokens"
               [waitingVotes]="pointsStage === 'waiting'"
               [votesReceived]="pointsVotesReceived"
@@ -59,6 +61,7 @@
             />
           } @else if (phase === 'hand') {
             <app-dixit-hand-phase
+              class="table-phase"
               [currentClue]="currentClue"
               [cards]="cards"
               [selectedCardCode]="selectedHandCardCode"
