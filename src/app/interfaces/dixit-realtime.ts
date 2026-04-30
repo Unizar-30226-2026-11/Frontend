@@ -16,6 +16,7 @@ export type DixitGameActionType =
   | 'NEXT_ROUND'
   | 'RESOLVE_DUEL'
   | 'CHANGE_MODE'
+  | 'ACCEPT_MODE_CHANGE'
   | 'STELLA_SUBMIT_MARKS'
   | 'STELLA_REVEAL_MARK';
 
@@ -140,6 +141,12 @@ export interface RealtimeSpecialEvent {
   winnerId?: string;
   loserId?: string;
   isDuel?: boolean;
+  receivedAt: number;
+}
+
+export interface RealtimeModeChangeOffer {
+  message: string;
+  targetMode: 'STANDARD' | 'STELLA';
   receivedAt: number;
 }
 

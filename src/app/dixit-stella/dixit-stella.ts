@@ -1,6 +1,11 @@
-import { ChangeDetectorRef, Component, Injector, OnInit, effect, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, Injector, OnDestroy, OnInit, effect, inject } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { RealtimeGameStateUpdate, RealtimeLobbyState } from '../interfaces/dixit-realtime';
+import {
+  RealtimeGameStateUpdate,
+  RealtimeLobbyState,
+  RealtimeMinigameStart,
+  RealtimeSpecialEvent,
+} from '../interfaces/dixit-realtime';
 import { Game } from '../interfaces/game';
 import { WordCard } from '../interfaces/word-card';
 import { Auth } from '../services/auth';
@@ -8,6 +13,13 @@ import { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
+import { DixitMinijuego1 } from '../dixit/minijuegos/minijuego-1';
+import { DixitMinijuego2 } from '../dixit/minijuegos/minijuego-2/minijuego-2';
+import {
+  FinalResultsOverlay,
+  type FinalResultsRankingRow as SharedFinalResultsRankingRow,
+  type FinalResultsStat,
+} from '../shared/final-results-overlay';
 import {
   BOARD_COLUMNS,
   BOARD_ROWS,
@@ -34,10 +46,11 @@ const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 @Component({
   selector: 'app-dixit-stella',
   standalone: true,
+  imports: [FinalResultsOverlay, DixitMinijuego1, DixitMinijuego2],
   templateUrl: './dixit-stella.html',
   styleUrl: './dixit-stella.css',
 })
-export class DixitStella implements OnInit {
+export class DixitStella implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly auth = inject(Auth);
@@ -82,6 +95,16 @@ export class DixitStella implements OnInit {
   lastResolutionTitle = 'Esperando revelaciones';
   limitFeedbackActive = false;
   inspectedCard: DeckCard | null = null;
+  isStateDrawerOpen = false;
+  activeMinigame: RealtimeMinigameStart | null = null;
+  isMinigame1Open = false;
+  isMinigame2Open = false;
+  minigameUiState: 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled' = 'playing';
+  minigameStatusMessage = '';
+  private lastAppliedMinigameReceivedAt = 0;
+  private minigameResultSent = false;
+  private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
+  private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     effect(
@@ -119,6 +142,33 @@ export class DixitStella implements OnInit {
 
         this.errorMessage = realtimeError;
         this.loading = false;
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const minigame = this.realtime.minigameStart();
+        if (!minigame || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeMinigameStart(minigame);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const specialEvent = this.realtime.specialEvent();
+        if (!specialEvent || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeSpecialEvent(specialEvent);
+        this.realtime.clearSpecialEvent();
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -165,7 +215,22 @@ export class DixitStella implements OnInit {
       this.applyRealtimeGameState(initialGameState);
     }
 
+    const currentMinigame = this.realtime.minigameStart();
+    if (currentMinigame && this.realtime.activeLobbyCode() === this.id) {
+      this.applyRealtimeMinigameStart(currentMinigame);
+    }
+
+    const currentSpecialEvent = this.realtime.specialEvent();
+    if (currentSpecialEvent && this.realtime.activeLobbyCode() === this.id) {
+      this.applyRealtimeSpecialEvent(currentSpecialEvent);
+    }
+
     this.loading = false;
+  }
+
+  ngOnDestroy(): void {
+    this.clearMinigameResolutionTimer();
+    this.clearMinigameUnavailableSubmitTimer();
   }
 
   get currentPhaseMeta(): PhaseMeta {
@@ -195,6 +260,77 @@ export class DixitStella implements OnInit {
 
   get primaryWinner(): StellaPlayerState | null {
     return this.finalWinners[0] ?? null;
+  }
+
+  get hasMultipleWinners(): boolean {
+    return this.finalWinners.length > 1;
+  }
+
+  get stellaFinalOverlayTitle(): string {
+    const winner = this.primaryWinner;
+    if (!winner) {
+      return 'Resultados finales';
+    }
+
+    if (this.hasMultipleWinners) {
+      return 'Victoria compartida';
+    }
+
+    if (winner.isCurrentUser) {
+      return 'Has ganado la partida';
+    }
+
+    return `Gana ${winner.name}`;
+  }
+
+  get stellaFinalOverlayCopy(): string {
+    const winner = this.primaryWinner;
+    if (!winner) {
+      return 'Esperando a que el servidor termine de publicar el resultado final.';
+    }
+
+    if (this.hasMultipleWinners) {
+      return `${this.getWinnersLabel()} comparten la victoria con ${winner.score} estrellas.`;
+    }
+
+    return `${winner.name} termina con ${winner.score} estrellas.`;
+  }
+
+  get stellaFinalOverlayStats(): FinalResultsStat[] {
+    const currentPlayer = this.players.find((player) => player.isCurrentUser) ?? this.primaryWinner;
+    if (!currentPlayer) {
+      return [];
+    }
+
+    const currentPlayerPlace =
+      this.getPlayersSortedByScore().findIndex((player) => player.id === currentPlayer.id) + 1;
+
+    return [
+      {
+        label: 'Puesto',
+        value: this.formatPlace(currentPlayerPlace || 1),
+      },
+      {
+        label: 'Estrellas',
+        value: String(currentPlayer.score),
+      },
+      {
+        label: this.hasMultipleWinners ? 'Ganadores' : 'Ganador',
+        value: String(this.finalWinners.length || 1),
+        muted: true,
+      },
+    ];
+  }
+
+  get stellaFinalRankingRows(): SharedFinalResultsRankingRow[] {
+    return this.getPlayersSortedByScore().map((player, index) => ({
+      id: player.id,
+      title: player.name,
+      subtitle: `${player.successfulAssociations} aciertos · ${player.selectionCount}/10 marcadas`,
+      sideValue: String(player.score),
+      placeLabel: this.formatPlace(index + 1),
+      highlighted: player.isCurrentUser,
+    }));
   }
 
   get currentSelectionCodes(): string[] {
@@ -259,6 +395,77 @@ export class DixitStella implements OnInit {
     }
   }
 
+  get connectionStatusLabel(): string {
+    switch (this.realtime.connectionStatus()) {
+      case 'joining':
+        return 'Solicitando acceso';
+      case 'connecting':
+        return 'Conectando';
+      case 'connected':
+        return 'Conectado';
+      case 'disconnected':
+        return 'Desconectado';
+      case 'error':
+        return 'Error realtime';
+      default:
+        return 'Pendiente';
+    }
+  }
+
+  get activeRealtimeLobbyCode(): string {
+    return this.realtime.activeLobbyCode() || this.id;
+  }
+
+  get isCurrentPlayerInActiveMinigame(): boolean {
+    return !!this.activeMinigame && (
+      this.activeMinigame.player1 === this.currentPlayerId ||
+      this.activeMinigame.player2 === this.currentPlayerId
+    );
+  }
+
+  get activeMinigameDurationMs(): number {
+    return this.activeMinigame?.duration ?? 15_000;
+  }
+
+  get activeMinigameOpponentName(): string {
+    if (!this.activeMinigame) {
+      return 'Rival';
+    }
+
+    const opponentId =
+      this.activeMinigame.player1 === this.currentPlayerId
+        ? this.activeMinigame.player2
+        : this.activeMinigame.player1;
+
+    return this.playerNames.get(opponentId) ?? opponentId ?? 'Rival';
+  }
+
+  get activeMinigamePlayerOneName(): string {
+    return this.playerNames.get(this.activeMinigame?.player1 ?? '') ?? this.activeMinigame?.player1 ?? 'Jugador 1';
+  }
+
+  get activeMinigamePlayerTwoName(): string {
+    return this.playerNames.get(this.activeMinigame?.player2 ?? '') ?? this.activeMinigame?.player2 ?? 'Jugador 2';
+  }
+
+  get activeMinigameSeedKey(): string {
+    if (!this.activeMinigame) {
+      return 'minigame-default';
+    }
+
+    return [
+      this.activeMinigame.player1,
+      this.activeMinigame.player2,
+      this.activeMinigame.type,
+      this.activeMinigame.duration,
+      this.activeMinigame.isDuel ? 'duel' : 'conflict',
+    ].join('|');
+  }
+
+  get isUnavailableMinigameType(): boolean {
+    return this.activeMinigame !== null && this.resolveMinigameView(this.activeMinigame.type) === null;
+  }
+
   goHome(): void {
     void this.router.navigate(['/menu']);
   }
@@ -281,6 +488,60 @@ export class DixitStella implements OnInit {
 
   closeInspection(): void {
     this.inspectedCard = null;
+  }
+
+  toggleStateDrawer(): void {
+    this.isStateDrawerOpen = !this.isStateDrawerOpen;
+  }
+
+  closeStateDrawer(): void {
+    this.isStateDrawerOpen = false;
+  }
+
+  emitEndGameFromStateDrawer(): void {
+    try {
+      this.realtime.endGame();
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el fin de partida';
+    }
+  }
+
+  closeMinigame1(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
+    this.isMinigame1Open = false;
+  }
+
+  closeMinigame2(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
+    this.isMinigame2Open = false;
+  }
+
+  onMinigameFinished(result: { score: number }): void {
+    if (!this.activeMinigame || this.minigameResultSent) {
+      return;
+    }
+
+    this.minigameResultSent = true;
+    this.minigameUiState = 'waiting';
+    this.minigameStatusMessage = 'Puntuacion enviada. Esperando al rival...';
+    try {
+      this.realtime.sendMinigameScore(result.score);
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el resultado del minijuego';
+      this.minigameResultSent = false;
+      this.minigameUiState = 'playing';
+      this.minigameStatusMessage = '';
+    }
   }
 
   getBoardCardsForRow(rowIndex: number): DeckCard[] {
@@ -384,6 +645,18 @@ export class DixitStella implements OnInit {
 
   getWinnersLabel(): string {
     return this.finalWinners.map((player) => player.name).join(', ');
+  }
+
+  formatPlace(place: number): string {
+    if (place === 1) {
+      return '1er';
+    }
+
+    if (place === 3) {
+      return '3er';
+    }
+
+    return `${place}º`;
   }
 
   getPlayersSortedByScore(): StellaPlayerState[] {
@@ -548,6 +821,75 @@ export class DixitStella implements OnInit {
     this.syncStatusCopy();
   }
 
+  private applyRealtimeMinigameStart(minigame: RealtimeMinigameStart): void {
+    if (minigame.receivedAt <= this.lastAppliedMinigameReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    this.clearMinigameResolutionTimer();
+    this.clearMinigameUnavailableSubmitTimer();
+    this.activeMinigame = minigame;
+    this.minigameResultSent = false;
+    this.minigameUiState = 'playing';
+    this.minigameStatusMessage = '';
+    this.realtime.clearMinigameStart();
+
+    if (!this.isCurrentPlayerInActiveMinigame) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.minigameStatusMessage =
+        this.resolveMinigameView(minigame.type) === null
+          ? 'Minijuego no disponible en este cliente. Esperando resolucion del servidor...'
+          : 'Minijuego en curso. Esperando resolucion del servidor...';
+      return;
+    }
+
+    const minigameView = this.resolveMinigameView(minigame.type);
+    if (minigameView === null) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.minigameUiState = 'waiting';
+      this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
+      this.scheduleUnavailableMinigameSubmit(minigame.duration);
+    } else if (minigameView === 2) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = true;
+    } else {
+      this.isMinigame1Open = true;
+      this.isMinigame2Open = false;
+    }
+  }
+
+  private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
+    if (!this.activeMinigame) {
+      return;
+    }
+
+    if (specialEvent.effect === 'CONFLICT_RESOLVED') {
+      if (specialEvent.winnerId === this.currentPlayerId) {
+        this.minigameUiState = 'won';
+        this.minigameStatusMessage = 'Victoria';
+      } else if (specialEvent.loserId === this.currentPlayerId) {
+        this.minigameUiState = 'lost';
+        this.minigameStatusMessage = 'Derrota';
+      } else {
+        this.minigameUiState = 'waiting';
+        this.minigameStatusMessage = specialEvent.message || 'Conflicto resuelto.';
+      }
+
+      this.scheduleMinigameClose(3000);
+      return;
+    }
+
+    if (specialEvent.effect === 'CONFLICT_CANCELLED' || specialEvent.effect === 'CONFLICT_DRAW') {
+      this.minigameUiState = 'cancelled';
+      this.minigameStatusMessage =
+        specialEvent.message || 'El minijuego ha terminado sin ganador.';
+      this.scheduleMinigameClose(2000);
+    }
+  }
+
   private appendRevealLog(
     previousSnapshot: StellaRoundSnapshot | null,
     nextSnapshot: StellaRoundSnapshot
@@ -648,6 +990,65 @@ export class DixitStella implements OnInit {
         this.lastResolutionTitle = 'Victoria final';
         break;
     }
+  }
+
+  private resolveMinigameView(type: number): 1 | 2 | null {
+    if (type === 0) {
+      return 1;
+    }
+
+    if (type === 1) {
+      return 2;
+    }
+
+    return null;
+  }
+
+  private scheduleMinigameClose(delayMs: number): void {
+    this.clearMinigameResolutionTimer();
+    this.minigameResolutionTimer = setTimeout(() => {
+      this.closeActiveMinigame();
+      this.minigameResolutionTimer = null;
+      this.cdr.detectChanges();
+    }, delayMs);
+  }
+
+  private clearMinigameResolutionTimer(): void {
+    if (this.minigameResolutionTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.minigameResolutionTimer);
+    this.minigameResolutionTimer = null;
+  }
+
+  private scheduleUnavailableMinigameSubmit(durationMs: number): void {
+    this.clearMinigameUnavailableSubmitTimer();
+    this.minigameUnavailableSubmitTimer = setTimeout(() => {
+      this.minigameUnavailableSubmitTimer = null;
+      this.onMinigameFinished({ score: 0 });
+      this.cdr.detectChanges();
+    }, Math.max(500, durationMs));
+  }
+
+  private clearMinigameUnavailableSubmitTimer(): void {
+    if (this.minigameUnavailableSubmitTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.minigameUnavailableSubmitTimer);
+    this.minigameUnavailableSubmitTimer = null;
+  }
+
+  private closeActiveMinigame(): void {
+    this.isMinigame1Open = false;
+    this.isMinigame2Open = false;
+    this.clearMinigameUnavailableSubmitTimer();
+    this.clearMinigameResolutionTimer();
+    this.activeMinigame = null;
+    this.minigameResultSent = false;
+    this.minigameUiState = 'playing';
+    this.minigameStatusMessage = '';
   }
 
   private toggleDraftSelection(cardCode: string): void {

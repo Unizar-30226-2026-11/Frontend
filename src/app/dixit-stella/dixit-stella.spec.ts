@@ -27,6 +27,12 @@ describe('DixitStella', () => {
     lastError: jasmine.Spy<() => string>;
     connectionStatus: jasmine.Spy<() => string>;
     sendGameAction: jasmine.Spy<(actionType: string, payload?: Record<string, unknown>) => void>;
+    sendMinigameScore: jasmine.Spy<(score: number) => void>;
+    minigameStart: jasmine.Spy<() => { player1: string; player2: string; type: number; duration: number; isDuel: boolean; receivedAt: number } | null>;
+    specialEvent: jasmine.Spy<() => { effect: string; message: string; winnerId?: string; loserId?: string; receivedAt: number } | null>;
+    clearMinigameStart: jasmine.Spy<() => void>;
+    clearSpecialEvent: jasmine.Spy<() => void>;
+    endGame: jasmine.Spy<() => void>;
   };
 
   beforeEach(async () => {
@@ -45,6 +51,12 @@ describe('DixitStella', () => {
       lastError: jasmine.createSpy().and.returnValue(''),
       connectionStatus: jasmine.createSpy().and.returnValue('connected'),
       sendGameAction: jasmine.createSpy(),
+      sendMinigameScore: jasmine.createSpy(),
+      minigameStart: jasmine.createSpy().and.returnValue(null),
+      specialEvent: jasmine.createSpy().and.returnValue(null),
+      clearMinigameStart: jasmine.createSpy(),
+      clearSpecialEvent: jasmine.createSpy(),
+      endGame: jasmine.createSpy(),
     };
 
     stellaCardPullSpy.getCards.and.resolveTo(createCardsFixture(30));
@@ -176,6 +188,67 @@ describe('DixitStella', () => {
         value: 'Carta URL 129',
       })
     );
+  });
+
+  it('shows the state drawer with the lobby code and emits client:game:end from there', () => {
+    component.isStateDrawerOpen = true;
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('LobbyCode: STELLA1');
+    expect(text).toContain('Emitir client:game:end');
+
+    component.emitEndGameFromStateDrawer();
+
+    expect(realtimeStub.endGame).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the classic minigame components when a realtime minigame starts in stella', async () => {
+    realtimeStub.minigameStart.and.returnValue({
+      player1: 'u_111',
+      player2: 'u_222',
+      type: 0,
+      duration: 15_000,
+      isDuel: false,
+      receivedAt: 2,
+    });
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.isMinigame1Open).toBeTrue();
+    expect(component.isMinigame2Open).toBeFalse();
+    expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
+  });
+
+  it('reuses the shared final overlay when the stella match is finished', async () => {
+    realtimeStub.gameState.and.returnValue(
+      createRealtimeState({
+        phase: 'FINISHED',
+        currentRound: {
+          successfulMarks: {
+            u_111: 3,
+            u_222: 2,
+            u_333: 1,
+            u_444: 0,
+          },
+        },
+      })
+    );
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Fin de partida');
+    expect(text).toContain('Alpha');
+    expect(text).toContain('Volver a salas');
   });
 });
 

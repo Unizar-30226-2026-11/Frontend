@@ -41,7 +41,9 @@ describe('Dixit', () => {
       'chatMessages',
       'minigameStart',
       'specialEvent',
+      'modeChangeOffer',
       'clearSpecialEvent',
+      'clearModeChangeOffer',
       'clearMinigameStart',
       'clearDuelChallenge',
     ]);
@@ -60,6 +62,7 @@ describe('Dixit', () => {
     realtimeSpy.chatMessages.and.returnValue([]);
     realtimeSpy.minigameStart.and.returnValue(null);
     realtimeSpy.specialEvent.and.returnValue(null);
+    realtimeSpy.modeChangeOffer.and.returnValue(null);
 
     await TestBed.configureTestingModule({
       imports: [Dixit],
@@ -694,6 +697,82 @@ describe('Dixit', () => {
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('NEXT_ROUND');
   });
 
+  it('shows the mode change offer and accepts it through the generic game action channel', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimeModeChangeOffer']({
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent as string).toContain('Quieres pasar a Stella?');
+    expect(component.modeChangeOfferSecondsLeft).toBe(10);
+
+    component.acceptModeChangeOffer();
+
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('ACCEPT_MODE_CHANGE', {});
+    expect(realtimeSpy.clearModeChangeOffer).toHaveBeenCalled();
+    expect(component.activeModeChangeOffer).toBeNull();
+  });
+
+  it('hides the mode change offer when the scoring window ends because the phase changes', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimeModeChangeOffer']({
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'HAND',
+      },
+      receivedAt: Date.now() + 1,
+    });
+
+    expect(realtimeSpy.clearModeChangeOffer).toHaveBeenCalled();
+    expect(component.activeModeChangeOffer).toBeNull();
+    expect(component.modeChangeOfferSecondsLeft).toBe(0);
+  });
+
+  it('hides the mode change offer automatically after 10 seconds', async () => {
+    vi.useFakeTimers();
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimeModeChangeOffer']({
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+      receivedAt: Date.now(),
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(realtimeSpy.clearModeChangeOffer).toHaveBeenCalled();
+    expect(component.activeModeChangeOffer).toBeNull();
+    expect(component.modeChangeOfferSecondsLeft).toBe(0);
+  });
+
   it('clears scoring presentation when a recovered hand state for the next round arrives', async () => {
     await initializeComponent(fixture);
 
@@ -836,7 +915,17 @@ describe('Dixit', () => {
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('LobbyCode: A1B2');
+    expect(text).toContain('Emitir client:game:end');
     expect(text).toContain('Simular casilla de duelo backend');
+  });
+
+  it('emits client:game:end from the state drawer button flow', async () => {
+    await initializeComponent(fixture);
+
+    component.emitEndGameFromStateDrawer();
+
+    expect(realtimeSpy.endGame).toHaveBeenCalledTimes(1);
   });
 
   it('opens the rival picker for backend duel simulation', fakeAsync(() => {

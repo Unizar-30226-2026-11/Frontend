@@ -14,6 +14,7 @@ import {
   RealtimeGameStateUpdate,
   RealtimeLobbyState,
   RealtimeMinigameStart,
+  RealtimeModeChangeOffer,
   RealtimePrivateHandEntry,
   RealtimeSpecialEvent,
   RealtimeStarClaim,
@@ -59,6 +60,11 @@ import {
   rotateCards,
 } from './dixit.logic';
 import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
+import {
+  FinalResultsOverlay,
+  type FinalResultsRankingRow as SharedFinalResultsRankingRow,
+  type FinalResultsStat,
+} from '../shared/final-results-overlay';
 
 @Component({
   selector: 'app-dixit',
@@ -70,6 +76,7 @@ import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
     DixitPointsPhase,
     DixitMinijuego1,
     DixitMinijuego2,
+    FinalResultsOverlay,
   ],
   templateUrl: './dixit.html',
   styleUrl: './dixit.css',
@@ -117,6 +124,7 @@ export class Dixit implements OnInit, OnDestroy {
   currentPlayerPlayedCardCode = '';
   activeDuelChallenge: RealtimeDuelChallenge | null = null;
   activeMinigame: RealtimeMinigameStart | null = null;
+  activeModeChangeOffer: RealtimeModeChangeOffer | null = null;
   activeStar: RealtimeStarSpawn | null = null;
   starWinnerLabel = '';
   finalRanking: FinalRankingRow[] = [];
@@ -150,6 +158,9 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
+  private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastAppliedModeChangeOfferAt = 0;
+  modeChangeOfferSecondsLeft = 0;
   starClaimSequence = 0;
 
   constructor() {
@@ -327,6 +338,20 @@ export class Dixit implements OnInit, OnDestroy {
       },
       { injector: this.injector }
     );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const modeChangeOffer = this.realtime.modeChangeOffer();
+        if (!modeChangeOffer || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeModeChangeOffer(modeChangeOffer);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
   }
 
   async ngOnInit(): Promise<void> {
@@ -366,6 +391,11 @@ export class Dixit implements OnInit, OnDestroy {
         this.applyRealtimeSpecialEvent(currentSpecialEvent);
       }
 
+      const currentModeChangeOffer = this.realtime.modeChangeOffer();
+      if (currentModeChangeOffer && this.realtime.activeLobbyCode() === this.id) {
+        this.applyRealtimeModeChangeOffer(currentModeChangeOffer);
+      }
+
       const currentWalletUpdated = this.realtime.walletUpdated();
       if (currentWalletUpdated && this.realtime.activeLobbyCode() === this.id) {
         this.applyRealtimeWalletUpdated(currentWalletUpdated);
@@ -400,6 +430,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.clearStarWinnerTimer();
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
+    this.clearModeChangeOfferTimer();
   }
 
   get currentPhaseMeta(): PhaseStep {
@@ -586,6 +617,40 @@ export class Dixit implements OnInit, OnDestroy {
     return `Has terminado ${this.formatPlace(result.place)}`;
   }
 
+  get finalOverlayStats(): FinalResultsStat[] {
+    const result = this.currentPlayerFinalResult;
+    if (!result) {
+      return [];
+    }
+
+    return [
+      {
+        label: 'Puesto',
+        value: this.formatPlace(result.place),
+      },
+      {
+        label: 'Monedas ganadas',
+        value: `+${result.coinsEarned}`,
+      },
+      {
+        label: 'Puntos',
+        value: String(result.points),
+        muted: true,
+      },
+    ];
+  }
+
+  get sharedFinalRankingRows(): SharedFinalResultsRankingRow[] {
+    return this.finalRanking.map((entry) => ({
+      id: entry.playerId,
+      title: entry.playerName,
+      subtitle: `${entry.points} puntos`,
+      sideValue: `+${entry.coinsEarned}`,
+      placeLabel: this.formatPlace(entry.place),
+      highlighted: entry.isCurrentPlayer,
+    }));
+  }
+
   get duelTargetPlayers(): DixitPlayerRow[] {
     return this.playerRows.filter((player) => !player.isCurrentPlayer);
   }
@@ -647,6 +712,14 @@ export class Dixit implements OnInit, OnDestroy {
 
   get isUnavailableMinigameType(): boolean {
     return this.activeMinigame !== null && this.resolveMinigameView(this.activeMinigame.type) === null;
+  }
+
+  get modeChangeTargetLabel(): string {
+    if (!this.activeModeChangeOffer) {
+      return 'otro modo';
+    }
+
+    return this.activeModeChangeOffer.targetMode === 'STELLA' ? 'Stella' : 'Standard';
   }
 
   // --- Sincronizacion base -------------------------------------------------
@@ -759,6 +832,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
     this.logStorytellerResolution(state, currentRoundState, update.lastAction);
     this.syncRealtimePhaseTimers();
+    this.syncModeChangeOfferVisibility();
     this.requestGameEndIfNeeded();
 
     this.loading = false;
@@ -845,6 +919,10 @@ export class Dixit implements OnInit, OnDestroy {
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudo solicitar el cierre de la partida';
     }
+  }
+
+  get activeRealtimeLobbyCode(): string {
+    return this.realtime.activeLobbyCode() || this.id;
   }
 
   // --- Normalizacion de payloads realtime ---------------------------------
@@ -2080,6 +2158,17 @@ export class Dixit implements OnInit, OnDestroy {
   closeSimulationDrawer(): void {
     this.isSimulationDrawerOpen = false;
   }
+
+  emitEndGameFromStateDrawer(): void {
+    try {
+      this.realtime.endGame();
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el fin de partida';
+    }
+  }
+
   closeMinigame1(): void {
     if (this.activeMinigame) {
       return;
@@ -2292,6 +2381,25 @@ export class Dixit implements OnInit, OnDestroy {
     this.realtime.clearDuelChallenge();
   }
 
+  closeModeChangeOffer(): void {
+    this.dismissModeChangeOffer();
+  }
+
+  acceptModeChangeOffer(): void {
+    if (!this.activeModeChangeOffer) {
+      return;
+    }
+
+    try {
+      this.realtime.sendGameAction('ACCEPT_MODE_CHANGE', {});
+      this.errorMessage = '';
+      this.dismissModeChangeOffer();
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo aceptar el cambio de modo';
+    }
+  }
+
   resolveDuel(targetId: string): void {
     if (!targetId.trim()) {
       return;
@@ -2393,6 +2501,14 @@ export class Dixit implements OnInit, OnDestroy {
     this.clearNextRoundTimer();
   }
 
+  private syncModeChangeOfferVisibility(): void {
+    if (this.phase === 'points') {
+      return;
+    }
+
+    this.dismissModeChangeOffer();
+  }
+
   private applyRevealRankingToBoard(): void {
     if (this.phase !== 'points' || this.pointsStage !== 'reveal') {
       return;
@@ -2460,6 +2576,22 @@ export class Dixit implements OnInit, OnDestroy {
     clearTimeout(this.nextRoundTimer);
     this.nextRoundTimer = null;
     this.nextRoundTimerRoundNumber = null;
+  }
+
+  private dismissModeChangeOffer(): void {
+    this.activeModeChangeOffer = null;
+    this.modeChangeOfferSecondsLeft = 0;
+    this.clearModeChangeOfferTimer();
+    this.realtime.clearModeChangeOffer();
+  }
+
+  private clearModeChangeOfferTimer(): void {
+    if (this.modeChangeOfferTimer === null) {
+      return;
+    }
+
+    clearInterval(this.modeChangeOfferTimer);
+    this.modeChangeOfferTimer = null;
   }
 
   private applyRealtimeStarClaim(claim: RealtimeStarClaim): void {
@@ -2584,6 +2716,24 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.closeSimulationDrawer();
+  }
+
+  private applyRealtimeModeChangeOffer(offer: RealtimeModeChangeOffer): void {
+    if (offer.receivedAt <= this.lastAppliedModeChangeOfferAt) {
+      return;
+    }
+
+    this.lastAppliedModeChangeOfferAt = offer.receivedAt;
+    this.activeModeChangeOffer = offer;
+    this.modeChangeOfferSecondsLeft = 10;
+    this.clearModeChangeOfferTimer();
+    this.modeChangeOfferTimer = setInterval(() => {
+      this.modeChangeOfferSecondsLeft = Math.max(0, this.modeChangeOfferSecondsLeft - 1);
+      if (this.modeChangeOfferSecondsLeft === 0) {
+        this.dismissModeChangeOffer();
+      }
+      this.cdr.detectChanges();
+    }, 1000);
   }
 
   private resolveMinigameView(type: number): 1 | 2 | null {

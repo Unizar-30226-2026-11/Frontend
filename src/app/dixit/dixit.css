@@ -217,6 +217,16 @@
       border: 1px solid rgba(255, 255, 255, 0.16);
     }
 
+    .mode-change-popup {
+      max-width: min(32rem, calc(100vw - 2rem));
+    }
+
+    .mode-change-timer {
+      margin: 0;
+      color: rgba(244, 239, 228, 0.78);
+      font-size: 0.95rem;
+    }
+
     .sidebar-action:disabled,
     .secondary-action:disabled {
       opacity: 0.55;

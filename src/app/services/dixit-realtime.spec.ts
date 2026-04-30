@@ -432,6 +432,48 @@ describe('DixitRealtime', () => {
     );
   }));
 
+  it('stores mode change offers and exposes the normalized target mode', fakeAsync(() => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
+    socket.trigger('connect');
+    tick();
+
+    socket.trigger('server:game:mode_change_offer', {
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+    });
+
+    expect(service.modeChangeOffer()).toEqual(
+      jasmine.objectContaining({
+        message: 'Puedes cambiar a Stella.',
+        targetMode: 'STELLA',
+      })
+    );
+    expect(service.toast()?.message).toBe('Puedes cambiar a Stella.');
+  }));
+
   it('keeps the final ranking available after server:game:ended and clears the active game id', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine

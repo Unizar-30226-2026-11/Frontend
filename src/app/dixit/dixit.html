@@ -104,6 +104,7 @@
         <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
           <article class="sim-card">
             <p class="overlay-label">Estado realtime</p>
+            <p>LobbyCode: {{ activeRealtimeLobbyCode }}</p>
             <h3>Socket</h3>
 
             <p>Conexion: {{ connectionStatusLabel }}</p>
@@ -129,6 +130,9 @@
             }
 
             <div class="duel-options">
+              <button type="button" class="sidebar-action" (click)="emitEndGameFromStateDrawer()">
+                Emitir client:game:end
+              </button>
               <button type="button" class="sidebar-action" (click)="simulateDuelSquareLanding()">
                 Simular casilla de duelo backend
               </button>
@@ -174,78 +178,50 @@
       </div>
     }
 
-    @if (phase === 'finished') {
-      <div class="final-results-backdrop">
+    @if (activeModeChangeOffer; as offer) {
+      <div class="wildcard-popup-backdrop" (click)="closeModeChangeOffer()">
         <article
-          class="final-results-overlay"
+          class="wildcard-popup mode-change-popup"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="final-results-title"
+          aria-labelledby="mode-change-title"
+          (click)="$event.stopPropagation()"
         >
-          <p class="overlay-label">Fin de partida</p>
-          <h2 id="final-results-title">{{ finalOverlayTitle }}</h2>
-
-          @if (currentPlayerFinalResult; as result) {
-            <div class="final-results-hero">
-              <div class="final-results-stat">
-                <span class="final-results-stat-label">Puesto</span>
-                <strong>{{ formatPlace(result.place) }}</strong>
-              </div>
-              <div class="final-results-stat">
-                <span class="final-results-stat-label">Monedas ganadas</span>
-                <strong>+{{ result.coinsEarned }}</strong>
-              </div>
-              <div class="final-results-stat muted">
-                <span class="final-results-stat-label">Puntos</span>
-                <strong>{{ result.points }}</strong>
-              </div>
-            </div>
-          } @else {
-            <p class="final-results-copy">
-              Esperando a que el servidor termine de publicar tu resultado final.
-            </p>
-          }
-
-          @if (finalWalletBalance !== null) {
-            <p class="final-results-wallet">Saldo total actualizado: {{ finalWalletBalance }} monedas.</p>
-          }
-
-          @if (finalResultsError) {
-            <p class="final-results-error">
-              Se termino la partida, pero hubo un problema al guardar las estadisticas: {{ finalResultsError }}
-            </p>
-          }
+          <p class="overlay-label">Cambio de juego</p>
+          <h2 id="mode-change-title">Quieres pasar a {{ modeChangeTargetLabel }}?</h2>
+          <p class="duel-copy">{{ offer.message }}</p>
+          <p class="mode-change-timer">
+            Disponible durante esta fase. Se cerrara en {{ modeChangeOfferSecondsLeft }} s.
+          </p>
 
           <div class="final-results-actions">
-            <button
-              type="button"
-              class="secondary-action"
-              [disabled]="!hasFinalRanking"
-              (click)="toggleFinalRanking()"
-            >
-              {{ showFinalRanking ? 'Ocultar clasificacion' : 'Ver clasificacion' }}
+            <button type="button" class="sidebar-action" (click)="acceptModeChangeOffer()">
+              Cambiar a {{ modeChangeTargetLabel }}
             </button>
-            <button type="button" class="sidebar-action" (click)="returnToGames()">
-              Ir al inicio
+            <button type="button" class="secondary-action" (click)="closeModeChangeOffer()">
+              Seguir igual
             </button>
           </div>
-
-          @if (showFinalRanking) {
-            <div class="final-ranking-list" aria-label="Clasificacion final">
-              @for (entry of finalRanking; track entry.playerId) {
-                <article class="final-ranking-row" [class.current-player]="entry.isCurrentPlayer">
-                  <div class="final-ranking-place">{{ formatPlace(entry.place) }}</div>
-                  <div class="final-ranking-main">
-                    <strong>{{ entry.playerName }}</strong>
-                    <span>{{ entry.points }} puntos</span>
-                  </div>
-                  <div class="final-ranking-coins">+{{ entry.coinsEarned }}</div>
-                </article>
-              }
-            </div>
-          }
         </article>
       </div>
+    }
+
+    @if (phase === 'finished') {
+      <app-final-results-overlay
+        eyebrow="Fin de partida"
+        [title]="finalOverlayTitle"
+        [copy]="currentPlayerFinalResult ? '' : 'Esperando a que el servidor termine de publicar tu resultado final.'"
+        [accentText]="finalWalletBalance !== null ? 'Saldo total actualizado: ' + finalWalletBalance + ' monedas.' : ''"
+        [errorText]="finalResultsError ? 'Se termino la partida, pero hubo un problema al guardar las estadisticas: ' + finalResultsError : ''"
+        primaryActionLabel="Ir al inicio"
+        [secondaryActionLabel]="showFinalRanking ? 'Ocultar clasificacion' : 'Ver clasificacion'"
+        [secondaryActionDisabled]="!hasFinalRanking"
+        [showRanking]="showFinalRanking"
+        [stats]="finalOverlayStats"
+        [rankingRows]="sharedFinalRankingRows"
+        (primaryAction)="returnToGames()"
+        (secondaryAction)="toggleFinalRanking()"
+      />
     }
 
     @if (activeDuelChallenge) {

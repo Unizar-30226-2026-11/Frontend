@@ -9,6 +9,7 @@ import type {
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
   RealtimeMinigameStart,
+  RealtimeModeChangeOffer,
   RealtimePrivateHand,
   RealtimeSpecialEvent,
   RealtimeStarClaim,
@@ -100,6 +101,7 @@ export class DixitRealtimeSimulator {
   private readonly duelChallengeSignal = signal<RealtimeDuelChallenge | null>(null);
   private readonly activeMinigameSignal = signal<RealtimeMinigameStart | null>(null);
   private readonly specialEventSignal = signal<RealtimeSpecialEvent | null>(null);
+  private readonly modeChangeOfferSignal = signal<RealtimeModeChangeOffer | null>(null);
   private readonly activeStarSignal = signal<RealtimeStarSpawn | null>(null);
   private readonly starClaimSignal = signal<RealtimeStarClaim | null>(null);
   private readonly gameEndedSignal = signal<RealtimeGameEnded | null>(null);
@@ -152,6 +154,10 @@ export class DixitRealtimeSimulator {
 
   specialEvent(): RealtimeSpecialEvent | null {
     return this.specialEventSignal();
+  }
+
+  modeChangeOffer(): RealtimeModeChangeOffer | null {
+    return this.modeChangeOfferSignal();
   }
 
   activeStar(): RealtimeStarSpawn | null {
@@ -273,6 +279,10 @@ export class DixitRealtimeSimulator {
 
   clearSpecialEvent(): void {
     this.specialEventSignal.set(null);
+  }
+
+  clearModeChangeOffer(): void {
+    this.modeChangeOfferSignal.set(null);
   }
 
   clearDuelChallenge(): void {
