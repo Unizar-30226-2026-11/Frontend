@@ -29,13 +29,13 @@ interface PendingFriendRequestViewModel {
   standalone: true,
   imports: [RouterLink],
   template: `
-    <header class="store-navbar">
+        <header class="store-navbar">
       <a class="brand" [routerLink]="brandRoute()" [attr.aria-label]="brandAriaLabel()">
         A Tale of Recognition
       </a>
 
       <nav class="quick-actions" aria-label="Acciones rapidas">
-        @if (isSettingsPage()) {
+        @if (showsBackButton()) {
           <button type="button" class="icon-button back-button" aria-label="Volver a la pagina anterior" (click)="goBack()">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M14.5 5.5L8 12l6.5 6.5" />
@@ -243,6 +243,14 @@ export class NavigationBar {
 
   isSettingsPage(): boolean {
     return this.router.url.split('?')[0].split('#')[0] === '/settings';
+  }
+
+  isDeckBuilderPage(): boolean {
+    return this.router.url.split('?')[0].split('#')[0] === '/deck-builder';
+  }
+
+  showsBackButton(): boolean {
+    return this.isSettingsPage() || this.isDeckBuilderPage();
   }
 
   brandRoute(): string {

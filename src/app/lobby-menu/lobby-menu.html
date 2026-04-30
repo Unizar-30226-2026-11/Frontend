@@ -71,9 +71,10 @@
 
     <label class="select-label">
       Seleccion Mazo
-      <select class="choice-select">
-        @for (deck of decks; track deck) {
-          <option>{{ deck }}</option>
+      <select class="choice-select" [value]="selectedDeckId" (change)="onDeckSelected($event)">
+        <option value="">Sin seleccionar</option>
+        @for (deck of deckOptions; track deck.id) {
+          <option [value]="deck.id">{{ deck.name }}</option>
         }
       </select>
     </label>

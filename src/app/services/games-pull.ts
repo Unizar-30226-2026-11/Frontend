@@ -131,6 +131,7 @@ export class GamesPull {
       engine: lobby.engine,
       status: lobby.status,
       isPrivate,
+      selectedDeckId: 'selectedDeckId' in lobby ? lobby.selectedDeckId ?? null : null,
     };
   }
 

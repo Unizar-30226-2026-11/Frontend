@@ -16,6 +16,47 @@ export interface BuyDeckResponse {
   remainingCoins?: number;
 }
 
+export interface OwnedDeckCard {
+  id: string;
+  name: string;
+  quantity: number;
+  rarity: string;
+  image: string;
+}
+
+export interface UserDeckSummary {
+  id: string;
+  name: string;
+  cardIds: string[];
+}
+
+interface UserCardsApiResponse {
+  cards?: Array<{
+    cardId?: string;
+    name?: string;
+    quantity?: number;
+    rarity?: string;
+    url_image?: string;
+  }>;
+}
+
+interface UserDecksApiResponse {
+  decks?: Array<{
+    id?: string;
+    name?: string;
+    cardIds?: string[];
+  }>;
+}
+
+interface UserDeckMutationResponse {
+  message?: string;
+  deck?: {
+    id?: string;
+    name?: string;
+    cardIds?: string[];
+  };
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -67,6 +108,98 @@ export class DecksPull {
 
   async buyDeck(itemId: string): Promise<BuyDeckResponse> {
     return this.buyItem(itemId);
+  }
+
+  async getOwnedCards(options: { forceRefresh?: boolean } = {}): Promise<OwnedDeckCard[]> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<UserCardsApiResponse>('/users/cards', {
+      token,
+      ttlMs: 20_000,
+      forceRefresh: options.forceRefresh,
+    });
+
+    return (response.cards ?? [])
+      .map((card) => {
+        const id = typeof card.cardId === 'string' ? card.cardId.trim() : '';
+        if (!id) {
+          return null;
+        }
+
+        return {
+          id,
+          name: typeof card.name === 'string' && card.name.trim() ? card.name.trim() : id,
+          quantity:
+            typeof card.quantity === 'number' && Number.isFinite(card.quantity)
+              ? Math.max(0, Math.floor(card.quantity))
+              : 0,
+          rarity: typeof card.rarity === 'string' && card.rarity.trim() ? card.rarity.trim() : 'COMMON',
+          image: this.resolveImage(card.url_image),
+        } satisfies OwnedDeckCard;
+      })
+      .filter((card): card is OwnedDeckCard => card !== null);
+  }
+
+  async getUserDecks(options: { forceRefresh?: boolean } = {}): Promise<UserDeckSummary[]> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<UserDecksApiResponse>('/users/decks', {
+      token,
+      ttlMs: 20_000,
+      forceRefresh: options.forceRefresh,
+    });
+
+    return (response.decks ?? [])
+      .map((deck) => this.normalizeUserDeck(deck))
+      .filter((deck): deck is UserDeckSummary => deck !== null);
+  }
+
+  async createUserDeck(payload: { name: string; cardIds: string[] }): Promise<UserDeckSummary> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<UserDeckMutationResponse>('/users/decks', {
+      method: 'POST',
+      token,
+      body: payload,
+      useCache: false,
+    });
+
+    this.invalidateDeckCaches();
+    const deck = this.normalizeUserDeck(response.deck);
+    if (!deck) {
+      throw new Error('La API no devolvio un mazo valido');
+    }
+
+    return deck;
+  }
+
+  async updateUserDeck(deckId: string, payload: { name: string; cardIds: string[] }): Promise<UserDeckSummary> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<UserDeckMutationResponse>(
+      `/users/decks/${encodeURIComponent(deckId)}`,
+      {
+        method: 'PUT',
+        token,
+        body: payload,
+        useCache: false,
+      }
+    );
+
+    this.invalidateDeckCaches();
+    const deck = this.normalizeUserDeck(response.deck);
+    if (!deck) {
+      throw new Error('La API no devolvio el mazo actualizado');
+    }
+
+    return deck;
+  }
+
+  async deleteUserDeck(deckId: string): Promise<void> {
+    const token = this.requireToken();
+    await this.apiClient.request<{ message?: string }>(`/users/decks/${encodeURIComponent(deckId)}`, {
+      method: 'DELETE',
+      token,
+      useCache: false,
+    });
+
+    this.invalidateDeckCaches();
   }
 
   private toStoreCatalog(response: ShopItemsResponse): StoreCatalogResponse {
@@ -139,6 +272,34 @@ export class DecksPull {
     }
 
     return this.defaultImage;
+  }
+
+  private normalizeUserDeck(
+    deck:
+      | {
+          id?: string;
+          name?: string;
+          cardIds?: string[];
+        }
+      | null
+      | undefined
+  ): UserDeckSummary | null {
+    if (!deck || typeof deck.id !== 'string' || !deck.id.trim()) {
+      return null;
+    }
+
+    return {
+      id: deck.id.trim(),
+      name: typeof deck.name === 'string' && deck.name.trim() ? deck.name.trim() : 'Mazo sin nombre',
+      cardIds: Array.isArray(deck.cardIds)
+        ? deck.cardIds.filter((cardId): cardId is string => typeof cardId === 'string' && cardId.trim().length > 0)
+        : [],
+    };
+  }
+
+  private invalidateDeckCaches(): void {
+    this.apiClient.invalidateCache('/users/decks');
+    this.apiClient.invalidateCache('/users/cards');
   }
 
   private formatRarity(rarity: string): string {

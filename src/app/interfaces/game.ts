@@ -12,6 +12,7 @@ export interface LobbySummaryApi {
 
 export interface LobbyDetailsApi extends LobbySummaryApi {
   isPrivate: boolean;
+  selectedDeckId?: string | null;
 }
 
 export interface LobbyListResponse {
@@ -80,6 +81,7 @@ export interface Game {
   engine: LobbyEngine;
   status: string;
   isPrivate: boolean;
+  selectedDeckId?: string | null;
 }
 
 export function buildGameRoute(gameId: string, engine: LobbyEngine = 'Classic'): string {
