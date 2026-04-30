@@ -6,6 +6,7 @@ import { Store } from './store/store';
 import { StorePack } from './store/store-pack/store-pack';
 import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
+import { DeckBuilder } from './deck-builder/deck-builder';
 import { LobbyMenu } from './lobby-menu/lobby-menu';
 import { Settings } from './settings/settings';
 import { Login } from './login/login';
@@ -87,6 +88,12 @@ export const routes: Routes = [
         path: 'games/:id',
         title: 'Waiting Menu',
         component: LobbyMenu,
+        canActivate: [requireAuthGuard, activeGameLobbyGuard],
+    },
+    {
+        path: 'deck-builder',
+        title: 'Deck Builder',
+        component: DeckBuilder,
         canActivate: [requireAuthGuard, activeGameLobbyGuard],
     },
     {

@@ -27,6 +27,6 @@ export class MainMenu extends MenuShowcaseState {
   }
 
   goToDeckBuilder(): void {
-    return;
+    void this.router.navigate(['/deck-builder']);
   }
 }

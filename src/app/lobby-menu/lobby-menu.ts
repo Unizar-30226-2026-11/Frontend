@@ -9,6 +9,7 @@ import {
   RealtimeLobbyState,
 } from '../interfaces/dixit-realtime';
 import { Auth } from '../services/auth';
+import { DecksPull, type UserDeckSummary } from '../services/decks-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { MenuShowcase } from '../menu-showcase/menu-showcase';
@@ -35,6 +36,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly gamesPull = inject(GamesPull);
+  private readonly decksPull = inject(DecksPull);
   private readonly realtime = inject(DixitRealtime);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -52,9 +54,10 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   primaryActionMessage = '';
   joinLobbyLoading = false;
   isReady = false;
+  deckOptions: UserDeckSummary[] = [];
+  selectedDeckId = '';
 
   maps = ['Costa Sumergida', 'Bosque Inverso', 'Ciudad Onirica'];
-  decks = ['Surrealista', 'Sketch', 'Dream-Core'];
 
   roomSlots: RoomSlot[] = [];
 
@@ -312,9 +315,12 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
       return;
     }
 
+    await this.loadDeckOptions();
+
     if (lobbyResult.status === 'fulfilled') {
       const lobby = lobbyResult.value;
       this.currentLobby = lobby;
+      this.restoreSelectedDeck(lobbyCode, lobby.selectedDeckId ?? null);
       this.roomCapacity = lobby.maxPlayers;
       this.playersInRoom = lobby.playerCount;
       this.roomSlots = this.toRoomSlots(lobby);
@@ -352,6 +358,18 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     if (this.currentLobbyCode === lobbyCode) {
       this.roomLoading = false;
       this.cdr.detectChanges();
+    }
+  }
+
+  onDeckSelected(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    this.selectedDeckId = target.value;
+    if (this.currentLobbyCode) {
+      localStorage.setItem(this.buildLobbyDeckStorageKey(this.currentLobbyCode), this.selectedDeckId);
     }
   }
 
@@ -449,6 +467,26 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   private resetPrimaryActionFeedback(): void {
     this.primaryActionError = '';
     this.primaryActionMessage = '';
+  }
+
+  private async loadDeckOptions(): Promise<void> {
+    try {
+      this.deckOptions = await this.decksPull.getUserDecks({ forceRefresh: true });
+    } catch (error) {
+      console.error('[LobbyMenu] Error al cargar mazos del usuario:', error);
+      this.deckOptions = [];
+    }
+  }
+
+  private restoreSelectedDeck(lobbyCode: string, backendSelectedDeckId: string | null): void {
+    const localDeckId = localStorage.getItem(this.buildLobbyDeckStorageKey(lobbyCode)) ?? '';
+    const preferredDeckId = backendSelectedDeckId?.trim() || localDeckId;
+    const hasPreferredDeck = this.deckOptions.some((deck) => deck.id === preferredDeckId);
+    this.selectedDeckId = hasPreferredDeck ? preferredDeckId : '';
+  }
+
+  private buildLobbyDeckStorageKey(lobbyCode: string): string {
+    return `ator:lobby:${lobbyCode}:selected-deck`;
   }
 
   private applyRealtimeLobbyState(lobbyState: RealtimeLobbyState): void {
