@@ -102,7 +102,9 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
   private readonly moleFadeOutGraceMs = 180;
   private timerIntervalId: ReturnType<typeof setInterval> | null = null;
   private moleIntervalId: ReturnType<typeof setInterval> | null = null;
+  private finishTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private hasEmittedResult = false;
+  private gameEndsAt = 0;
 
   timeLeft = 15;
   score = 0;
@@ -162,16 +164,23 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
     this.score = 0;
     this.isGameOver = false;
     this.hasEmittedResult = false;
+    this.gameEndsAt = Date.now() + this.resolveGameDurationMs();
     this.showRandomMole();
 
+    this.finishTimeoutId = setTimeout(() => {
+      this.finishGame();
+      this.cdr.detectChanges();
+    }, this.resolveGameDurationMs());
+
     this.timerIntervalId = setInterval(() => {
-      if (this.timeLeft <= 1) {
+      const nextTimeLeft = Math.max(0, Math.ceil((this.gameEndsAt - Date.now()) / 1000));
+      if (nextTimeLeft <= 0) {
         this.finishGame();
         this.cdr.detectChanges();
         return;
       }
 
-      this.timeLeft -= 1;
+      this.timeLeft = nextTimeLeft;
       this.cdr.detectChanges();
     }, 1000);
 
@@ -182,6 +191,10 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
   }
 
   private finishGame(): void {
+    if (this.isGameOver) {
+      return;
+    }
+
     this.clearGameIntervals();
     this.timeLeft = 0;
     this.activeMoleIndex = -1;
@@ -229,6 +242,11 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
       clearInterval(this.moleIntervalId);
       this.moleIntervalId = null;
     }
+
+    if (this.finishTimeoutId !== null) {
+      clearTimeout(this.finishTimeoutId);
+      this.finishTimeoutId = null;
+    }
   }
 
   private resolveInitialTimeLeft(): number {
@@ -238,6 +256,15 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
     }
 
     return Math.max(5, Math.ceil(durationMs / 1000));
+  }
+
+  private resolveGameDurationMs(): number {
+    const durationMs = this.durationMs();
+    if (!Number.isFinite(durationMs)) {
+      return 15_000;
+    }
+
+    return Math.max(5_000, durationMs);
   }
 
   private emitResultOnce(): void {

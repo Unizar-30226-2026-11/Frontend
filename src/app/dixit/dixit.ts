@@ -29,6 +29,7 @@ import { FallingStarOverlay } from './components/falling-star-overlay';
 import type { TrackBoardToken } from './components/track-board';
 import { DixitMinijuego1 } from './minijuegos/minijuego-1';
 import { DixitMinijuego2 } from './minijuegos/minijuego-2/minijuego-2';
+import { DixitMinijuego3 } from './minijuegos/minijuego-3/minijuego-3';
 import { DixitChoicePhase } from './phases/choice-phase';
 import { DixitHandPhase } from './phases/hand-phase';
 import type { DixitRankingRow, DixitRevealedCard } from './phases/points-phase';
@@ -118,6 +119,7 @@ const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
     DixitPointsPhase,
     DixitMinijuego1,
     DixitMinijuego2,
+    DixitMinijuego3,
   ],
   templateUrl: './dixit.html',
   styleUrl: './dixit.css',
@@ -179,6 +181,7 @@ export class Dixit implements OnInit, OnDestroy {
   isSimulationDrawerOpen = false;
   isMinigame1Open = false;
   isMinigame2Open = false;
+  isMinigame3Open = false;
   minigameUiState: MinigameUiState = 'playing';
   minigameStatusMessage = '';
   simulationTriggerMode: SimulationTriggerMode = null;
@@ -1886,6 +1889,14 @@ export class Dixit implements OnInit, OnDestroy {
     this.isMinigame2Open = false;
   }
 
+  closeMinigame3(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
+    this.isMinigame3Open = false;
+  }
+
   onMinigameFinished(result: { score: number }): void {
     if (!this.activeMinigame || this.minigameResultSent) {
       return;
@@ -2380,6 +2391,7 @@ export class Dixit implements OnInit, OnDestroy {
     if (!this.isCurrentPlayerInActiveMinigame) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
       this.minigameStatusMessage =
         this.resolveMinigameView(minigame.type) === null
           ? 'Minijuego no disponible en este cliente. Esperando resolucion del servidor...'
@@ -2392,27 +2404,38 @@ export class Dixit implements OnInit, OnDestroy {
     if (minigameView === null) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
       this.scheduleUnavailableMinigameSubmit(minigame.duration);
     } else if (minigameView === 2) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = true;
+      this.isMinigame3Open = false;
+    } else if (minigameView === 3) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.isMinigame3Open = true;
     } else {
       this.isMinigame1Open = true;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
     }
 
     this.closeSimulationDrawer();
   }
 
-  private resolveMinigameView(type: number): 1 | 2 | null {
+  private resolveMinigameView(type: number): 1 | 2 | 3 | null {
     if (type === 0) {
       return 1;
     }
 
     if (type === 1) {
       return 2;
+    }
+
+    if (type === 2) {
+      return 3;
     }
 
     return null;
@@ -2486,6 +2509,7 @@ export class Dixit implements OnInit, OnDestroy {
   private closeActiveMinigame(): void {
     this.isMinigame1Open = false;
     this.isMinigame2Open = false;
+    this.isMinigame3Open = false;
     this.clearMinigameUnavailableSubmitTimer();
     this.clearMinigameResolutionTimer();
     this.activeMinigame = null;
