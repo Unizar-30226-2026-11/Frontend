@@ -40,7 +40,7 @@ describe('GamesPull', () => {
 
     const result = await service.startLobby('ABCD', 'Classic');
 
-    expect(result.route).toBe('/dixit/classic-1');
+    expect(result.route).toBe('/game/classic-1');
     expect(apiClientSpy.invalidateCache).toHaveBeenCalledWith('/lobbies');
   });
 
@@ -53,7 +53,7 @@ describe('GamesPull', () => {
 
     const result = await service.startLobby('ST99', 'Stella');
 
-    expect(result.route).toBe('/dixit-stella/stella-9');
+    expect(result.route).toBe('/game/stella-9');
   });
 
   it('uses the requested engine as fallback when the backend does not return one', async () => {
@@ -64,6 +64,6 @@ describe('GamesPull', () => {
 
     const result = await service.startLobby('ROOM7', 'Stella');
 
-    expect(result.route).toBe('/dixit-stella/ROOM7');
+    expect(result.route).toBe('/game/ROOM7');
   });
 });

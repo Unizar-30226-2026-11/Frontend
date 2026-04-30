@@ -11,6 +11,7 @@ import {
   RealtimeLobbyPlayer,
   RealtimeLobbyState,
   RealtimeMinigameStart,
+  RealtimeModeChangeOffer,
   RealtimePrivateHandEntry,
   RealtimePrivateHand,
   RealtimeDuelChallenge,
@@ -68,6 +69,7 @@ export class DixitRealtime {
   private readonly duelChallengeSignal = signal<RealtimeDuelChallenge | null>(null);
   private readonly minigameStartSignal = signal<RealtimeMinigameStart | null>(null);
   private readonly specialEventSignal = signal<RealtimeSpecialEvent | null>(null);
+  private readonly modeChangeOfferSignal = signal<RealtimeModeChangeOffer | null>(null);
   // Estado efímero de efectos visuales del tablero.
   // activeStar representa una estrella aún disponible para capturar.
   private readonly activeStarSignal = signal<RealtimeStarSpawn | null>(null);
@@ -98,6 +100,7 @@ export class DixitRealtime {
   readonly duelChallenge = computed(() => this.duelChallengeSignal());
   readonly minigameStart = computed(() => this.minigameStartSignal());
   readonly specialEvent = computed(() => this.specialEventSignal());
+  readonly modeChangeOffer = computed(() => this.modeChangeOfferSignal());
   readonly activeStar = computed(() => this.activeStarSignal());
   readonly starClaim = computed(() => this.starClaimSignal());
 
@@ -135,6 +138,7 @@ export class DixitRealtime {
     this.walletUpdatedSignal.set(null);
     this.minigameStartSignal.set(null);
     this.specialEventSignal.set(null);
+    this.modeChangeOfferSignal.set(null);
 
     let response: LobbyJoinResponse;
     try {
@@ -262,10 +266,13 @@ export class DixitRealtime {
   // los resultados de los dos jugadores y desbloquear la partida.
   sendMinigameScore(score: number): void {
     const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.floor(score)) : 0;
-    this.debug('emit client:game:minigame_score', { score: normalizedScore });
-    this.emit('client:game:minigame_score', {
+    this.debug('emit client:game:action SUBMIT_MINIGAME_SCORE', { score: normalizedScore });
+    this.emit('client:game:action', {
       lobbyCode: this.requireSession().lobbyCode,
-      score: normalizedScore,
+      actionType: 'SUBMIT_MINIGAME_SCORE',
+      payload: {
+        score: normalizedScore,
+      },
     });
   }
 
@@ -309,6 +316,10 @@ export class DixitRealtime {
     this.specialEventSignal.set(null);
   }
 
+  clearModeChangeOffer(): void {
+    this.modeChangeOfferSignal.set(null);
+  }
+
   // Cierra el estado efímero del duelo cuando el modal se ha gestionado.
   clearDuelChallenge(): void {
     this.duelChallengeSignal.set(null);
@@ -348,6 +359,7 @@ export class DixitRealtime {
     this.duelChallengeSignal.set(null);
     this.minigameStartSignal.set(null);
     this.specialEventSignal.set(null);
+    this.modeChangeOfferSignal.set(null);
     this.activeStarSignal.set(null);
     this.starClaimSignal.set(null);
     this.gameEndedSignal.set(null);
@@ -540,6 +552,17 @@ export class DixitRealtime {
         this.pushToast(message);
       }
       this.debug('event server:game:special_event', payload);
+    });
+
+    socket.on('server:game:mode_change_offer', (payload: unknown) => {
+      const offer = this.normalizeModeChangeOffer(payload);
+      if (!offer) {
+        return;
+      }
+
+      this.modeChangeOfferSignal.set(offer);
+      this.pushToast(offer.message);
+      this.debug('event server:game:mode_change_offer', offer);
     });
 
     // --- Conflictos 1 vs 1: duelo disponible y minijuego activo ---
@@ -976,9 +999,9 @@ export class DixitRealtime {
     }
 
     const id =
-      this.normalizeCardId(card['id']) ??
       this.normalizeCardId(card['cardId']) ??
       this.normalizeCardId(card['card_id']) ??
+      this.normalizeCardId(card['id']) ??
       this.normalizeCardId(card['code']);
     if (id === null) {
       return null;
@@ -1081,6 +1104,7 @@ export class DixitRealtime {
     this.walletUpdatedSignal.set(null);
     this.minigameStartSignal.set(null);
     this.specialEventSignal.set(null);
+    this.modeChangeOfferSignal.set(null);
     this.auth.setActiveGameId(lobbyCode, engine);
     this.activeGameNoticeSignal.set(DEFAULT_ACTIVE_GAME_NOTICE);
     this.gameStartedSignal.set({
@@ -1107,6 +1131,7 @@ export class DixitRealtime {
     this.gameEndedSignal.set(endedResult);
     this.minigameStartSignal.set(null);
     this.specialEventSignal.set(null);
+    this.modeChangeOfferSignal.set(null);
     this.duelChallengeSignal.set(null);
     this.setGameState({
       state: {
@@ -1449,6 +1474,27 @@ export class DixitRealtime {
       winnerId: readString(wrappedData, 'winnerId') ?? undefined,
       loserId: readString(wrappedData, 'loserId') ?? undefined,
       isDuel: readBoolean(wrappedData, 'isDuel') ?? undefined,
+      receivedAt: Date.now(),
+    };
+  }
+
+  private normalizeModeChangeOffer(payload: unknown): RealtimeModeChangeOffer | null {
+    const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
+    if (!wrappedData) {
+      return null;
+    }
+
+    const targetMode = readString(wrappedData, 'targetMode')?.toUpperCase();
+    if (targetMode !== 'STANDARD' && targetMode !== 'STELLA') {
+      return null;
+    }
+
+    return {
+      message:
+        readString(wrappedData, 'message') ??
+        `Puedes cambiar al modo ${targetMode === 'STELLA' ? 'Stella' : 'Standard'}.`,
+      targetMode,
       receivedAt: Date.now(),
     };
   }

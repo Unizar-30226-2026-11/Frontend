@@ -1,5 +1,9 @@
-export type DixitPhase = 'hand' | 'choice' | 'points';
+import type { RealtimeGameEndedRankingEntry } from '../interfaces/dixit-realtime';
+
+export type DixitPhase = 'hand' | 'choice' | 'points' | 'finished';
 export type PointsStage = 'waiting' | 'reveal' | 'ranking';
+export type MinigameUiState = 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled';
+export type SimulationTriggerMode = 'duel' | null;
 
 export interface PhaseStep {
   id: DixitPhase;
@@ -17,19 +21,6 @@ export interface RoundPlayer extends RosterPlayer {
   pointsBefore: number;
 }
 
-export interface PlayerPanelRow extends RosterPlayer {
-  points: number;
-  isCurrentPlayer: boolean;
-}
-
-export interface WildcardReward {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  points: number;
-}
-
 export interface BoardEffectPopup {
   id: string;
   title: string;
@@ -37,15 +28,26 @@ export interface BoardEffectPopup {
   icon: string;
 }
 
-export interface SpecialCellResolutionOptions {
-  allowWildcardReward?: boolean;
+export interface ResolvedPhaseState {
+  phase: DixitPhase;
+  pointsStage: PointsStage;
+}
+
+export interface RoundVoteEntry {
+  voterId: string;
+  targetCardCode: string;
+}
+
+export interface FinalRankingRow extends RealtimeGameEndedRankingEntry {
+  playerName: string;
+  isCurrentPlayer: boolean;
 }
 
 export const PHASE_STEPS: readonly PhaseStep[] = [
   {
     id: 'hand',
     title: 'Elegir carta',
-    description: 'Arrastra una carta desde tu mano hasta el tablero para dejarla preparada.',
+    description: 'Selecciona una carta y enviala cuando el servidor te deje jugar.',
   },
   {
     id: 'choice',
@@ -55,32 +57,24 @@ export const PHASE_STEPS: readonly PhaseStep[] = [
   {
     id: 'points',
     title: 'Puntuacion',
-    description: 'Simula los eventos de votos, revelado y ranking mientras el tablero sigue visible.',
+    description: 'Espera el resultado del servidor y revisa la resolucion de la ronda.',
+  },
+  {
+    id: 'finished',
+    title: 'Fin de partida',
+    description: 'Consulta tu posicion final, las monedas ganadas y la clasificacion.',
   },
 ];
 
-export const ROUND_CLUES = [
-  'Una mirada perdida.',
-  'El eco de un bosque dormido.',
-  'Nadie vio venir la tormenta.',
-  'La ultima luz antes del silencio.',
+export const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
+export const DEFAULT_PLAYER_COLORS = [
+  '#ff7725',
+  '#27c93f',
+  '#2b79ff',
+  '#d645ff',
+  '#ff3a3a',
+  '#ffd166',
 ] as const;
 
-export const WILDCARD_CELL_POSITIONS = [3, 8, 11, 15, 19, 23, 27, 31, 35, 39, 41, 42] as const;
 export const EVENT_BACK_CELL_POSITIONS = [6, 14, 22, 30, 38] as const;
 export const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
-
-export const WILDCARD_REWARDS: readonly Omit<WildcardReward, 'id'>[] = [
-  {
-    name: 'Suma 1 punto',
-    description: 'Al usarlo durante la fase de mano avanzas 1 casilla.',
-    icon: '+1',
-    points: 1,
-  },
-  {
-    name: 'Suma 2 puntos',
-    description: 'Al usarlo durante la fase de mano avanzas 2 casillas.',
-    icon: '+2',
-    points: 2,
-  },
-] as const;

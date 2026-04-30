@@ -10,133 +10,133 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
   imports: [DixitTrackBoard],
   template: `
     <section class="hand-phase-layout">
-      <app-dixit-track-board
-        [title]="''"
-        [subtitle]="''"
-        [tokens]="boardTokens"
-        [eventBackCells]="eventBackCells"
-        [eventForwardCells]="eventForwardCells"
-        [showControls]="false"
-        [interactive]="false"
-      >
-        <div board-overlay class="board-overlay-content">
-          <section class="board-overlay-shell">
-            <div class="story-card hand-overlay" [class.waiting-overlay]="handSubmitted">
-              <div class="clue-copy">
-                @if (handSubmitted) {
-                  <span class="overlay-label">Jugada enviada</span>
-                  <h2>Esperando al resto de jugadores</h2>
-                  <p class="storyteller-copy">
-                    Cuenta-cuentos:
-                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
-                  </p>
-                  <p>
-                    @if (isCurrentPlayerStoryteller) {
-                      Tu pista y tu carta ya estan enviadas. La ronda avanzara cuando todos hayan terminado.
-                    } @else {
-                      Tu carta ya esta enviada. La ronda avanzara cuando todos los jugadores hayan terminado.
-                    }
-                  </p>
-                  @if (currentClue) {
-                    <p class="submitted-detail">Pista: <strong>{{ currentClue }}</strong></p>
-                  }
-                  @if (submittedCardLabel) {
-                    <p class="submitted-detail">Carta enviada: <strong>{{ submittedCardLabel }}</strong></p>
-                  }
-                  <div class="waiting-feedback" aria-hidden="true">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                } @else {
-                  <span class="overlay-label">Pista actual</span>
-                  <h2>{{ currentClue || 'Esperando pista' }}</h2>
-                  <p class="storyteller-copy">
-                    Cuenta-cuentos:
-                    <strong>{{ storytellerName || 'Pendiente' }}</strong>
-                  </p>
-                  <p>
-                    @if (!currentClue && isCurrentPlayerStoryteller) {
-                      Escribe la pista y confirmala para abrir la ronda.
-                    } @else if (!currentClue) {
-                      Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
-                    } @else if (isCurrentPlayerStoryteller) {
-                      La pista ya esta publicada. Esperando a que el resto envie su carta.
-                    } @else {
-                      La pista ya esta publicada. Elige una carta y enviala al servidor.
-                    }
-                  </p>
+      <section class="board-stage">
+        <app-dixit-track-board
+          [title]="''"
+          [subtitle]="''"
+          [tokens]="boardTokens"
+          [eventBackCells]="eventBackCells"
+          [eventForwardCells]="eventForwardCells"
+          [showControls]="false"
+          [interactive]="false"
+        />
 
-                  @if (!currentClue && isCurrentPlayerStoryteller) {
-                    <label class="clue-field">
-                      <span>Tu pista</span>
-                      <input
-                        type="text"
-                        maxlength="255"
-                        [value]="clueDraft"
-                        (input)="onClueDraftChanged($event)"
-                        placeholder="Escribe una pista para esta ronda"
-                      />
-                    </label>
-                  }
-
-                  <div class="hand-submit-row">
-                    @if (!currentClue && isCurrentPlayerStoryteller) {
-                      <button
-                        type="button"
-                        class="secondary-action"
-                        [disabled]="isStorySubmitDisabled"
-                        (click)="storySubmitRequested.emit()"
-                      >
-                        Confirmar pista
-                      </button>
-                    }
-
-                    @if (!isCurrentPlayerStoryteller) {
-                      <button
-                        type="button"
-                        class="sidebar-action"
-                        [disabled]="isHandSubmitDisabled"
-                        (click)="handSubmitRequested.emit()"
-                      >
-                        {{ handSubmitButtonText }}
-                      </button>
-                    }
-                  </div>
-                }
-              </div>
-
+        <section class="floating-hand-overlay-shell">
+          <div class="story-card hand-overlay" [class.waiting-overlay]="handSubmitted">
+            <div class="clue-copy">
               @if (handSubmitted) {
-                <div class="waiting-zone">
-                  <span class="waiting-check" aria-hidden="true">OK</span>
-                  <strong>Jugada registrada</strong>
-                  <p>Ya no necesitas hacer nada en esta fase.</p>
+                <span class="overlay-label">Jugada enviada</span>
+                <h2>Esperando al resto de jugadores</h2>
+                <p class="storyteller-copy">
+                  Cuenta-cuentos:
+                  <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                </p>
+                <p>
+                  @if (isCurrentPlayerStoryteller) {
+                    Tu pista y tu carta ya estan enviadas. La ronda avanzara cuando todos hayan terminado.
+                  } @else {
+                    Tu carta ya esta enviada. La ronda avanzara cuando todos los jugadores hayan terminado.
+                  }
+                </p>
+                @if (currentClue) {
+                  <p class="submitted-detail">Pista: <strong>{{ currentClue }}</strong></p>
+                }
+                @if (submittedCardLabel) {
+                  <p class="submitted-detail">Carta enviada: <strong>{{ submittedCardLabel }}</strong></p>
+                }
+                <div class="waiting-feedback" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
               } @else {
-                <div
-                  class="drop-zone"
-                  [class.has-card]="!!selectedCard"
-                  [class.is-dragover]="isDropZoneActive"
-                  (dragover)="onDropZoneDragOver($event)"
-                  (dragleave)="onDropZoneDragLeave()"
-                  (drop)="onDropZoneDrop($event)"
-                >
-                  @if (selectedCard; as card) {
-                    <img
-                      draggable="false"
-                      [src]="card.image"
-                      [alt]="card.value + ' de ' + card.suit"
-                    />
-                    <p>Seleccionada: {{ card.code }}</p>
+                <span class="overlay-label">Pista actual</span>
+                <h2>{{ currentClue || 'Esperando pista' }}</h2>
+                <p class="storyteller-copy">
+                  Cuenta-cuentos:
+                  <strong>{{ storytellerName || 'Pendiente' }}</strong>
+                </p>
+                <p>
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    Escribe la pista y confirmala para abrir la ronda.
+                  } @else if (!currentClue) {
+                    Espera a que el cuenta-cuentos confirme la pista para poder jugar carta.
+                  } @else if (isCurrentPlayerStoryteller) {
+                    La pista ya esta publicada. Esperando a que el resto envie su carta.
                   } @else {
-                    <p>Suelta aqui tu carta</p>
+                    La pista ya esta publicada. Elige una carta y enviala al servidor.
+                  }
+                </p>
+
+                @if (!currentClue && isCurrentPlayerStoryteller) {
+                  <label class="clue-field">
+                    <span>Tu pista</span>
+                    <input
+                      type="text"
+                      maxlength="255"
+                      [value]="clueDraft"
+                      (input)="onClueDraftChanged($event)"
+                      placeholder="Escribe una pista para esta ronda"
+                    />
+                  </label>
+                }
+
+                <div class="hand-submit-row">
+                  @if (!currentClue && isCurrentPlayerStoryteller) {
+                    <button
+                      type="button"
+                      class="secondary-action"
+                      [disabled]="isStorySubmitDisabled"
+                      (click)="storySubmitRequested.emit()"
+                    >
+                      Confirmar pista
+                    </button>
+                  }
+
+                  @if (!isCurrentPlayerStoryteller) {
+                    <button
+                      type="button"
+                      class="sidebar-action"
+                      [disabled]="isHandSubmitDisabled"
+                      (click)="handSubmitRequested.emit()"
+                    >
+                      {{ handSubmitButtonText }}
+                    </button>
                   }
                 </div>
               }
             </div>
-          </section>
-        </div>
-      </app-dixit-track-board>
+
+            @if (handSubmitted) {
+              <div class="waiting-zone">
+                <span class="waiting-check" aria-hidden="true">OK</span>
+                <strong>Jugada registrada</strong>
+                <p>Ya no necesitas hacer nada en esta fase.</p>
+              </div>
+            } @else {
+              <div
+                class="drop-zone"
+                [class.has-card]="!!selectedCard"
+                [class.is-dragover]="isDropZoneActive"
+                (dragover)="onDropZoneDragOver($event)"
+                (dragleave)="onDropZoneDragLeave()"
+                (drop)="onDropZoneDrop($event)"
+              >
+                @if (selectedCard; as card) {
+                  <img
+                    draggable="false"
+                    [src]="card.image"
+                    [alt]="card.value + ' de ' + card.suit"
+                  />
+                  <p>Seleccionada: {{ card.code }}</p>
+                } @else {
+                  <p>Suelta aqui tu carta</p>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      </section>
 
       <section class="table-support">
         <aside class="chat-panel">
@@ -258,17 +258,26 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       gap: 12px;
     }
 
-    .board-overlay-content {
-      pointer-events: auto;
-      width: 100%;
-      display: flex;
-      justify-content: center;
+    .board-stage {
+      display: grid;
+      gap: 0;
+      min-width: 0;
+      position: relative;
+      isolation: isolate;
     }
 
-    .board-overlay-shell {
-      width: min(920px, 100%);
-      display: flex;
-      justify-content: center;
+    app-dixit-track-board {
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+
+    .floating-hand-overlay-shell {
+      position: relative;
+      z-index: 3;
+      width: min(920px, calc(100% - 24px));
+      margin: clamp(-28rem, -24vw, -20rem) auto 0;
+      pointer-events: auto;
     }
 
     .story-card {
@@ -286,7 +295,8 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       background: rgba(247, 245, 239, 0.9);
       color: #1e2631;
       box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
-      transform: translateX(4.5%);
+      margin-inline: auto;
+      transform: none;
     }
 
     .waiting-overlay {
@@ -604,6 +614,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       display: block;
       min-height: 0;
       height: 100%;
+      overflow: auto;
     }
 
     .hand-main {
@@ -640,13 +651,15 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
     .hand-card {
       width: 100%;
-      max-width: 120px;
+      max-width: 96px;
+      aspect-ratio: 3 / 5;
       justify-self: center;
       appearance: none;
       background: transparent;
       border: 0;
       padding: 0;
       border-radius: 20px;
+      overflow: hidden;
       cursor: grab;
       transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
     }
@@ -667,8 +680,11 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
 
     .hand-card img {
       width: 100%;
+      height: 100%;
       display: block;
       border-radius: 18px;
+      object-fit: cover;
+      object-position: center;
     }
 
     .players-list {
@@ -747,15 +763,16 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       }
 
       .hand-cards {
-        grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
       }
 
-      .board-overlay-shell {
+      .floating-hand-overlay-shell {
         width: 100%;
+        margin-top: -10rem;
       }
 
       .hand-overlay {
-        transform: none;
+        width: 100%;
       }
     }
   `,

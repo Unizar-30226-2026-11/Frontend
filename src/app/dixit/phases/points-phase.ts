@@ -45,11 +45,13 @@ export interface DixitRankingRow {
           <div class="reveal-grid">
             @for (result of revealedCards; track result.card.code; let cardIndex = $index) {
               <article class="reveal-card" [style.--reveal-index]="cardIndex">
-                <img
-                  draggable="false"
-                  [src]="result.card.image"
-                  [alt]="result.card.value + ' de ' + result.card.suit"
-                />
+                <div class="reveal-card-media">
+                  <img
+                    draggable="false"
+                    [src]="result.card.image"
+                    [alt]="result.card.value + ' de ' + result.card.suit"
+                  />
+                </div>
                 <p class="owner">{{ result.ownerName }}</p>
                 <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
               </article>
@@ -157,11 +159,24 @@ export interface DixitRankingRow {
       animation-delay: calc(var(--reveal-index) * 70ms);
     }
 
-    .reveal-card img {
+    .reveal-card-media {
+      aspect-ratio: 3 / 4;
       width: 100%;
-      display: block;
+      overflow: hidden;
       border-radius: 10px;
       margin-bottom: 6px;
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.16), transparent 55%),
+        rgba(6, 12, 20, 0.72);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .reveal-card img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      object-position: center;
     }
 
     .owner {

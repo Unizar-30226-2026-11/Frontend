@@ -287,6 +287,45 @@ describe('DixitRealtime', () => {
     );
   });
 
+  it('prefers cardId over id when private_hand includes both fields', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+    socket.trigger('connect');
+    await connectionPromise;
+
+    socket.trigger('server:game:private_hand', {
+      hand: [{ id: 999, cardId: 17, url_image: 'https://cdn.example.com/card-17.webp' }],
+    });
+
+    expect(service.privateHand()).toEqual(
+      jasmine.objectContaining({
+        lobbyCode: 'A1B2',
+        hand: [jasmine.objectContaining({ id: 17, cardId: 17 })],
+      })
+    );
+  });
+
   it('syncs the active game engine from state_updated when the mode is STELLA', fakeAsync(() => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
@@ -381,13 +420,58 @@ describe('DixitRealtime', () => {
 
     expect(socket.emissions).toContain(
       jasmine.objectContaining({
-        event: 'client:game:minigame_score',
+        event: 'client:game:action',
         payload: jasmine.objectContaining({
           lobbyCode: 'A1B2',
-          score: 12,
+          actionType: 'SUBMIT_MINIGAME_SCORE',
+          payload: jasmine.objectContaining({
+            score: 12,
+          }),
         }),
       })
     );
+  }));
+
+  it('stores mode change offers and exposes the normalized target mode', fakeAsync(() => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    void service.ensureLobbyConnection('A1B2');
+
+    tick();
+    socket.trigger('connect');
+    tick();
+
+    socket.trigger('server:game:mode_change_offer', {
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+    });
+
+    expect(service.modeChangeOffer()).toEqual(
+      jasmine.objectContaining({
+        message: 'Puedes cambiar a Stella.',
+        targetMode: 'STELLA',
+      })
+    );
+    expect(service.toast()?.message).toBe('Puedes cambiar a Stella.');
   }));
 
   it('keeps the final ranking available after server:game:ended and clears the active game id', async () => {

@@ -8,13 +8,14 @@ import { Register } from './register/register';
 import { MainMenu } from './main-menu/main-menu';
 import { LobbyMenu } from './lobby-menu/lobby-menu';
 import { Settings } from './settings/settings';
-import { Dixit } from './dixit/dixit';
-import { DixitStella } from './dixit-stella/dixit-stella';
 import { Login } from './login/login';
 import { Profile } from './profile/profile';
 import { DixitTestShell } from './test/dixit/dixit-test-shell';
+import { StellaTestShell } from './test/stella/stella-test-shell';
 import { StarTest } from './test/star/star-test';
+import { UnifiedTestShell } from './test/unified/unified-test-shell';
 import { Auth } from './services/auth';
+import { GameShell } from './game-shell/game-shell';
 
 function buildActiveGameUrlTree(router: Router, auth: Auth) {
   const activeGameRoute = auth.activeGameRoute();
@@ -107,21 +108,25 @@ export const routes: Routes = [
         canActivate: [requireAuthGuard],
     },
     {
-        path: 'dixit/:id',
-        title: 'Dixit',
-        component: Dixit,
+        path: 'game/:id',
+        title: 'Game',
+        component: GameShell,
         canActivate: [requireAuthGuard],
+    },
+    {
+        path: 'dixit/:id',
+        pathMatch: 'full',
+        redirectTo: 'game/:id',
     },
     {
         path: 'dixit-stella/:id',
-        title: 'Dixit Stella',
-        component: DixitStella,
-        canActivate: [requireAuthGuard],
+        pathMatch: 'full',
+        redirectTo: 'game/:id',
     },
     {
         path: 'stella-test',
-        title: 'Stella Test',
-        component: DixitStella,
+        pathMatch: 'full',
+        redirectTo: 'test/stella/TEST-STELLA',
     },
     {
         path: 'register',
@@ -149,6 +154,26 @@ export const routes: Routes = [
         path: 'test/dixit/:id',
         title: 'Dixit Test',
         component: DixitTestShell,
+    },
+    {
+        path: 'test/stella',
+        pathMatch: 'full',
+        redirectTo: 'test/stella/TEST-STELLA',
+    },
+    {
+        path: 'test/stella/:id',
+        title: 'Stella Test',
+        component: StellaTestShell,
+    },
+    {
+        path: 'test/unif',
+        pathMatch: 'full',
+        redirectTo: 'test/unif/TEST-UNIF',
+    },
+    {
+        path: 'test/unif/:id',
+        title: 'Unified Test',
+        component: UnifiedTestShell,
     },
     {
         path: 'test/star',

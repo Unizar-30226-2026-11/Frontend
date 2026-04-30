@@ -3,12 +3,14 @@ import { Router } from '@angular/router';
 
 import { MainMenu } from './main-menu';
 import { CardCollection, CollectionCard, CollectionsPull } from '../services/collections-pull';
+import { CardPull } from '../services/card-pull';
 
 describe('MainMenu', () => {
   let component: MainMenu;
   let fixture: ComponentFixture<MainMenu>;
   let routerSpy: jasmine.SpyObj<Router>;
   let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
+  let cardPullSpy: jasmine.SpyObj<CardPull>;
 
   beforeEach(async () => {
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
@@ -19,12 +21,15 @@ describe('MainMenu', () => {
     ]);
     collectionsPullSpy.getCollections.and.resolveTo(createCollectionsFixture());
     collectionsPullSpy.getCollectionCards.and.resolveTo(createCollectionCardsFixture());
+    cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
+    cardPullSpy.getCards.and.resolveTo(createOwnedCardsFixture());
 
     await TestBed.configureTestingModule({
       imports: [MainMenu],
       providers: [
         { provide: Router, useValue: routerSpy },
         { provide: CollectionsPull, useValue: collectionsPullSpy },
+        { provide: CardPull, useValue: cardPullSpy },
       ],
     }).compileComponents();
 
@@ -40,11 +45,12 @@ describe('MainMenu', () => {
 
   it('loads only collections on init and keeps them collapsed', () => {
     expect(collectionsPullSpy.getCollections).toHaveBeenCalledTimes(1);
+    expect(cardPullSpy.getCards).toHaveBeenCalledTimes(1);
     expect(collectionsPullSpy.getCollectionCards).not.toHaveBeenCalled();
     expect(component.collections.length).toBe(2);
     expect(component.collections.every((collection) => !collection.expanded)).toBeTrue();
     expect(component.totalCards).toBe(12);
-    expect(component.collectedCards).toBe(12);
+    expect(component.collectedCards).toBe(2);
   });
 
   it('loads cards the first time a collection is expanded and reuses them afterwards', async () => {
@@ -54,6 +60,9 @@ describe('MainMenu', () => {
     expect(component.collections[0].expanded).toBeTrue();
     expect(component.collections[0].cardsLoaded).toBeTrue();
     expect(component.collections[0].cards.length).toBe(2);
+    expect(component.collections[0].collected).toBe(1);
+    expect(component.collections[0].cards[0].locked).toBeFalse();
+    expect(component.collections[0].cards[1].locked).toBeTrue();
 
     await component.toggleCollection('col_set1');
     await component.toggleCollection('col_set1');
@@ -109,6 +118,23 @@ function createCollectionCardsFixture(): CollectionCard[] {
       rarity: 'Comun',
       title: 'Guardian del Lago',
       imageUrl: '/assets/card-2.png',
+    },
+  ];
+}
+
+function createOwnedCardsFixture() {
+  return [
+    {
+      code: 'col_set1_card_001',
+      image: '/assets/card-1.png',
+      value: 'Dragon de Fuego',
+      suit: 'DIXIT',
+    },
+    {
+      code: 'col_set2_card_003',
+      image: '/assets/card-3.png',
+      value: 'Espectro Lunar',
+      suit: 'DIXIT',
     },
   ];
 }

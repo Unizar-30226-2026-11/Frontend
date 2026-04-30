@@ -61,7 +61,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'secret');
 
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/dixit-stella/A1B2');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/game/A1B2');
   });
 
   it('shows the API error when authentication fails', async () => {
