@@ -46,17 +46,19 @@ describe('MainMenu', () => {
   it('loads only collections on init and keeps them collapsed', () => {
     expect(collectionsPullSpy.getCollections).toHaveBeenCalledTimes(1);
     expect(cardPullSpy.getCards).toHaveBeenCalledTimes(1);
-    expect(collectionsPullSpy.getCollectionCards).not.toHaveBeenCalled();
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledTimes(2);
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledWith('col_set1');
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledWith('col_set2');
     expect(component.collections.length).toBe(2);
     expect(component.collections.every((collection) => !collection.expanded)).toBeTrue();
     expect(component.totalCards).toBe(12);
     expect(component.collectedCards).toBe(2);
   });
 
-  it('loads cards the first time a collection is expanded and reuses them afterwards', async () => {
+  it('reuses precached cards when a collection is expanded', async () => {
     await component.toggleCollection('col_set1');
 
-    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledOnceWith('col_set1');
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledTimes(2);
     expect(component.collections[0].expanded).toBeTrue();
     expect(component.collections[0].cardsLoaded).toBeTrue();
     expect(component.collections[0].cards.length).toBe(2);
@@ -67,8 +69,40 @@ describe('MainMenu', () => {
     await component.toggleCollection('col_set1');
     await component.toggleCollection('col_set1');
 
-    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledTimes(1);
+    expect(collectionsPullSpy.getCollectionCards).toHaveBeenCalledTimes(2);
     expect(component.collections[0].expanded).toBeTrue();
+  });
+
+  it('computes collection counters from real collection cards before opening the dropdown', async () => {
+    cardPullSpy.getCards.and.resolveTo([
+      {
+        code: 'owned-card-alpha',
+        image: '/assets/card-1.png',
+        value: 'Dragon de Fuego',
+        suit: 'DIXIT',
+      },
+    ]);
+    collectionsPullSpy.getCollectionCards.and.callFake(async (collectionId: string) =>
+      collectionId === 'col_set1'
+        ? [
+            {
+              idCard: 'owned-card-alpha',
+              idCollection: 'col_set1',
+              rarity: 'Rara',
+              title: 'Dragon de Fuego',
+              imageUrl: '/assets/card-1.png',
+            },
+          ]
+        : []
+    );
+
+    const freshFixture = TestBed.createComponent(MainMenu);
+    const freshComponent = freshFixture.componentInstance;
+    freshFixture.detectChanges();
+    await freshFixture.whenStable();
+
+    expect(freshComponent.collections[0].collected).toBe(1);
+    expect(freshComponent.collections[1].collected).toBe(0);
   });
 
   it('navigates to games from the primary action', () => {

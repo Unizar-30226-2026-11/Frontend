@@ -2,6 +2,7 @@ import { ChangeDetectorRef, inject } from '@angular/core';
 
 import {
   CardCollection,
+  CollectionCard,
   CollectionsPull,
 } from '../services/collections-pull';
 import { CardPull } from '../services/card-pull';
@@ -38,6 +39,7 @@ export abstract class MenuShowcaseState {
   protected readonly cardPull = inject(CardPull);
   protected readonly cdr = inject(ChangeDetectorRef);
   private readonly ownedCardIds = new Set<string>();
+  private readonly collectionCardsCache = new Map<string, CollectionCard[]>();
 
   totalCards = 0;
   collectedCards = 0;
@@ -92,17 +94,32 @@ export abstract class MenuShowcaseState {
     this.cardsError = '';
 
     try {
-      const [collections, userCards] = await Promise.all([
-        this.collectionsPull.getCollections(),
+      const collections = await this.collectionsPull.getCollections();
+      const [userCards, collectionCardsResults] = await Promise.all([
         this.cardPull.getCards(),
+        Promise.allSettled(
+          collections.map(async (collection) => ({
+            collectionId: collection.id,
+            cards: await this.collectionsPull.getCollectionCards(collection.id),
+          }))
+        ),
       ]);
 
       this.ownedCardIds.clear();
+      this.collectionCardsCache.clear();
       userCards.forEach((card) => {
         const normalizedCode = card.code.trim();
         if (normalizedCode) {
           this.ownedCardIds.add(normalizedCode);
         }
+      });
+
+      collectionCardsResults.forEach((result) => {
+        if (result.status !== 'fulfilled') {
+          return;
+        }
+
+        this.collectionCardsCache.set(result.value.collectionId, result.value.cards);
       });
 
       this.collections = this.toMenuCollections(collections);
@@ -142,20 +159,21 @@ export abstract class MenuShowcaseState {
       return;
     }
 
+    const cachedCards = this.collectionCardsCache.get(collection.id);
+    if (cachedCards) {
+      this.applyCollectionCards(collection, cachedCards);
+      this.cdr.detectChanges();
+      return;
+    }
+
     collection.cardsLoading = true;
     collection.cardsError = '';
     this.cdr.detectChanges();
 
     try {
       const cards = await this.collectionsPull.getCollectionCards(collection.id);
-      collection.cards = cards.map((card) => ({
-        id: card.idCard,
-        title: card.title,
-        imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
-        locked: !this.ownedCardIds.has(card.idCard),
-      }));
-      collection.collected = collection.cards.filter((card) => !card.locked).length;
-      collection.cardsLoaded = true;
+      this.collectionCardsCache.set(collection.id, cards);
+      this.applyCollectionCards(collection, cards);
     } catch (error) {
       collection.cardsError =
         error instanceof Error ? error.message : 'No se pudieron cargar las cartas';
@@ -170,13 +188,35 @@ export abstract class MenuShowcaseState {
       id: collection.id,
       name: collection.name,
       total: collection.totalCards,
-      collected: this.estimateOwnedCardsForCollection(collection.id),
+      collected: this.resolveOwnedCardsForCollection(collection.id),
       expanded: false,
       cardsLoading: false,
       cardsLoaded: false,
       cardsError: '',
       cards: [],
     }));
+  }
+
+  private applyCollectionCards(collection: MenuCardCollection, cards: CollectionCard[]): void {
+    collection.cards = cards.map((card) => ({
+      id: card.idCard,
+      title: card.title,
+      imageUrl: card.imageUrl || DEFAULT_CARD_IMAGE,
+      locked: !this.ownedCardIds.has(card.idCard),
+    }));
+    collection.collected = collection.cards.filter((card) => !card.locked).length;
+    collection.cardsLoaded = true;
+    collection.cardsError = '';
+    collection.cardsLoading = false;
+  }
+
+  private resolveOwnedCardsForCollection(collectionId: string): number {
+    const cachedCards = this.collectionCardsCache.get(collectionId);
+    if (cachedCards) {
+      return cachedCards.filter((card) => this.ownedCardIds.has(card.idCard)).length;
+    }
+
+    return this.estimateOwnedCardsForCollection(collectionId);
   }
 
   private estimateOwnedCardsForCollection(collectionId: string): number {
