@@ -239,7 +239,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
       void this.loadLobby(lobbyCode);
     });
 
-    await this.loadCollections();
+    await this.loadShowcaseData();
   }
 
   async onPrimaryAction(): Promise<void> {

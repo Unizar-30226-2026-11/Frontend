@@ -15,7 +15,7 @@ export class MainMenu extends MenuShowcaseState {
 
   constructor() {
     super();
-    void this.loadCollections();
+    void this.loadShowcaseData();
   }
 
   goToGames(): void {

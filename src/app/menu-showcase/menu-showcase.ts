@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
-import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
+import { UserBoardSummary } from '../services/boards-pull';
+import { MenuCardCollection } from './menu-showcase-base';
 
 @Component({
   selector: 'app-menu-showcase',
@@ -75,42 +76,54 @@ import { CommunityCard, MenuCardCollection } from './menu-showcase-base';
     </article>
 
     <article class="panel community-card">
-      <h2>{{ communityTitle }}</h2>
+      <h2>{{ boardTitle }}</h2>
       <figure class="community-figure">
-        <img [src]="currentCommunityCard.imageUrl" [alt]="currentCommunityCard.title" />
+        <img
+          [src]="selectedBoard?.image || fallbackBoardImage"
+          [alt]="selectedBoardId ? 'Vista previa del tablero seleccionado' : 'Vista previa del tablero'"
+        />
       </figure>
-      <h3 class="community-title">{{ currentCommunityCard.title }}</h3>
-      <div class="community-actions">
-        <button
-          type="button"
-          class="round-btn"
-          (click)="previousCommunity.emit()"
-          aria-label="Carta anterior"
-        >
-          &uarr;
-        </button>
-        <button
-          type="button"
-          class="round-btn"
-          (click)="nextCommunity.emit()"
-          aria-label="Carta siguiente"
-        >
-          &darr;
-        </button>
-        <span class="badge dark">{{ currentCommunityCard.id }}</span>
-        <div class="stars" aria-label="Valorar carta">
-          @for (star of [1, 2, 3, 4, 5]; track star) {
-            <button
-              type="button"
-              class="star"
-              [class.active]="star <= currentRating"
-              (click)="ratingChange.emit(star)"
-              [attr.aria-label]="'Puntuar con ' + star + ' estrellas'"
-            >
-              &#9733;
-            </button>
+      <h3 class="community-title">Tablero seleccionado</h3>
+      <div class="board-actions">
+        @if (boardsLoading) {
+          <p class="board-status">Cargando tableros...</p>
+        } @else if (boardsError) {
+          <p class="board-status error">{{ boardsError }}</p>
+        } @else if (boards.length === 0) {
+          <p class="board-status">No tienes tableros disponibles.</p>
+        } @else {
+          <div class="board-grid" aria-label="Tableros disponibles">
+            @for (board of boards; track board.id) {
+              <button
+                type="button"
+                class="board-option"
+                [class.selected]="board.id === selectedBoardId"
+                [attr.aria-pressed]="board.id === selectedBoardId"
+                [attr.aria-label]="'Seleccionar tablero ' + board.id"
+                (click)="boardSelectionChange.emit(board.id)"
+              >
+                <img [src]="board.image" [alt]="'Tablero ' + board.id" loading="lazy" draggable="false" />
+              </button>
+            }
+          </div>
+
+          @if (boardActionMessage) {
+            <p class="board-status success">{{ boardActionMessage }}</p>
           }
-        </div>
+
+          @if (boardActionError) {
+            <p class="board-status error">{{ boardActionError }}</p>
+          }
+
+          <button
+            type="button"
+            class="board-activate-btn"
+            [disabled]="activatingBoard || !selectedBoardId"
+            (click)="activateBoard.emit()"
+          >
+            {{ activatingBoard ? 'Confirmando...' : 'Confirmar tablero' }}
+          </button>
+        }
       </div>
     </article>
   `,
@@ -122,12 +135,18 @@ export class MenuShowcase {
   @Input() collectedCards = 0;
   @Input() cardsLoading = true;
   @Input() cardsError = '';
-  @Input() currentRating = 0;
-  @Input() currentCommunityCard!: CommunityCard;
-  @Input() communityTitle = 'Cartas de la Comunidad:';
+  @Input() boards: UserBoardSummary[] = [];
+  @Input() selectedBoard: UserBoardSummary | null = null;
+  @Input() selectedBoardId = '';
+  @Input() boardsLoading = true;
+  @Input() boardsError = '';
+  @Input() boardActionMessage = '';
+  @Input() boardActionError = '';
+  @Input() activatingBoard = false;
+  @Input() boardTitle = 'Seleccion de tableros:';
+  @Input() fallbackBoardImage = '/assets/Tablero.png';
 
-  @Output() previousCommunity = new EventEmitter<void>();
-  @Output() nextCommunity = new EventEmitter<void>();
-  @Output() ratingChange = new EventEmitter<number>();
+  @Output() boardSelectionChange = new EventEmitter<string>();
+  @Output() activateBoard = new EventEmitter<void>();
   @Output() toggleCollection = new EventEmitter<string>();
 }

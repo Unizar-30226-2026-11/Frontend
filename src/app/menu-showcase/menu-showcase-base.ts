@@ -5,9 +5,11 @@ import {
   CollectionCard,
   CollectionsPull,
 } from '../services/collections-pull';
+import { BoardsPull, UserBoardSummary } from '../services/boards-pull';
 import { CardPull } from '../services/card-pull';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
+const ACTIVE_BOARD_STORAGE_KEY = 'ator:selected-board';
 
 export interface MenuCollectionCard {
   id: string;
@@ -28,65 +30,33 @@ export interface MenuCardCollection {
   cards: MenuCollectionCard[];
 }
 
-export interface CommunityCard {
-  id: number;
-  title: string;
-  imageUrl: string;
-}
-
 export abstract class MenuShowcaseState {
   protected readonly collectionsPull = inject(CollectionsPull);
   protected readonly cardPull = inject(CardPull);
+  protected readonly boardsPull = inject(BoardsPull);
   protected readonly cdr = inject(ChangeDetectorRef);
   private readonly ownedCardIds = new Set<string>();
   private readonly collectionCardsCache = new Map<string, CollectionCard[]>();
 
   totalCards = 0;
   collectedCards = 0;
-  currentRating = 3;
-  currentCardIndex = 0;
   cardsLoading = true;
   cardsError = '';
   collections: MenuCardCollection[] = [];
+  boardsLoading = true;
+  boardsError = '';
+  boardActionMessage = '';
+  boardActionError = '';
+  activatingBoard = false;
+  boards: UserBoardSummary[] = [];
+  selectedBoardId = '';
 
-  readonly communityCards: CommunityCard[] = [
-    {
-      id: 458,
-      title: 'Donde nacen las sombras',
-      imageUrl: 'https://picsum.photos/seed/atr-community-458/520/700',
-    },
-    {
-      id: 459,
-      title: 'Sueno fractal en rojo',
-      imageUrl: 'https://picsum.photos/seed/atr-community-459/520/700',
-    },
-    {
-      id: 460,
-      title: 'La puerta que respira',
-      imageUrl: 'https://picsum.photos/seed/atr-community-460/520/700',
-    },
-    {
-      id: 461,
-      title: 'Jardin de cristal roto',
-      imageUrl: 'https://picsum.photos/seed/atr-community-461/520/700',
-    },
-  ];
-
-  get currentCommunityCard(): CommunityCard {
-    return this.communityCards[this.currentCardIndex];
+  get selectedBoard(): UserBoardSummary | null {
+    return this.boards.find((board) => board.id === this.selectedBoardId) ?? null;
   }
 
-  previousCommunityCard(): void {
-    this.currentCardIndex =
-      (this.currentCardIndex - 1 + this.communityCards.length) % this.communityCards.length;
-  }
-
-  nextCommunityCard(): void {
-    this.currentCardIndex = (this.currentCardIndex + 1) % this.communityCards.length;
-  }
-
-  setRating(rating: number): void {
-    this.currentRating = rating;
+  protected async loadShowcaseData(): Promise<void> {
+    await Promise.all([this.loadCollections(), this.loadBoards()]);
   }
 
   protected async loadCollections(): Promise<void> {
@@ -179,6 +149,57 @@ export abstract class MenuShowcaseState {
         error instanceof Error ? error.message : 'No se pudieron cargar las cartas';
     } finally {
       collection.cardsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async loadBoards(options: { forceRefresh?: boolean } = {}): Promise<void> {
+    this.boardsLoading = true;
+    this.boardsError = '';
+
+    try {
+      const boards = await this.boardsPull.getUserBoards(options);
+      this.boards = boards;
+
+      const preferredBoardId =
+        this.selectedBoardId || localStorage.getItem(ACTIVE_BOARD_STORAGE_KEY) || boards[0]?.id || '';
+      const hasPreferredBoard = boards.some((board) => board.id === preferredBoardId);
+      this.selectedBoardId = hasPreferredBoard ? preferredBoardId : boards[0]?.id ?? '';
+    } catch (error) {
+      this.boardsError =
+        error instanceof Error ? error.message : 'No se pudieron cargar los tableros';
+      this.boards = [];
+      this.selectedBoardId = '';
+    } finally {
+      this.boardsLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  onBoardSelected(boardId: string): void {
+    this.selectedBoardId = boardId;
+    this.boardActionMessage = '';
+    this.boardActionError = '';
+    this.cdr.detectChanges();
+  }
+
+  async activateSelectedBoard(): Promise<void> {
+    if (!this.selectedBoardId || this.activatingBoard) {
+      return;
+    }
+
+    this.activatingBoard = true;
+    this.boardActionMessage = '';
+    this.boardActionError = '';
+
+    try {
+      this.boardActionMessage = await this.boardsPull.activateBoard(this.selectedBoardId);
+      localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, this.selectedBoardId);
+    } catch (error) {
+      this.boardActionError =
+        error instanceof Error ? error.message : 'No se pudo activar el tablero';
+    } finally {
+      this.activatingBoard = false;
       this.cdr.detectChanges();
     }
   }
