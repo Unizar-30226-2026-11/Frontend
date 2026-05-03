@@ -101,6 +101,7 @@ export class Dixit implements OnInit, OnDestroy {
   private currentRoundPlayers: RoundPlayer[] = [];
   private ownedCards: DeckCard[] = [];
   private latestPrivateHand: RealtimePrivateHandEntry[] = [];
+  private activeBoardImageUrl = '';
   private submittedHandRoundNumber: number | null = null;
   private readonly dynamicCardUrls = new Map<string, string>();
 
@@ -209,7 +210,7 @@ export class Dixit implements OnInit, OnDestroy {
           return;
         }
 
-        if (this.applyRealtimePrivateHand(privateHand.hand)) {
+        if (this.applyRealtimePrivateHand(privateHand.hand, privateHand.board?.url_image ?? null)) {
           this.cdr.detectChanges();
         }
       },
@@ -406,7 +407,7 @@ export class Dixit implements OnInit, OnDestroy {
 
       this.ownedCards = await this.cardPull.getCards(this.maxPlayersPerMatch);
       if (this.latestPrivateHand.length > 0) {
-        this.applyRealtimePrivateHand(this.latestPrivateHand);
+        this.applyRealtimePrivateHand(this.latestPrivateHand, this.activeBoardImageUrl);
       } else if (this.cards.length === 0) {
         this.cards = [...this.ownedCards];
       }
@@ -1103,9 +1104,15 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  private applyRealtimePrivateHand(hand: RealtimePrivateHandEntry[]): boolean {
+  private applyRealtimePrivateHand(
+    hand: RealtimePrivateHandEntry[],
+    boardImageUrl?: string | null
+  ): boolean {
     // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
     this.latestPrivateHand = [...hand];
+    const nextBoardImageUrl = typeof boardImageUrl === 'string' ? boardImageUrl.trim() : '';
+    const boardImageChanged = this.activeBoardImageUrl !== nextBoardImageUrl;
+    this.activeBoardImageUrl = nextBoardImageUrl;
     let handCards = this.buildPrivateHandCards(hand);
     if (this.handSubmitted && this.selectedHandCardCode) {
       handCards = handCards.filter((card) => card.code !== this.selectedHandCardCode);
@@ -1147,7 +1154,7 @@ export class Dixit implements OnInit, OnDestroy {
       selectionChanged = true;
     }
 
-    return cardsChanged || choiceCardsChanged || selectionChanged;
+    return boardImageChanged || cardsChanged || choiceCardsChanged || selectionChanged;
   }
 
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
@@ -1617,7 +1624,10 @@ export class Dixit implements OnInit, OnDestroy {
       const knownCard = this.findKnownCardByCode(code);
       return {
         code,
-        image: this.preferKnownCardImage(this.dynamicCardUrls.get(code) ?? DEFAULT_CARD_IMAGE, knownCard),
+        image: this.preferKnownCardImage(
+          this.dynamicCardUrls.get(code) ?? this.resolveDefaultCardImage(),
+          knownCard
+        ),
         value: knownCard?.value ?? code,
         suit: knownCard?.suit ?? 'DIXIT',
       };
@@ -1632,7 +1642,10 @@ export class Dixit implements OnInit, OnDestroy {
       const knownCard = this.findKnownCardByCode(code);
       return {
         code,
-        image: this.preferKnownCardImage(this.dynamicCardUrls.get(code) ?? DEFAULT_CARD_IMAGE, knownCard),
+        image: this.preferKnownCardImage(
+          this.dynamicCardUrls.get(code) ?? this.resolveDefaultCardImage(),
+          knownCard
+        ),
         value: knownCard?.value ?? code,
         suit: knownCard?.suit ?? 'DIXIT',
       };
@@ -1650,9 +1663,9 @@ export class Dixit implements OnInit, OnDestroy {
     const knownCard = this.findKnownCardByCode(code);
     const image =
       this.preferKnownCardImage(
-        this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+          this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
           this.dynamicCardUrls.get(code) ??
-          DEFAULT_CARD_IMAGE,
+          this.resolveDefaultCardImage(),
         knownCard
       );
     const value =
@@ -2019,6 +2032,10 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     return knownCard.image;
+  }
+
+  private resolveDefaultCardImage(): string {
+    return this.activeBoardImageUrl || DEFAULT_CARD_IMAGE;
   }
 
   private removeCardFromVisibleHand(cardCode: string): void {

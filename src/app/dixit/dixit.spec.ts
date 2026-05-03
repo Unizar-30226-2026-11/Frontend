@@ -475,6 +475,17 @@ describe('Dixit', () => {
     });
   });
 
+  it('uses the board image from private_hand as the fallback card image in classic dixit', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimePrivateHand'](
+      [17],
+      'https://cdn.example.com/boards/classic.webp'
+    );
+
+    expect(component.cards[0]?.image).toBe('https://cdn.example.com/boards/classic.webp');
+  });
+
   it('keeps the same rendered hand entries when private_hand arrives with the same cards', async () => {
     await initializeComponent(fixture);
 

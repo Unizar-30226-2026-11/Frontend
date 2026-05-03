@@ -276,12 +276,22 @@ describe('DixitRealtime', () => {
     await connectionPromise;
 
     socket.trigger('server:game:private_hand', {
+      board: {
+        id: 'b_1',
+        name: 'CLASSIC',
+        url_image: 'https://cdn.example.com/boards/classic.webp',
+      },
       hand: [1, '2', { id: 3, url_image: 'https://cdn.example.com/card-3.webp' }, null, ''],
     });
 
     expect(service.privateHand()).toEqual(
       jasmine.objectContaining({
         lobbyCode: 'A1B2',
+        board: jasmine.objectContaining({
+          id: 'b_1',
+          name: 'CLASSIC',
+          url_image: 'https://cdn.example.com/boards/classic.webp',
+        }),
         hand: [1, '2', jasmine.objectContaining({ id: 3, url_image: 'https://cdn.example.com/card-3.webp' })],
       })
     );

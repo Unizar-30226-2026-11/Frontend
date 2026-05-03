@@ -12,6 +12,7 @@ import {
   RealtimeLobbyState,
   RealtimeMinigameStart,
   RealtimeModeChangeOffer,
+  RealtimePrivateBoard,
   RealtimePrivateHandEntry,
   RealtimePrivateHand,
   RealtimeDuelChallenge,
@@ -957,6 +958,7 @@ export class DixitRealtime {
   private handlePrivateHand(payload: unknown, lobbyCode: string): void {
     const data = asRecord(payload);
     const rawHand = data ? readArray(data, 'hand') : [];
+    const board = data ? this.normalizePrivateBoard(data['board']) : null;
     const hand = rawHand
       .map((entry) => this.normalizePrivateHandEntry(entry))
       .filter((entry): entry is RealtimePrivateHandEntry => entry !== null);
@@ -968,9 +970,10 @@ export class DixitRealtime {
     this.privateHandSignal.set({
       lobbyCode,
       hand,
+      board,
       receivedAt: Date.now(),
     });
-    this.debug('event server:game:private_hand', { lobbyCode, hand });
+    this.debug('event server:game:private_hand', { lobbyCode, hand, board });
   }
 
   // Las cartas pueden viajar como número o string según el evento de backend.
@@ -1010,6 +1013,26 @@ export class DixitRealtime {
     return {
       ...card,
       id,
+    };
+  }
+
+  private normalizePrivateBoard(value: unknown): RealtimePrivateBoard | null {
+    const board = asRecord(value);
+    if (!board) {
+      return null;
+    }
+
+    const id = readString(board, 'id');
+    const name = readString(board, 'name');
+    const urlImage = readString(board, 'url_image');
+    if (!id || !name || !urlImage) {
+      return null;
+    }
+
+    return {
+      id,
+      name,
+      url_image: urlImage,
     };
   }
 
