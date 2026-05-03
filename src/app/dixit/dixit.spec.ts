@@ -136,6 +136,27 @@ describe('Dixit', () => {
     expect(component.pointsStage).toBe('ranking');
   });
 
+  it('shows a non-blocking connection overlay instead of the fullscreen error when the websocket disconnects', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'HAND',
+        currentRound: {},
+      },
+      receivedAt: Date.now(),
+    });
+    realtimeSpy.connectionStatus.and.returnValue('disconnected');
+    component.errorMessage = 'Websocket error';
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+
+    expect(text).toContain('Se ha perdido conexion con el websocket.');
+    expect(text).not.toContain('Websocket error');
+    expect(text).toContain('Perfil');
+  });
+
   it('hydrates players and scores from state player ids plus state.scores', async () => {
     await initializeComponent(fixture);
 

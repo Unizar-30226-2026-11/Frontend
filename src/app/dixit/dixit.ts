@@ -119,6 +119,7 @@ export class Dixit implements OnInit, OnDestroy {
   boardTokens: TrackBoardToken[] = [];
   loading = true;
   errorMessage = '';
+  realtimeErrorMessage = '';
   selectedHandCardCode = '';
   selectedChoiceCardCode = '';
   handSubmitted = false;
@@ -169,6 +170,7 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAppliedModeChangeOfferAt = 0;
+  private hasHydratedRealtimePresentation = false;
   modeChangeOfferSecondsLeft = 0;
   starClaimSequence = 0;
 
@@ -227,14 +229,20 @@ export class Dixit implements OnInit, OnDestroy {
         // Propaga errores de socket/servidor a la capa visual sin bloquear
         // la reactividad del resto de eventos.
         const realtimeError = this.realtime.lastError();
-        if (!realtimeError || this.realtime.activeLobbyCode() !== this.id) {
+        if (this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        if (!realtimeError) {
+          this.realtimeErrorMessage = '';
+          this.cdr.detectChanges();
           return;
         }
 
         if (!this.currentClue.trim()) {
           this.storySubmitted = false;
         }
-        this.errorMessage = realtimeError;
+        this.realtimeErrorMessage = realtimeError;
         this.loading = false;
         this.cdr.detectChanges();
       },
@@ -505,6 +513,19 @@ export class Dixit implements OnInit, OnDestroy {
       default:
         return 'Pendiente';
     }
+  }
+
+  get showConnectionOverlay(): boolean {
+    const status = this.realtime.connectionStatus();
+    return !this.loading && this.hasHydratedRealtimePresentation && (status === 'disconnected' || status === 'error');
+  }
+
+  get connectionOverlayMessage(): string {
+    return 'Se ha perdido conexion con el websocket.';
+  }
+
+  get blockingErrorMessage(): string {
+    return this.errorMessage || this.realtimeErrorMessage;
   }
 
   get currentUserId(): string {
@@ -805,6 +826,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    this.hasHydratedRealtimePresentation = true;
     const state = update.state;
     const currentRoundState = this.resolveCurrentRoundState(state);
     const resolvedPhaseState = this.resolveRealtimePhase(state, update.lastAction);
@@ -945,6 +967,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   // --- Normalizacion de payloads realtime ---------------------------------
   private applyRealtimePlayers(state: Record<string, unknown>): void {
+    this.hasHydratedRealtimePresentation = true;
     // Algunos payloads repiten datos de jugadores dentro del state público.
     // Si existen, se priorizan para mantener nombres/ids coherentes con backend.
     const shouldApplyRealtimeScores =
@@ -1156,6 +1179,7 @@ export class Dixit implements OnInit, OnDestroy {
     boardImageUrl?: string | null
   ): boolean {
     // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
+    this.hasHydratedRealtimePresentation = true;
     this.latestPrivateHand = [...hand];
     const nextBoardImageUrl = typeof boardImageUrl === 'string' ? boardImageUrl.trim() : '';
     const boardImageChanged = this.activeBoardImageUrl !== nextBoardImageUrl;

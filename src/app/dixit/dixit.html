@@ -13,15 +13,21 @@
         <article class="status-card">
           <p>Conectando con la mesa...</p>
         </article>
-      } @else if (errorMessage) {
+      } @else if (blockingErrorMessage && !showConnectionOverlay) {
         <article class="status-card error">
-          <p>{{ errorMessage }}</p>
+          <p>{{ blockingErrorMessage }}</p>
         </article>
       } @else if (phase === 'choice' && choiceCards.length === 0) {
         <article class="status-card">
           <p>Esperando a que el servidor envie las cartas para votar.</p>
         </article>
       } @else {
+        @if (showConnectionOverlay) {
+          <article class="connection-overlay" role="status" aria-live="polite">
+            <p>{{ connectionOverlayMessage }}</p>
+          </article>
+        }
+
         <div class="table-main">
           @if (phase === 'choice') {
             <app-dixit-choice-phase
