@@ -26,6 +26,7 @@ export interface DixitRankingRow {
         [title]="'Marcador de la mesa'"
         [subtitle]="'Preparado para recibir posiciones y eventos reales del backend.'"
         [tokens]="boardTokens"
+        [boardImageUrl]="boardImageUrl"
         [showControls]="false"
         [interactive]="false"
       />
@@ -246,6 +247,7 @@ export interface DixitRankingRow {
 })
 export class DixitPointsPhase {
   @Input() boardTokens: TrackBoardToken[] = [];
+  @Input() boardImageUrl = '';
   @Input() waitingVotes = false;
   @Input() votesReceived = 0;
   @Input() votesTotal = 0;

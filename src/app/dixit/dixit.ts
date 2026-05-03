@@ -60,7 +60,11 @@ import {
   resolveCurrentPlayerSpecialCells,
   rotateCards,
 } from './dixit.logic';
-import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
+import type {
+  DixitChatComposer,
+  DixitHandLimitModifier,
+  DixitPlayerRow,
+} from './dixit-phase.models';
 import {
   FinalResultsOverlay,
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
@@ -102,6 +106,7 @@ export class Dixit implements OnInit, OnDestroy {
   private ownedCards: DeckCard[] = [];
   private latestPrivateHand: RealtimePrivateHandEntry[] = [];
   private activeBoardImageUrl = '';
+  private activeHandLimitModifier: DixitHandLimitModifier | null = null;
   private submittedHandRoundNumber: number | null = null;
   private readonly dynamicCardUrls = new Map<string, string>();
 
@@ -592,6 +597,14 @@ export class Dixit implements OnInit, OnDestroy {
     };
   }
 
+  get boardImageUrl(): string {
+    return this.activeBoardImageUrl;
+  }
+
+  get handLimitModifier(): DixitHandLimitModifier | null {
+    return this.activeHandLimitModifier;
+  }
+
   get playerRows(): DixitPlayerRow[] {
     return this.playerRoster.map((player) => ({
       ...player,
@@ -831,6 +844,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     this.applyRealtimePlayers(state);
     this.applyRealtimeScores(state);
+    this.applyRealtimeModifiers(state);
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
@@ -1017,6 +1031,39 @@ export class Dixit implements OnInit, OnDestroy {
     if (hasAnyScore) {
       this.boardTokens = this.buildBoardTokensFromScores();
     }
+  }
+
+  private applyRealtimeModifiers(state: Record<string, unknown>): void {
+    this.activeHandLimitModifier = this.resolveHandLimitModifier(state);
+  }
+
+  private resolveHandLimitModifier(state: Record<string, unknown>): DixitHandLimitModifier | null {
+    const modifiers = asRecord(state['activeModifiers']);
+    if (!modifiers) {
+      return null;
+    }
+
+    for (const modifierValue of Object.values(modifiers)) {
+      const modifier = asRecord(modifierValue);
+      if (!modifier) {
+        continue;
+      }
+
+      const type = this.readStringFromCandidates(modifier, ['type']);
+      const value = this.readNumber(modifier, ['value']);
+      const turnsLeft = this.readNumber(modifier, ['turnsLeft']);
+      if (type !== 'HAND_LIMIT' || value === null || turnsLeft === null) {
+        continue;
+      }
+
+      return {
+        type: 'HAND_LIMIT',
+        value,
+        turnsLeft,
+      };
+    }
+
+    return null;
   }
 
   private applyRealtimeCards(state: Record<string, unknown>): void {

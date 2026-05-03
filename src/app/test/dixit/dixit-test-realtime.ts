@@ -28,6 +28,12 @@ interface SimulatorPlayerState {
   voteCardCode: string | null;
 }
 
+interface SimulatorActiveModifier {
+  type: 'HAND_LIMIT';
+  value: number;
+  turnsLeft: number;
+}
+
 export interface DixitSimulatorLogEntry {
   id: number;
   timestamp: string;
@@ -43,6 +49,7 @@ export interface DixitSimulatorSnapshot {
   boardCards: string[];
   playedCards: Record<string, string>;
   votes: Array<{ voterId: string; targetCardCode: string }>;
+  activeModifiers: Record<string, SimulatorActiveModifier>;
   players: Array<{
     id: string;
     username: string;
@@ -117,6 +124,7 @@ export class DixitRealtimeSimulator {
   private storytellerId = CURRENT_USER_ID;
   private clue = '';
   private players: SimulatorPlayerState[] = [];
+  private activeModifiers: Record<string, SimulatorActiveModifier> = {};
   private finalBalance = DEFAULT_FINAL_BALANCE;
   private logSequence = 0;
   private minigameTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -356,6 +364,7 @@ export class DixitRealtimeSimulator {
     this.phase = 'hand';
     this.storytellerId = CURRENT_USER_ID;
     this.clue = '';
+    this.activeModifiers = {};
     this.finalBalance = DEFAULT_FINAL_BALANCE;
     this.lastMinigameResolution = null;
     this.dealHandsForRound();
@@ -504,6 +513,29 @@ export class DixitRealtimeSimulator {
 
     player.score = Math.max(0, Math.round(nextScore));
     this.emitGameState('SIM_SCORE_UPDATED');
+  }
+
+  setHandLimitModifier(value: number, turnsLeft: number): void {
+    const normalizedValue = Math.trunc(value) || 1;
+    const normalizedTurnsLeft = Math.max(1, Math.floor(turnsLeft));
+    this.activeModifiers = {
+      hand_limit: {
+        type: 'HAND_LIMIT',
+        value: normalizedValue,
+        turnsLeft: normalizedTurnsLeft,
+      },
+    };
+    this.emitGameState('SIM_HAND_LIMIT_MODIFIER_UPDATED');
+    const signedValue = normalizedValue > 0 ? `+${normalizedValue}` : `${normalizedValue}`;
+    this.pushLog(
+      `Modificador HAND_LIMIT activado: ${signedValue} carta(s) durante ${normalizedTurnsLeft} turno(s).`
+    );
+  }
+
+  clearHandLimitModifier(): void {
+    this.activeModifiers = {};
+    this.emitGameState('SIM_HAND_LIMIT_MODIFIER_CLEARED');
+    this.pushLog('Modificador HAND_LIMIT desactivado.');
   }
 
   finishGame(reason = 'Fin de partida simulado.'): void {
@@ -699,6 +731,7 @@ export class DixitRealtimeSimulator {
     const state: Record<string, unknown> = {
       phase: this.mapPhaseForRealtime(),
       roundNumber: this.roundNumber,
+      activeModifiers: { ...this.activeModifiers },
       players: this.players.map((player) => ({
         id: player.id,
         username: player.username,
@@ -740,6 +773,7 @@ export class DixitRealtimeSimulator {
         voterId: entry.voterId,
         targetCardCode: String(entry.targetCardId),
       })),
+      activeModifiers: { ...this.activeModifiers },
       lastMinigameResolution: this.lastMinigameResolution,
       players: this.players.map((player) => ({
         id: player.id,

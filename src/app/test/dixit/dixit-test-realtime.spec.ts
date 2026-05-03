@@ -48,4 +48,25 @@ describe('DixitRealtimeSimulator', () => {
     expect(service.gameEndedResult()?.ranking.length).toBe(4);
     expect(service.walletUpdated()?.balance).toBeGreaterThan(250);
   });
+
+  it('can publish a HAND_LIMIT modifier in the simulated game state', async () => {
+    await service.ensureLobbyConnection('sandbox-9');
+
+    service.setHandLimitModifier(1, 3);
+
+    expect(service.gameState()?.state['activeModifiers']).toEqual({
+      hand_limit: {
+        type: 'HAND_LIMIT',
+        value: 1,
+        turnsLeft: 3,
+      },
+    });
+    expect(service.simulatorSnapshot()?.activeModifiers).toEqual({
+      hand_limit: {
+        type: 'HAND_LIMIT',
+        value: 1,
+        turnsLeft: 3,
+      },
+    });
+  });
 });

@@ -168,6 +168,52 @@ const TEST_CARD_CATALOG: DeckCard[] = [
           </article>
 
           <article class="sim-card">
+            <p class="eyebrow">Modifier</p>
+            <h3>HAND_LIMIT</h3>
+            <p>
+              Activa el modificador global para ver el icono en la zona de <strong>Tu mano</strong>
+              dentro del Dixit clasico.
+            </p>
+
+            <div class="facts">
+              <span>
+                <strong>Activo</strong>
+                <em>{{ snapshot?.activeModifiers?.['hand_limit'] ? 'Si' : 'No' }}</em>
+              </span>
+              <span>
+                <strong>Turnos</strong>
+                <em>{{ snapshot?.activeModifiers?.['hand_limit']?.turnsLeft ?? handLimitTurnsLeft }}</em>
+              </span>
+              <span>
+                <strong>Value</strong>
+                <em>{{ snapshot?.activeModifiers?.['hand_limit']?.value ?? 0 }}</em>
+              </span>
+            </div>
+
+            <label class="field">
+              <span>Turnos restantes</span>
+              <input
+                type="number"
+                min="1"
+                [value]="handLimitTurnsLeft"
+                (input)="handLimitTurnsLeft = readNumberInput($event, handLimitTurnsLeft)"
+              />
+            </label>
+
+            <div class="button-grid">
+              <button type="button" class="primary" (click)="activateHandLimitModifier(1)">
+                Activar +1
+              </button>
+              <button type="button" (click)="activateHandLimitModifier(-1)">
+                Activar -1
+              </button>
+              <button type="button" class="secondary" (click)="clearHandLimitModifier()">
+                Limpiar modifier
+              </button>
+            </div>
+          </article>
+
+          <article class="sim-card">
             <p class="eyebrow">Marcador</p>
             <h3>Jugadores</h3>
             <div class="players">
@@ -500,6 +546,7 @@ export class DixitTestShell implements OnInit, OnDestroy {
   drawerOpen = true;
   clueDraft = '';
   starWinnerId = 'u_self';
+  handLimitTurnsLeft = 2;
 
   get snapshot(): DixitSimulatorSnapshot | null {
     return this.simulator.simulatorSnapshot();
@@ -549,6 +596,14 @@ export class DixitTestShell implements OnInit, OnDestroy {
   nextRound(): void {
     this.simulator.sendGameAction('NEXT_ROUND');
     this.clueDraft = '';
+  }
+
+  activateHandLimitModifier(value: number): void {
+    this.simulator.setHandLimitModifier(value, this.handLimitTurnsLeft);
+  }
+
+  clearHandLimitModifier(): void {
+    this.simulator.clearHandLimitModifier();
   }
 
   updateScore(playerId: string, nextScore: number): void {

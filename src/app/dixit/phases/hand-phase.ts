@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
 import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
-import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
+import {
+  DixitChatComposer,
+  DixitHandLimitModifier,
+  DixitPlayerRow,
+} from '../dixit-phase.models';
 
 @Component({
   selector: 'app-dixit-hand-phase',
@@ -15,6 +19,7 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
           [title]="''"
           [subtitle]="''"
           [tokens]="boardTokens"
+          [boardImageUrl]="boardImageUrl"
           [eventBackCells]="eventBackCells"
           [eventForwardCells]="eventForwardCells"
           [showControls]="false"
@@ -185,6 +190,15 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
               </div>
 
               <div class="section-header-side">
+                @if (handLimitModifier; as modifier) {
+                  <img
+                    class="hand-modifier-badge"
+                    [src]="modifier.value === 1 ? 'assets/modificador_hand_limit_plus.png' : 'assets/modificador_hand_limit.png'"
+                    [alt]="'Modificador de mano activo: ' + formatModifierValue(modifier.value)"
+                    [title]="handLimitModifierTooltip"
+                    draggable="false"
+                  />
+                }
                 @if (selectedCard) {
                   <button type="button" class="secondary-action" (click)="clearSelectionRequested.emit()">
                     Quitar
@@ -610,6 +624,16 @@ import { DixitChatComposer, DixitPlayerRow } from '../dixit-phase.models';
       margin-left: auto;
     }
 
+    .hand-modifier-badge {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      border-radius: 10px;
+      filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.24));
+      cursor: help;
+    }
+
     .hand-layout {
       display: block;
       min-height: 0;
@@ -790,6 +814,8 @@ export class DixitHandPhase {
   @Input() handSubmitButtonText = 'Jugar carta';
   @Input() players: DixitPlayerRow[] = [];
   @Input() boardTokens: TrackBoardToken[] = [];
+  @Input() boardImageUrl = '';
+  @Input() handLimitModifier: DixitHandLimitModifier | null = null;
   @Input() eventBackCells: number[] = [];
   @Input() eventForwardCells: number[] = [];
   @Input() chat: DixitChatComposer = {
@@ -820,6 +846,25 @@ export class DixitHandPhase {
     }
 
     return this.selectedCardCode;
+  }
+
+  get handLimitModifierTooltip(): string {
+    const modifier = this.handLimitModifier;
+    if (!modifier) {
+      return '';
+    }
+
+    const absoluteValue = Math.abs(modifier.value);
+    const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
+    const turnsLabel = modifier.turnsLeft === 1 ? '1 turno restante' : `${modifier.turnsLeft} turnos restantes`;
+    return `Modificador de mano activo: ${this.formatModifierValue(modifier.value)}. ${turnsLabel}.`;
+  }
+
+  formatModifierValue(value: number): string {
+    const absoluteValue = Math.abs(value);
+    const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
+    const signedValue = value > 0 ? `+${absoluteValue}` : value < 0 ? `-${absoluteValue}` : '0';
+    return `${signedValue} (${cardsLabel})`;
   }
 
   onClueDraftChanged(event: Event): void {

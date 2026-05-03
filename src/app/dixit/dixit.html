@@ -39,6 +39,7 @@
             <app-dixit-points-phase
               class="table-phase"
               [boardTokens]="boardTokens"
+              [boardImageUrl]="boardImageUrl"
               [waitingVotes]="pointsStage === 'waiting'"
               [votesReceived]="pointsVotesReceived"
               [votesTotal]="pointsVotesTotal"
@@ -65,6 +66,8 @@
               [handSubmitButtonText]="handSubmitButtonText"
               [players]="playerRows"
               [boardTokens]="boardTokens"
+              [boardImageUrl]="boardImageUrl"
+              [handLimitModifier]="handLimitModifier"
               [eventBackCells]="eventBackCellPositions"
               [eventForwardCells]="eventForwardCellPositions"
               [chat]="handChatComposer"
