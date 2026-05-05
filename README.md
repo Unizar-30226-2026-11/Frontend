@@ -1,60 +1,268 @@
-# Frontend
-Frontend development for Web
+# Proyecto Software Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.1.
+Frontend Angular del proyecto de juego basado en Dixit, con soporte para:
 
-## Development server
+- autenticacion y sesion persistente
+- lobby y listado de partidas
+- tienda, perfil y ajustes
+- modo clasico de Dixit
+- modo Stella
+- integracion realtime por websocket para estado de sala, partida, minijuegos y eventos especiales
 
-To start a local development server, run:
+## Stack
 
-```bash
-ng serve
-```
+- Angular 21 con componentes standalone
+- TypeScript
+- Angular Router
+- Signals de Angular para estado reactivo
+- Fetch API a traves de un cliente HTTP propio
+- WebSocket / Socket.IO a traves del servicio `DixitRealtime`
+- Nginx para despliegue del build estatico
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Requisitos
 
-## Code scaffolding
+- Node.js 22 o compatible
+- npm 11 o compatible
+- Backend disponible en `http://localhost:3000` para desarrollo local
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+## Scripts
 
 ```bash
-ng build
+npm install
+npm run start
+npm run build
+npm run test
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+### Desarrollo local
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+El proyecto usa `proxy.conf.json` para redirigir `/api` a `http://localhost:3000`, asi que en local basta con levantar backend y frontend:
 
 ```bash
-ng test
+npm install
+npm run start
 ```
 
-## Running end-to-end tests
+La aplicacion quedara disponible en `http://localhost:4200`.
 
-For end-to-end (e2e) testing, run:
+### Build de produccion
 
 ```bash
-ng e2e
+npm run build
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+El resultado se genera en `dist/proyecto-software-front/`.
 
-## Additional Resources
+### Tests
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+```bash
+npm run test
+```
+
+Los tests del repo estan escritos en formato Jasmine/Karma-style sobre el builder de Angular (`@angular/build:unit-test`), aunque tambien exista `vitest` como dependencia de desarrollo.
+
+## Docker
+
+El `Dockerfile` construye la app en una imagen `node:22-alpine` y despues sirve el resultado estatico con `nginx:1.27-alpine`.
+
+Flujo:
+
+1. `npm ci`
+2. `ng build --configuration production`
+3. copia de `dist/proyecto-software-front/browser` a `/usr/share/nginx/html`
+4. uso de `nginx/default.conf.template`
+
+## Rutas principales
+
+Definidas en [src/app/app.routes.ts](src/app/app.routes.ts):
+
+- `/` - portada
+- `/login` - acceso
+- `/register` - registro
+- `/menu` - menu principal
+- `/games` - listado de salas
+- `/games/:id` - lobby de una partida
+- `/game/:id` - shell unificado que decide entre Dixit clasico y Stella
+- `/store` - tienda
+- `/store/packs/:id` - detalle de pack
+- `/deck-builder` - constructor de mazos
+- `/profile` - perfil
+- `/settings` - ajustes / resumen de cuenta
+- `/test/dixit/:id` - shell de pruebas de Dixit
+- `/test/stella/:id` - shell de pruebas de Stella
+- `/test/star` - test visual de estrella fugaz
+
+Las rutas antiguas `/dixit/:id` y `/dixit-stella/:id` redirigen a `/game/:id`.
+
+## Arquitectura general
+
+### 1. Capa de paginas y componentes
+
+Cada pantalla principal vive en su propia carpeta bajo `src/app/` y suele exponerse como componente standalone:
+
+- `home/`
+- `login/`
+- `register/`
+- `main-menu/`
+- `games/`
+- `lobby-menu/`
+- `store/`
+- `profile/`
+- `settings/`
+- `deck-builder/`
+- `dixit/`
+- `dixit-stella/`
+
+### 2. Capa de servicios
+
+La carpeta `src/app/services/` concentra la logica de acceso a datos y estado compartido:
+
+- `api-client.ts`
+  Cliente base para peticiones REST contra `/api`.
+- `auth.ts`
+  Gestion de login, registro, refresco de sesion y persistencia local.
+- `player-store.ts`
+  Estado de jugador cargado en memoria.
+- `player-info-pull.ts`
+  Perfil, balance y mutaciones de cuenta.
+- `dixit-realtime.ts`
+  Servicio central de websocket para lobby, partida, chat, conflictos, minijuegos y cierre de partida.
+- `games-pull.ts`
+  Listado y detalle de partidas.
+- `card-pull.ts`, `stella-card-pull.ts`
+  Catalogos de cartas por modo.
+- `boards-pull.ts`
+  Inventario y activacion de tableros.
+- `decks-pull.ts`
+  Mazos del usuario y catalogo de tienda.
+- `collections-pull.ts`, `friends-pull.ts`
+  Otras consultas auxiliares.
+
+### 3. Capa de interfaces
+
+`src/app/interfaces/` contiene los contratos tipados del frontend:
+
+- auth
+- api
+- game
+- player-info
+- dixit-realtime
+- store-item
+- word-card
+
+## Como se selecciona el modo de juego
+
+La ruta `/game/:id` renderiza [src/app/game-shell/game-shell.ts](src/app/game-shell/game-shell.ts), que decide si debe montar:
+
+- `app-dixit`
+- `app-dixit-stella`
+
+La decision se toma a partir de:
+
+1. `realtime.gameState()?.state.mode`
+2. y, si aun no existe ese dato, `auth.activeGameEngine()`
+
+## Realtime
+
+El servicio [src/app/services/dixit-realtime.ts](src/app/services/dixit-realtime.ts) es una pieza central del proyecto. Gestiona:
+
+- union a lobby por REST antes de abrir socket
+- reconexion y restauracion de sesion activa
+- estado de lobby
+- estado publico de partida
+- mano privada
+- retos 1 vs 1
+- inicio de minijuegos
+- eventos especiales
+- chat
+- cierre de partida y actualizacion de wallet
+
+Este servicio expone gran parte de su estado mediante `signal` y `computed`.
+
+## Estructura del repositorio
+
+```text
+Frontend/
+|- src/
+|  |- app/
+|  |  |- components/        # componentes reutilizables de UI
+|  |  |- deck-builder/      # constructor de mazos
+|  |  |- dixit/             # modo clasico
+|  |  |  |- components/
+|  |  |  |- minijuegos/
+|  |  |  |- phases/
+|  |  |  |- styles/
+|  |  |- dixit-stella/      # modo Stella
+|  |  |- game-shell/        # selector de modo para /game/:id
+|  |  |- games/             # listado de salas y tarjetas de partida
+|  |  |- home/              # landing
+|  |  |- interfaces/        # contratos TypeScript
+|  |  |- lobby-menu/        # sala previa a la partida
+|  |  |- login/
+|  |  |- main-menu/
+|  |  |- profile/
+|  |  |- register/
+|  |  |- services/          # REST, auth, realtime, stores
+|  |  |- settings/
+|  |  |- shared/            # overlays y piezas compartidas
+|  |  |- store/             # tienda y packs
+|  |  |- test/              # shells de prueba manual
+|  |  |- app.routes.ts
+|  |  |- app.config.ts
+|  |  |- app.ts
+|  |- assets operativos de Angular
+|  |- styles.css
+|- assets/                  # imagenes y recursos del juego
+|- fonts/                   # tipografias
+|- nginx/                   # configuracion de nginx para despliegue
+|- public/                  # archivos publicos copiados tal cual al build
+|- .github/workflows/       # automatizacion CI/CD si aplica
+|- Dockerfile
+|- angular.json
+|- proxy.conf.json
+|- package.json
+```
+
+## Carpetas importantes dentro de `src/app/dixit`
+
+- `minijuegos/`
+  Minijuegos compartidos por los flujos realtime.
+- `phases/`
+  Vistas y logica de fases del juego clasico.
+- `components/`
+  Componentes visuales del tablero.
+- `dixit.logic.ts`
+  Utilidades de calculo y transformacion de estado.
+- `dixit.constants.ts`
+  Constantes de flujo y configuracion visual.
+
+## Convenciones del proyecto
+
+- Se usan componentes standalone en lugar de `NgModule` clasicos.
+- El acceso a backend se hace a traves de servicios concretos apoyados en `ApiClient`.
+- La logica realtime no se mezcla directamente con fetch REST salvo donde tiene sentido funcional.
+- El estado de autenticacion y de partida activa se persiste en `localStorage`.
+- Muchas pantallas tienen sus propios `.spec.ts`.
+
+## Recursos auxiliares del repo
+
+- `DixitStella_sin_entidades.md`
+  Documento funcional relacionado con Stella.
+- `Sockets Partida · Wiki.html`
+  Documentacion exportada sobre eventos de socket y flujo de partida.
+
+## Recomendaciones para trabajar en el proyecto
+
+- Si tocas rutas o flujos de sesion, revisa tambien los guards en `app.routes.ts`.
+- Si tocas modos de juego, comprueba si el cambio afecta tanto a `dixit/` como a `dixit-stella/`.
+- Si tocas contratos de backend, revisa `interfaces/` y los normalizadores de `services/`.
+- Si tocas minijuegos o eventos realtime, valida la integracion con `DixitRealtime`.
+
+## Estado actual del README
+
+Este documento intenta describir la estructura real del repo a fecha actual. Si se anaden nuevas areas funcionales, conviene actualizar:
+
+- rutas
+- estructura de carpetas
+- servicios disponibles
+- flujo de despliegue
