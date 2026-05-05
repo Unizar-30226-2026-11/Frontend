@@ -276,12 +276,22 @@ describe('DixitRealtime', () => {
     await connectionPromise;
 
     socket.trigger('server:game:private_hand', {
+      board: {
+        id: 'b_1',
+        name: 'CLASSIC',
+        url_image: 'https://cdn.example.com/boards/classic.webp',
+      },
       hand: [1, '2', { id: 3, url_image: 'https://cdn.example.com/card-3.webp' }, null, ''],
     });
 
     expect(service.privateHand()).toEqual(
       jasmine.objectContaining({
         lobbyCode: 'A1B2',
+        board: jasmine.objectContaining({
+          id: 'b_1',
+          name: 'CLASSIC',
+          url_image: 'https://cdn.example.com/boards/classic.webp',
+        }),
         hand: [1, '2', jasmine.objectContaining({ id: 3, url_image: 'https://cdn.example.com/card-3.webp' })],
       })
     );
@@ -322,6 +332,67 @@ describe('DixitRealtime', () => {
       jasmine.objectContaining({
         lobbyCode: 'A1B2',
         hand: [jasmine.objectContaining({ id: 17, cardId: 17 })],
+      })
+    );
+  });
+
+  it('preserves string card ids and board metadata from the current backend private_hand payload', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+    socket.trigger('connect');
+    await connectionPromise;
+
+    socket.trigger('server:game:private_hand', {
+      board: {
+        id: 'b_6',
+        name: 'BOARD_3',
+        url_image: 'https://assets.keystudios.app/boards/Board_3.png',
+      },
+      hand: [
+        { id: 'c_31' },
+        { id: 'c_9' },
+        { id: 'c_48' },
+        { id: 'c_2' },
+        { id: 'c_42' },
+      ],
+    });
+
+    expect(service.privateHand()).toEqual(
+      jasmine.objectContaining({
+        lobbyCode: 'A1B2',
+        board: jasmine.objectContaining({
+          id: 'b_6',
+          name: 'BOARD_3',
+          url_image: 'https://assets.keystudios.app/boards/Board_3.png',
+        }),
+        hand: [
+          jasmine.objectContaining({ id: 'c_31' }),
+          jasmine.objectContaining({ id: 'c_9' }),
+          jasmine.objectContaining({ id: 'c_48' }),
+          jasmine.objectContaining({ id: 'c_2' }),
+          jasmine.objectContaining({ id: 'c_42' }),
+        ],
       })
     );
   });

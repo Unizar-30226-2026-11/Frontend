@@ -10,7 +10,14 @@
         </header>
       }
 
-      <div class="track-board">
+      <div
+        class="track-board"
+        [class.has-board-image]="!!resolvedBoardImageUrl"
+        [style.--board-image]="'url(' + resolvedBoardImageUrl + ')'"
+      >
+        @if (resolvedBoardImageUrl) {
+          <div class="board-image-layer" aria-hidden="true"></div>
+        }
         @for (cell of boardCells; track cell.index) {
           <div
             class="track-cell"

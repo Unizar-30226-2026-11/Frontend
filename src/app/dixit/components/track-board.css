@@ -25,6 +25,7 @@
     }
 
     .track-board {
+      --board-image: none;
       position: relative;
       width: 100%;
       aspect-ratio: 15 / 3.8;
@@ -35,6 +36,30 @@
         radial-gradient(circle at 82% 72%, rgba(71, 126, 210, 0.28) 0%, rgba(0, 0, 0, 0) 42%),
         linear-gradient(125deg, rgba(19, 80, 88, 0.9), rgba(14, 31, 62, 0.95));
       border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .board-image-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-image:
+        linear-gradient(125deg, rgba(19, 80, 88, 0.28), rgba(14, 31, 62, 0.5)),
+        var(--board-image);
+      background-size: cover;
+      background-position: center;
+      filter: saturate(1.04) contrast(1.02);
+      transform: scale(1.02);
+    }
+
+    .track-board.has-board-image::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16) 0%, rgba(0, 0, 0, 0) 38%),
+        linear-gradient(180deg, rgba(4, 10, 18, 0.1), rgba(4, 10, 18, 0.24));
+      pointer-events: none;
     }
 
     .board-overlay-slot {
@@ -55,6 +80,7 @@
       --cell-border: rgba(56, 63, 78, 0.5);
       --cell-inset: rgba(255, 255, 255, 0.55);
       position: absolute;
+      z-index: 2;
       width: clamp(26px, 3.55cqw, 54px);
       aspect-ratio: 1;
       transform: translate(-50%, -50%);

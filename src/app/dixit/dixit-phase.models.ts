@@ -13,3 +13,9 @@ export interface DixitChatComposer {
   canSend: boolean;
   messages: RealtimeChatMessage[];
 }
+
+export interface DixitHandLimitModifier {
+  type: 'HAND_LIMIT';
+  value: number;
+  turnsLeft: number;
+}

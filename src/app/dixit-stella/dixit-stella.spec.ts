@@ -224,6 +224,28 @@ describe('DixitStella', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });
 
+  it('maps realtime minigame type 2 to the third shared minigame in stella', async () => {
+    realtimeStub.minigameStart.and.returnValue({
+      player1: 'u_111',
+      player2: 'u_222',
+      type: 2,
+      duration: 15_000,
+      isDuel: false,
+      receivedAt: 2,
+    });
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(component.isMinigame2Open).toBeFalse();
+    expect(component.isMinigame3Open).toBeTrue();
+    expect(fixture.nativeElement.textContent as string).toContain('Recoge las manzanas');
+  });
+
   it('reuses the shared final overlay when the stella match is finished', async () => {
     realtimeStub.gameState.and.returnValue(
       createRealtimeState({

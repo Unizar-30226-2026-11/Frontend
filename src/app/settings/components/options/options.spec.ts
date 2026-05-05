@@ -1,61 +1,124 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { signal } from '@angular/core';
-import { Options } from './options';
-import { SettingsPreferencesStore } from '../../../services/settings-preferences-store';
 import { Auth } from '../../../services/auth';
+import { BoardsPull } from '../../../services/boards-pull';
+import { CardPull } from '../../../services/card-pull';
 import { PlayerStore } from '../../../services/player-store';
+import { Options } from './options';
 
 describe('Options', () => {
   let component: Options;
   let fixture: ComponentFixture<Options>;
   let authSpy: jasmine.SpyObj<Auth>;
-  let playerStoreSpy: jasmine.SpyObj<PlayerStore>;
+  let playerStoreSpy: jasmine.SpyObj<PlayerStore> & {
+    player: ReturnType<typeof signal>;
+    loading: ReturnType<typeof signal>;
+    error: ReturnType<typeof signal>;
+  };
+  let cardPullSpy: jasmine.SpyObj<CardPull>;
+  let boardsPullSpy: jasmine.SpyObj<BoardsPull>;
   let router: Router;
 
   beforeEach(async () => {
-    authSpy = jasmine.createSpyObj<Auth>('Auth', ['logOut']);
-    playerStoreSpy = jasmine.createSpyObj<PlayerStore>('PlayerStore', ['clearPlayer']);
+    authSpy = jasmine.createSpyObj<Auth>('Auth', ['logOut', 'isLoggedIn']);
+    authSpy.isLoggedIn.and.returnValue(true);
+
+    playerStoreSpy = Object.assign(
+      jasmine.createSpyObj<PlayerStore>('PlayerStore', [
+        'clearPlayer',
+        'loadPlayer',
+        'deleteAccount',
+      ]),
+      {
+        player: signal({
+          id: 'player-1',
+          legacyUserId: 7,
+          username: 'tester',
+          email: 'tester@example.com',
+          experienceLevel: 1,
+          progressLevel: 25,
+          state: 'CONNECTED' as const,
+          personalState: 'CONNECTED',
+          balance: 100,
+        }),
+        loading: signal(false),
+        error: signal<string | null>(null),
+      }
+    );
+    playerStoreSpy.loadPlayer.and.resolveTo();
+    playerStoreSpy.deleteAccount.and.resolveTo('Cuenta eliminada correctamente');
+
+    cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
+    cardPullSpy.getCards.and.resolveTo([
+      { code: 'card-1', image: '', value: 'A', suit: 'DIXIT' },
+      { code: 'card-2', image: '', value: 'B', suit: 'DIXIT' },
+    ]);
+
+    boardsPullSpy = jasmine.createSpyObj<BoardsPull>('BoardsPull', ['getUserBoards']);
+    boardsPullSpy.getUserBoards.and.resolveTo([
+      { id: 'board-1', image: '' },
+      { id: 'board-2', image: '' },
+      { id: 'board-3', image: '' },
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [Options],
       providers: [
         provideRouter([]),
-        {
-          provide: SettingsPreferencesStore,
-          useValue: {
-            settings: signal({
-              soundVolume: 100,
-              musicVolume: 100,
-              notificationsEnabled: false,
-              showOnlineStatus: false,
-            }),
-            save: jasmine.createSpy('save'),
-          },
-        },
         { provide: Auth, useValue: authSpy },
         { provide: PlayerStore, useValue: playerStoreSpy },
+        { provide: CardPull, useValue: cardPullSpy },
+        { provide: BoardsPull, useValue: boardsPullSpy },
       ],
     }).compileComponents();
 
     router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
+  });
 
+  async function createComponent(): Promise<void> {
     fixture = TestBed.createComponent(Options);
     component = fixture.componentInstance;
     fixture.detectChanges();
     await fixture.whenStable();
-  });
+    fixture.detectChanges();
+  }
 
-  it('should create', () => {
+  it('should create', async () => {
+    await createComponent();
+
     expect(component).toBeTruthy();
   });
 
-  it('clears the player store before logging out', () => {
+  it('loads cards and boards counters on init', async () => {
+    await createComponent();
+
+    expect(cardPullSpy.getCards).toHaveBeenCalled();
+    expect(boardsPullSpy.getUserBoards).toHaveBeenCalled();
+    expect(component.cardsCount()).toBe(2);
+    expect(component.boardsCount()).toBe(3);
+  });
+
+  it('clears the player store before logging out', async () => {
+    await createComponent();
+
     component.cerrarSesion();
 
     expect(playerStoreSpy.clearPlayer).toHaveBeenCalledBefore(authSpy.logOut);
     expect(authSpy.logOut).toHaveBeenCalledOnceWith();
     expect(router.navigate).toHaveBeenCalledOnceWith(['/login']);
+  });
+
+  it('deletes the account after confirmation', async () => {
+    await createComponent();
+    spyOn(window, 'confirm').and.returnValue(true);
+
+    await component.eliminarCuenta();
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(playerStoreSpy.deleteAccount).toHaveBeenCalledOnceWith();
+    expect(authSpy.logOut).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/login']);
   });
 });

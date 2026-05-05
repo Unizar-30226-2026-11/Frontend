@@ -84,6 +84,7 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
   @Input() title = 'Tablero';
   @Input() subtitle = '';
   @Input() tokens: TrackBoardToken[] = [];
+  @Input() boardImageUrl = '';
   @Input() showControls = true;
   @Input() interactive = true;
   @Input() cellPath: TrackPoint[] | null = null;
@@ -172,6 +173,10 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
 
   isAnyTokenMoving(): boolean {
     return this.movingTokenIds.size > 0;
+  }
+
+  get resolvedBoardImageUrl(): string {
+    return this.boardImageUrl.trim();
   }
 
   private animateTokenMove(tokenId: string, steps: number): void {

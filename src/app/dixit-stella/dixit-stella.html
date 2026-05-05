@@ -448,6 +448,27 @@
       }
     }
 
+    @if (isMinigame3Open) {
+      <app-dixit-minijuego-3
+        [durationMs]="activeMinigameDurationMs"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        (close)="closeMinigame3()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="modal-backdrop">
+          <article class="modal-card minigame-status-card" role="dialog" aria-modal="true">
+            <div class="modal-copy">
+              <p class="eyebrow">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+              <h3>{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h3>
+              <p>{{ minigameStatusMessage }}</p>
+            </div>
+          </article>
+        </div>
+      }
+    }
+
     @if (phase === 'FINISHED') {
       <app-final-results-overlay
         eyebrow="Fin de partida"

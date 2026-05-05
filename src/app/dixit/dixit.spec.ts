@@ -136,6 +136,27 @@ describe('Dixit', () => {
     expect(component.pointsStage).toBe('ranking');
   });
 
+  it('shows a non-blocking connection overlay instead of the fullscreen error when the websocket disconnects', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'HAND',
+        currentRound: {},
+      },
+      receivedAt: Date.now(),
+    });
+    realtimeSpy.connectionStatus.and.returnValue('disconnected');
+    component.errorMessage = 'Websocket error';
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+
+    expect(text).toContain('Se ha perdido conexion con el websocket.');
+    expect(text).not.toContain('Websocket error');
+    expect(text).toContain('Perfil');
+  });
+
   it('hydrates players and scores from state player ids plus state.scores', async () => {
     await initializeComponent(fixture);
 
@@ -473,6 +494,79 @@ describe('Dixit', () => {
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SUBMIT_CARD', {
       cardId: 17,
     });
+  });
+
+  it('submits string card ids from the current private_hand payload without coercing them', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SUBMISSION',
+        currentRound: {
+          storytellerId: 'cpu_1',
+          clue: 'Una pista real',
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    component['applyRealtimePrivateHand']([
+      { id: 'c_31' },
+      { id: 'c_9' },
+      { id: 'c_48' },
+      { id: 'c_2' },
+      { id: 'c_42' },
+    ]);
+
+    component.onHandCardSelected(component.cards[0]);
+    component.submitHandSelection();
+
+    expect(component.selectedHandCardCode).toBe('c_31');
+    expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('SUBMIT_CARD', {
+      cardId: 'c_31',
+    });
+  });
+
+  it('shows the active hand limit modifier beside the hand actions with turns and added cards in the tooltip', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        activeModifiers: {
+          mod_1: {
+            type: 'HAND_LIMIT',
+            value: 1,
+            turnsLeft: 2,
+          },
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    const modifierBadge = fixture.nativeElement.querySelector(
+      '.hand-modifier-badge'
+    ) as HTMLImageElement | null;
+
+    expect(component.handLimitModifier).toEqual({
+      type: 'HAND_LIMIT',
+      value: 1,
+      turnsLeft: 2,
+    });
+    expect(modifierBadge).not.toBeNull();
+    expect(modifierBadge?.getAttribute('src')).toContain('assets/modificador_hand_limit_plus.png');
+    expect(modifierBadge?.getAttribute('title')).toContain('+1 carta');
+    expect(modifierBadge?.getAttribute('title')).toContain('2 turnos restantes');
+  });
+
+  it('uses the board image from private_hand as the fallback card image in classic dixit', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimePrivateHand'](
+      [17],
+      'https://cdn.example.com/boards/classic.webp'
+    );
+
+    expect(component.cards[0]?.image).toBe('https://cdn.example.com/boards/classic.webp');
   });
 
   it('keeps the same rendered hand entries when private_hand arrives with the same cards', async () => {

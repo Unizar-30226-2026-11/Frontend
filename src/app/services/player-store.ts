@@ -110,6 +110,12 @@ export class PlayerStore {
     return message;
   }
 
+  async deleteAccount(): Promise<string> {
+    const message = await this.playerInfoPull.deleteAccount();
+    this.clearPlayer();
+    return message;
+  }
+
   clearPlayer(): void {
     this.player.set(null);
     this.loading.set(false);

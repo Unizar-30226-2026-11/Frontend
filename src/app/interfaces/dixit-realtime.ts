@@ -79,7 +79,14 @@ export interface RealtimeWalletUpdated {
 export interface RealtimePrivateHand {
   lobbyCode: string;
   hand: RealtimePrivateHandEntry[];
+  board?: RealtimePrivateBoard | null;
   receivedAt: number;
+}
+
+export interface RealtimePrivateBoard {
+  id: string;
+  name: string;
+  url_image: string;
 }
 
 export type RealtimePrivateHandEntry =

@@ -60,7 +60,11 @@ import {
   resolveCurrentPlayerSpecialCells,
   rotateCards,
 } from './dixit.logic';
-import type { DixitChatComposer, DixitPlayerRow } from './dixit-phase.models';
+import type {
+  DixitChatComposer,
+  DixitHandLimitModifier,
+  DixitPlayerRow,
+} from './dixit-phase.models';
 import {
   FinalResultsOverlay,
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
@@ -101,6 +105,8 @@ export class Dixit implements OnInit, OnDestroy {
   private currentRoundPlayers: RoundPlayer[] = [];
   private ownedCards: DeckCard[] = [];
   private latestPrivateHand: RealtimePrivateHandEntry[] = [];
+  private activeBoardImageUrl = '';
+  private activeHandLimitModifier: DixitHandLimitModifier | null = null;
   private submittedHandRoundNumber: number | null = null;
   private readonly dynamicCardUrls = new Map<string, string>();
 
@@ -113,6 +119,7 @@ export class Dixit implements OnInit, OnDestroy {
   boardTokens: TrackBoardToken[] = [];
   loading = true;
   errorMessage = '';
+  realtimeErrorMessage = '';
   selectedHandCardCode = '';
   selectedChoiceCardCode = '';
   handSubmitted = false;
@@ -163,6 +170,7 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAppliedModeChangeOfferAt = 0;
+  private hasHydratedRealtimePresentation = false;
   modeChangeOfferSecondsLeft = 0;
   starClaimSequence = 0;
 
@@ -209,7 +217,7 @@ export class Dixit implements OnInit, OnDestroy {
           return;
         }
 
-        if (this.applyRealtimePrivateHand(privateHand.hand)) {
+        if (this.applyRealtimePrivateHand(privateHand.hand, privateHand.board?.url_image ?? null)) {
           this.cdr.detectChanges();
         }
       },
@@ -221,14 +229,20 @@ export class Dixit implements OnInit, OnDestroy {
         // Propaga errores de socket/servidor a la capa visual sin bloquear
         // la reactividad del resto de eventos.
         const realtimeError = this.realtime.lastError();
-        if (!realtimeError || this.realtime.activeLobbyCode() !== this.id) {
+        if (this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        if (!realtimeError) {
+          this.realtimeErrorMessage = '';
+          this.cdr.detectChanges();
           return;
         }
 
         if (!this.currentClue.trim()) {
           this.storySubmitted = false;
         }
-        this.errorMessage = realtimeError;
+        this.realtimeErrorMessage = realtimeError;
         this.loading = false;
         this.cdr.detectChanges();
       },
@@ -406,7 +420,7 @@ export class Dixit implements OnInit, OnDestroy {
 
       this.ownedCards = await this.cardPull.getCards(this.maxPlayersPerMatch);
       if (this.latestPrivateHand.length > 0) {
-        this.applyRealtimePrivateHand(this.latestPrivateHand);
+        this.applyRealtimePrivateHand(this.latestPrivateHand, this.activeBoardImageUrl);
       } else if (this.cards.length === 0) {
         this.cards = [...this.ownedCards];
       }
@@ -501,6 +515,19 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
+  get showConnectionOverlay(): boolean {
+    const status = this.realtime.connectionStatus();
+    return !this.loading && this.hasHydratedRealtimePresentation && (status === 'disconnected' || status === 'error');
+  }
+
+  get connectionOverlayMessage(): string {
+    return 'Se ha perdido conexion con el websocket.';
+  }
+
+  get blockingErrorMessage(): string {
+    return this.errorMessage || this.realtimeErrorMessage;
+  }
+
   get currentUserId(): string {
     return this.auth.session()?.user.id ?? '';
   }
@@ -589,6 +616,14 @@ export class Dixit implements OnInit, OnDestroy {
       canSend: this.realtime.connectionStatus() === 'connected' && this.chatDraft.trim().length > 0,
       messages: this.realtime.chatMessages().slice(-20),
     };
+  }
+
+  get boardImageUrl(): string {
+    return this.activeBoardImageUrl;
+  }
+
+  get handLimitModifier(): DixitHandLimitModifier | null {
+    return this.activeHandLimitModifier;
   }
 
   get playerRows(): DixitPlayerRow[] {
@@ -791,6 +826,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    this.hasHydratedRealtimePresentation = true;
     const state = update.state;
     const currentRoundState = this.resolveCurrentRoundState(state);
     const resolvedPhaseState = this.resolveRealtimePhase(state, update.lastAction);
@@ -830,6 +866,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     this.applyRealtimePlayers(state);
     this.applyRealtimeScores(state);
+    this.applyRealtimeModifiers(state);
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
@@ -930,6 +967,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   // --- Normalizacion de payloads realtime ---------------------------------
   private applyRealtimePlayers(state: Record<string, unknown>): void {
+    this.hasHydratedRealtimePresentation = true;
     // Algunos payloads repiten datos de jugadores dentro del state público.
     // Si existen, se priorizan para mantener nombres/ids coherentes con backend.
     const shouldApplyRealtimeScores =
@@ -1018,6 +1056,39 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
+  private applyRealtimeModifiers(state: Record<string, unknown>): void {
+    this.activeHandLimitModifier = this.resolveHandLimitModifier(state);
+  }
+
+  private resolveHandLimitModifier(state: Record<string, unknown>): DixitHandLimitModifier | null {
+    const modifiers = asRecord(state['activeModifiers']);
+    if (!modifiers) {
+      return null;
+    }
+
+    for (const modifierValue of Object.values(modifiers)) {
+      const modifier = asRecord(modifierValue);
+      if (!modifier) {
+        continue;
+      }
+
+      const type = this.readStringFromCandidates(modifier, ['type']);
+      const value = this.readNumber(modifier, ['value']);
+      const turnsLeft = this.readNumber(modifier, ['turnsLeft']);
+      if (type !== 'HAND_LIMIT' || value === null || turnsLeft === null) {
+        continue;
+      }
+
+      return {
+        type: 'HAND_LIMIT',
+        value,
+        turnsLeft,
+      };
+    }
+
+    return null;
+  }
+
   private applyRealtimeCards(state: Record<string, unknown>): void {
     // Mezcla varias fuentes websocket: mano pública/privada, boardCards y playedCards,
     // manteniendo las cartas conocidas para no perder la imagen asociada a cada id.
@@ -1103,9 +1174,16 @@ export class Dixit implements OnInit, OnDestroy {
     }
   }
 
-  private applyRealtimePrivateHand(hand: RealtimePrivateHandEntry[]): boolean {
+  private applyRealtimePrivateHand(
+    hand: RealtimePrivateHandEntry[],
+    boardImageUrl?: string | null
+  ): boolean {
     // Integra private_hand sin romper una selección previa si esa carta sigue existiendo.
+    this.hasHydratedRealtimePresentation = true;
     this.latestPrivateHand = [...hand];
+    const nextBoardImageUrl = typeof boardImageUrl === 'string' ? boardImageUrl.trim() : '';
+    const boardImageChanged = this.activeBoardImageUrl !== nextBoardImageUrl;
+    this.activeBoardImageUrl = nextBoardImageUrl;
     let handCards = this.buildPrivateHandCards(hand);
     if (this.handSubmitted && this.selectedHandCardCode) {
       handCards = handCards.filter((card) => card.code !== this.selectedHandCardCode);
@@ -1147,7 +1225,7 @@ export class Dixit implements OnInit, OnDestroy {
       selectionChanged = true;
     }
 
-    return cardsChanged || choiceCardsChanged || selectionChanged;
+    return boardImageChanged || cardsChanged || choiceCardsChanged || selectionChanged;
   }
 
   private applyRealtimeVotingState(state: Record<string, unknown>): void {
@@ -1617,7 +1695,10 @@ export class Dixit implements OnInit, OnDestroy {
       const knownCard = this.findKnownCardByCode(code);
       return {
         code,
-        image: this.preferKnownCardImage(this.dynamicCardUrls.get(code) ?? DEFAULT_CARD_IMAGE, knownCard),
+        image: this.preferKnownCardImage(
+          this.dynamicCardUrls.get(code) ?? this.resolveDefaultCardImage(),
+          knownCard
+        ),
         value: knownCard?.value ?? code,
         suit: knownCard?.suit ?? 'DIXIT',
       };
@@ -1632,7 +1713,10 @@ export class Dixit implements OnInit, OnDestroy {
       const knownCard = this.findKnownCardByCode(code);
       return {
         code,
-        image: this.preferKnownCardImage(this.dynamicCardUrls.get(code) ?? DEFAULT_CARD_IMAGE, knownCard),
+        image: this.preferKnownCardImage(
+          this.dynamicCardUrls.get(code) ?? this.resolveDefaultCardImage(),
+          knownCard
+        ),
         value: knownCard?.value ?? code,
         suit: knownCard?.suit ?? 'DIXIT',
       };
@@ -1650,9 +1734,9 @@ export class Dixit implements OnInit, OnDestroy {
     const knownCard = this.findKnownCardByCode(code);
     const image =
       this.preferKnownCardImage(
-        this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+          this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
           this.dynamicCardUrls.get(code) ??
-          DEFAULT_CARD_IMAGE,
+          this.resolveDefaultCardImage(),
         knownCard
       );
     const value =
@@ -2019,6 +2103,10 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     return knownCard.image;
+  }
+
+  private resolveDefaultCardImage(): string {
+    return this.activeBoardImageUrl || DEFAULT_CARD_IMAGE;
   }
 
   private removeCardFromVisibleHand(cardCode: string): void {

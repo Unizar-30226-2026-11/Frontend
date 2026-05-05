@@ -69,6 +69,18 @@ export class PlayerInfoPull {
     return this.extractMutationMessage(response, 'Estado actualizado');
   }
 
+  async deleteAccount(): Promise<string> {
+    const token = this.requireToken();
+    const response = await this.apiClient.request<unknown>('/users/profile', {
+      method: 'DELETE',
+      token,
+      useCache: false,
+    });
+
+    this.apiClient.invalidateCache('/users/');
+    return this.extractMutationMessage(response, 'Cuenta eliminada correctamente');
+  }
+
   savePlayerInfoToCache(playerInfo: PlayerInfo): void {
     const token = this.requireToken();
 
