@@ -19,15 +19,66 @@ import { Auth } from '../services/auth';
           <span class="games-count">{{ games().length }} resultados</span>
         </div>
 
-        <button
-          type="button"
-          class="create-lobby-button"
-          [disabled]="!auth.isLoggedIn() || createLobbyLoading()"
-          (click)="toggleCreateLobbyPanel()"
-        >
-          {{ isCreateLobbyPanelOpen() ? 'Cerrar' : 'Crear lobby' }}
-        </button>
+        <div class="lobby-header-actions">
+          <button
+            type="button"
+            class="create-lobby-button"
+            [disabled]="!auth.isLoggedIn() || createLobbyLoading()"
+            (click)="toggleCreateLobbyPanel()"
+          >
+            {{ isCreateLobbyPanelOpen() ? 'Cerrar' : 'Crear lobby' }}
+          </button>
+
+          <button
+            type="button"
+            class="create-lobby-button"
+            [disabled]="!auth.isLoggedIn() || privateLobbyLoading()"
+            (click)="togglePrivateLobbyPanel()"
+          >
+            {{ isPrivateLobbyPanelOpen() ? 'Cerrar' : 'Lobby privado' }}
+          </button>
+        </div>
       </header>
+
+      @if (isPrivateLobbyPanelOpen()) {
+        <section class="create-lobby-panel private-lobby-panel">
+          <div class="create-lobby-grid private-lobby-grid">
+            <label class="field code-field">
+              <span>Codigo del lobby</span>
+              <input
+                type="text"
+                maxlength="6"
+                [value]="privateLobbyCode"
+                [disabled]="!auth.isLoggedIn() || privateLobbyLoading()"
+                placeholder="A1B2"
+                autocomplete="off"
+                inputmode="text"
+                (input)="updatePrivateLobbyCode($event)"
+                (keydown.enter)="submitPrivateLobbyCode()"
+              />
+            </label>
+          </div>
+
+          @if (privateLobbyMessage()) {
+            <p class="form-feedback success">{{ privateLobbyMessage() }}</p>
+          }
+
+          @if (privateLobbyError()) {
+            <p class="form-feedback error">{{ privateLobbyError() }}</p>
+          }
+
+          <div class="create-lobby-actions">
+            <button
+              type="button"
+              class="submit-lobby-button"
+              [disabled]="!auth.isLoggedIn() || privateLobbyLoading() || !canJoinPrivateLobby()"
+              (click)="submitPrivateLobbyCode()"
+            >
+              {{ privateLobbyLoading() ? 'Buscando...' : 'Entrar por codigo' }}
+            </button>
+          </div>
+        </section>
+      }
 
       @if (isCreateLobbyPanelOpen()) {
         <section class="create-lobby-panel">
@@ -123,6 +174,7 @@ import { Auth } from '../services/auth';
               [gameImage]="game.image"
               [gameDescription]="game.description"
               [gameId]="game.id"
+              [gameEngine]="game.engine"
             />
           }
         </div>
@@ -161,6 +213,13 @@ import { Auth } from '../services/auth';
       color: black;
     }
 
+    .lobby-header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     .create-lobby-button,
     .submit-lobby-button {
       border: 0;
@@ -185,6 +244,16 @@ import { Auth } from '../services/auth';
     .submit-lobby-button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    .code-field input {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 800;
+    }
+
+    .private-lobby-grid {
+      grid-template-columns: minmax(180px, 280px);
     }
 
     .create-lobby-panel {
@@ -304,6 +373,17 @@ import { Auth } from '../services/auth';
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
+
+    @media (max-width: 760px) {
+      .lobby-header-actions,
+      .lobby-header-actions .create-lobby-button {
+        width: 100%;
+      }
+
+      .private-lobby-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   `,
 })
 export class Games {
@@ -315,9 +395,13 @@ export class Games {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly isCreateLobbyPanelOpen = signal(false);
+  readonly isPrivateLobbyPanelOpen = signal(false);
   readonly createLobbyLoading = signal(false);
   readonly createLobbyError = signal<string | null>(null);
   readonly createLobbyMessage = signal<string | null>(null);
+  readonly privateLobbyLoading = signal(false);
+  readonly privateLobbyError = signal<string | null>(null);
+  readonly privateLobbyMessage = signal<string | null>(null);
   readonly availableLobbyEngines: ReadonlyArray<{ value: LobbyEngine; label: string }> = [
     { value: 'Classic', label: 'Classic' },
     { value: 'Stella', label: 'Stella' },
@@ -327,6 +411,7 @@ export class Games {
   createLobbyMaxPlayers = 4;
   createLobbyEngine: LobbyEngine = 'Classic';
   createLobbyPrivate = false;
+  privateLobbyCode = '';
 
   constructor() {
     if (this.auth.isLoggedIn()) {
@@ -355,10 +440,76 @@ export class Games {
     return this.createLobbyName.trim().length > 0;
   }
 
+  canJoinPrivateLobby(): boolean {
+    return this.isValidLobbyCode(this.privateLobbyCode);
+  }
+
   toggleCreateLobbyPanel(): void {
-    this.isCreateLobbyPanelOpen.update((currentState) => !currentState);
+    this.isCreateLobbyPanelOpen.update((currentState) => {
+      const nextState = !currentState;
+      if (nextState) {
+        this.isPrivateLobbyPanelOpen.set(false);
+      }
+      return nextState;
+    });
     this.createLobbyError.set(null);
     this.createLobbyMessage.set(null);
+  }
+
+  togglePrivateLobbyPanel(): void {
+    this.isPrivateLobbyPanelOpen.update((currentState) => {
+      const nextState = !currentState;
+      if (nextState) {
+        this.isCreateLobbyPanelOpen.set(false);
+      }
+      return nextState;
+    });
+    this.privateLobbyError.set(null);
+    this.privateLobbyMessage.set(null);
+  }
+
+  updatePrivateLobbyCode(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const normalizedCode = this.normalizeLobbyCodeInput(target.value);
+    this.privateLobbyCode = normalizedCode;
+    target.value = normalizedCode;
+    this.privateLobbyError.set(null);
+    this.privateLobbyMessage.set(null);
+  }
+
+  async submitPrivateLobbyCode(): Promise<void> {
+    if (!this.auth.isLoggedIn() || this.privateLobbyLoading()) {
+      return;
+    }
+
+    const lobbyCode = this.normalizeLobbyCodeInput(this.privateLobbyCode);
+    this.privateLobbyCode = lobbyCode;
+
+    if (!this.isValidLobbyCode(lobbyCode)) {
+      this.privateLobbyError.set('El codigo debe tener entre 4 y 6 caracteres alfanumericos.');
+      this.privateLobbyMessage.set(null);
+      return;
+    }
+
+    this.privateLobbyLoading.set(true);
+    this.privateLobbyError.set(null);
+    this.privateLobbyMessage.set(null);
+
+    try {
+      const lobby = await this.gameService.getGameDetails(lobbyCode, { forceRefresh: true });
+      this.privateLobbyMessage.set(`Sala ${lobby.id} encontrada.`);
+      await this.router.navigateByUrl(`/games/${encodeURIComponent(lobby.id)}`);
+    } catch (error) {
+      this.privateLobbyError.set(
+        error instanceof Error ? error.message : 'No se pudo encontrar la sala'
+      );
+    } finally {
+      this.privateLobbyLoading.set(false);
+    }
   }
 
   async submitCreateLobby(): Promise<void> {
@@ -387,5 +538,17 @@ export class Games {
     } finally {
       this.createLobbyLoading.set(false);
     }
+  }
+
+  private normalizeLobbyCodeInput(value: string): string {
+    return value
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 6);
+  }
+
+  private isValidLobbyCode(value: string): boolean {
+    return /^[A-Z0-9]{4,6}$/.test(this.normalizeLobbyCodeInput(value));
   }
 }

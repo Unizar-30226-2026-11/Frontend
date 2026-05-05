@@ -1,13 +1,30 @@
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
+import type { LobbyEngine } from '../../../interfaces/game';
+
 @Component({
   selector: 'app-game-card',
   standalone: true,
   imports: [RouterModule],
   template: `
     <div class="game-card">
-      <div class="game-image">
-        <img [src]="gameImage" alt="{{ gameTitle }}" />
+      <div
+        class="lobby-mode-banner"
+        [class.lobby-mode-banner-classic]="!isStellaLobby"
+        [class.lobby-mode-banner-stella]="isStellaLobby"
+        [attr.aria-label]="modeLabel"
+      >
+        @if (isStellaLobby) {
+          <span class="lobby-backdrop-mark stella-star-one" aria-hidden="true">*</span>
+          <span class="lobby-backdrop-mark stella-star-two" aria-hidden="true">*</span>
+          <span class="lobby-backdrop-mark stella-star-three" aria-hidden="true">*</span>
+          <span class="stella-horizon" aria-hidden="true"></span>
+        } @else {
+          <span class="classic-dawn-band classic-dawn-band-top" aria-hidden="true"></span>
+          <span class="classic-dawn-band classic-dawn-band-bottom" aria-hidden="true"></span>
+          <span class="classic-sun" aria-hidden="true"></span>
+        }
+        <span class="lobby-mode-title">{{ modeLabel }}</span>
       </div>
       <div class="game-title">
         <h2>{{ gameTitle }}</h2>
@@ -44,31 +61,98 @@ import { RouterModule } from '@angular/router';
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     }
 
-    .game-image {
+    .lobby-mode-banner {
       position: relative;
-      height: clamp(180px, 24vw, 240px);
+      width: 100%;
+      height: 150px;
       overflow: hidden;
-      background: #101826;
       display: flex;
       align-items: center;
       justify-content: center;
+      border-bottom: 1px solid rgba(252, 238, 181, 0.18);
     }
 
-    .game-image img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center;
-      display: block;
-      filter: saturate(1.08) contrast(1.03);
+    .lobby-mode-banner-classic {
+      background-color: #e9b45b;
     }
 
-    .game-image::after {
-      content: '';
+    .lobby-mode-banner-stella {
+      background-color: #101833;
+    }
+
+    .lobby-mode-title {
+      color: #fceeb5;
+      font-family: 'FuenteTitulo', 'FuenteDilana', serif;
+      font-size: 42px;
+      line-height: 1;
+      text-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+      z-index: 3;
+    }
+
+    .lobby-backdrop-mark {
       position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.6) 100%);
-      pointer-events: none;
+      color: rgba(252, 238, 181, 0.9);
+      font-size: 22px;
+      z-index: 1;
+    }
+
+    .stella-star-one {
+      top: 18px;
+      left: 44px;
+    }
+
+    .stella-star-two {
+      top: 42px;
+      right: 54px;
+      font-size: 18px;
+    }
+
+    .stella-star-three {
+      bottom: 38px;
+      left: 118px;
+      font-size: 15px;
+    }
+
+    .stella-horizon {
+      position: absolute;
+      left: -30px;
+      right: -30px;
+      bottom: -42px;
+      height: 92px;
+      background-color: #2b315d;
+      transform: rotate(-3deg);
+      opacity: 0.85;
+    }
+
+    .classic-sun {
+      position: absolute;
+      width: 84px;
+      height: 84px;
+      border-radius: 42px;
+      background-color: #fceeb5;
+      bottom: 22px;
+      right: 44px;
+      opacity: 0.9;
+    }
+
+    .classic-dawn-band {
+      position: absolute;
+      left: -20px;
+      right: -20px;
+      height: 58px;
+      transform: rotate(-4deg);
+    }
+
+    .classic-dawn-band-top {
+      top: 0;
+      background-color: #8bb9b0;
+      opacity: 0.45;
+    }
+
+    .classic-dawn-band-bottom {
+      bottom: -18px;
+      background-color: #d96f47;
+      opacity: 0.35;
     }
 
     .game-title {
@@ -120,4 +204,13 @@ export class GameCard {
   @Input() gameImage = '';
   @Input() gameDescription = '';
   @Input() gameId = '';
+  @Input() gameEngine: LobbyEngine | string = 'Classic';
+
+  get isStellaLobby(): boolean {
+    return this.gameEngine.trim().toUpperCase() === 'STELLA';
+  }
+
+  get modeLabel(): string {
+    return this.isStellaLobby ? 'STELLA' : 'DIXIT';
+  }
 }

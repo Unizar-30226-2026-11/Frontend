@@ -121,6 +121,7 @@
 .saved-deck,
 .owned-card,
 .selected-card,
+.deck-collection-header,
 .ghost-button,
 .accent-button,
 .danger-button {
@@ -145,8 +146,7 @@
   box-shadow: 0 12px 24px rgba(112, 74, 28, 0.16);
 }
 
-.saved-deck strong,
-.owned-copy strong {
+.saved-deck strong {
   font-size: 0.96rem;
 }
 
@@ -258,6 +258,56 @@
   margin-top: 26px;
 }
 
+.collection-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.deck-collection {
+  display: grid;
+  gap: 10px;
+}
+
+.deck-collection-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 248, 239, 0.96);
+  border: 1px solid rgba(69, 116, 111, 0.22);
+  color: #1d140c;
+  text-align: left;
+  box-shadow: 0 10px 20px rgba(76, 48, 16, 0.06);
+}
+
+.deck-collection-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.collection-counter {
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(57, 112, 106, 0.14);
+  color: #315f5a;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.collection-chevron {
+  min-width: 1ch;
+  color: #6f4a22;
+  font-weight: 800;
+}
+
+.collection-cards {
+  padding: 0 2px 4px;
+}
+
 .owned-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -266,6 +316,7 @@
 }
 
 .owned-card {
+  position: relative;
   padding: 10px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 248, 239, 0.98), rgba(244, 232, 214, 0.98));
@@ -275,7 +326,37 @@
 }
 
 .owned-card.disabled {
-  opacity: 0.45;
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.owned-card.selected {
+  border-color: rgba(47, 111, 104, 0.56);
+  background: linear-gradient(180deg, rgba(236, 250, 246, 0.98), rgba(222, 240, 234, 0.98));
+  opacity: 1;
+}
+
+.owned-card.locked {
+  opacity: 0.62;
+}
+
+.card-image-wrap {
+  position: relative;
+  display: block;
+}
+
+.locked-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(29, 20, 12, 0.62);
+  color: #fff7ee;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .owned-copy {

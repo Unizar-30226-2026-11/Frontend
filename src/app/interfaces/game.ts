@@ -1,4 +1,5 @@
 export type LobbyEngine = 'Classic' | 'Stella';
+export type LobbyEngineApi = LobbyEngine | 'STANDARD' | 'STELLA';
 
 export interface LobbySummaryApi {
   lobbyCode: string;
@@ -6,7 +7,7 @@ export interface LobbySummaryApi {
   hostId: string;
   players: string[];
   maxPlayers: number;
-  engine: LobbyEngine;
+  engine: LobbyEngineApi;
   status: string;
 }
 
@@ -47,7 +48,7 @@ export interface LobbyStartApi {
 export interface StartedGameApi {
   id?: string;
   route?: string;
-  engine?: LobbyEngine;
+  engine?: LobbyEngineApi;
 }
 
 export interface LobbyStartResponse {

@@ -17,7 +17,7 @@
 }
 
 .memory-shell {
-  width: min(94vw, 58rem);
+  width: min(94vw, 62rem);
   display: grid;
   gap: 20px;
   padding: 24px;
@@ -110,7 +110,7 @@
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -200,19 +200,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 10px;
   opacity: 0;
   transform: scale(0.95);
 }
 
-.card-front img {
-  width: auto;
-  max-width: 100%;
-  height: auto;
-  max-height: 100%;
-  display: block;
-  margin: auto;
-  border-radius: 14px;
+.fruit-emoji {
+  width: min(5.6rem, 74%);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.36) 46%, transparent 72%),
+    rgba(255, 255, 255, 0.28);
+  font-size: clamp(2.8rem, 5vw, 4.5rem);
+  line-height: 1;
+  filter: drop-shadow(0 12px 14px rgba(24, 37, 55, 0.18));
 }
 
 .memory-card.revealed .card-back,
@@ -235,7 +239,7 @@
   padding: 6px;
 }
 
-.memory-card.matched .card-front img {
+.memory-card.matched .fruit-emoji {
   box-shadow: 0 0 0 3px rgba(99, 181, 121, 0.72);
 }
 

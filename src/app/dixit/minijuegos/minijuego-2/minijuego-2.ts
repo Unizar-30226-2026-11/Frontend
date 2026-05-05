@@ -3,7 +3,7 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject, input, output 
 interface MemoryCard {
   id: number;
   pairKey: string;
-  image: string;
+  emoji: string;
   label: string;
   state: 'hidden' | 'revealed' | 'matched';
 }
@@ -11,22 +11,17 @@ interface MemoryCard {
 interface MemoryPairTemplate {
   code: string;
   label: string;
-  color: string;
+  emoji: string;
 }
 
 const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
-  { code: 'memory-1', label: 'Aurora', color: '#6ec5ff' },
-  { code: 'memory-2', label: 'Farol', color: '#ffb347' },
-  { code: 'memory-3', label: 'Mascara', color: '#ff7aa2' },
-  { code: 'memory-4', label: 'Llave', color: '#d8c26a' },
-  { code: 'memory-5', label: 'Reloj', color: '#8eb8ff' },
-  { code: 'memory-6', label: 'Cometa', color: '#ff8f70' },
-  { code: 'memory-7', label: 'Bruma', color: '#9fd3c7' },
-  { code: 'memory-8', label: 'Corona', color: '#f5d76e' },
-  { code: 'memory-9', label: 'Portal', color: '#9b87f5' },
-  { code: 'memory-10', label: 'Nube', color: '#9ad0f5' },
-  { code: 'memory-11', label: 'Bosque', color: '#74c69d' },
-  { code: 'memory-12', label: 'Luna', color: '#c3bef0' },
+  { code: 'fruit-apple', label: 'Manzana', emoji: '🍎' },
+  { code: 'fruit-banana', label: 'Platano', emoji: '🍌' },
+  { code: 'fruit-grapes', label: 'Uvas', emoji: '🍇' },
+  { code: 'fruit-strawberry', label: 'Fresa', emoji: '🍓' },
+  { code: 'fruit-orange', label: 'Naranja', emoji: '🍊' },
+  { code: 'fruit-watermelon', label: 'Sandia', emoji: '🍉' },
+  { code: 'fruit-pineapple', label: 'Pina', emoji: '🍍' },
 ] as const;
 
 @Component({
@@ -45,7 +40,7 @@ const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
           <div class="memory-copy">
             <p class="eyebrow">Minijuego 2</p>
             <h2 id="minigame-2-title">Buscar parejas</h2>
-            <p>Tienes {{ initialTimeLeft }} segundos para descubrir todas las parejas.</p>
+            <p>Tienes {{ initialTimeLeft }} segundos para descubrir las {{ totalPairs }} parejas de frutas.</p>
           </div>
 
           @if (closable()) {
@@ -72,7 +67,7 @@ const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
           </article>
         </section>
 
-        <section class="cards-grid" aria-label="Tablero de memoria">
+        <section class="cards-grid" aria-label="Tablero de memoria con frutas">
           @for (card of cards; track card.id) {
             <button
               type="button"
@@ -80,12 +75,12 @@ const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
               [class.revealed]="card.state !== 'hidden'"
               [class.matched]="card.state === 'matched'"
               [disabled]="card.state === 'matched' || isResolvingPair || isGameOver"
-              [attr.aria-label]="card.state === 'hidden' ? 'Carta boca abajo' : 'Carta ' + card.label"
+              [attr.aria-label]="card.state === 'hidden' ? 'Fruta boca abajo' : 'Fruta ' + card.label"
               (click)="onCardSelected(card.id)"
             >
               <span class="card-back">?</span>
               <span class="card-front">
-                <img [src]="card.image" [alt]="card.label" draggable="false" />
+                <span class="fruit-emoji" aria-hidden="true">{{ card.emoji }}</span>
               </span>
             </button>
           }
@@ -103,7 +98,7 @@ const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
               <button type="button" class="restart-button" (click)="restartGame()">Reintentar</button>
             }
           } @else {
-            <p>Revela dos cartas. Si coinciden, la pareja se queda descubierta.</p>
+            <p>Revela dos frutas. Si coinciden, la pareja se queda descubierta.</p>
           }
         </footer>
       </article>
@@ -247,14 +242,14 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
       {
         id: index * 2,
         pairKey: card.code,
-        image: this.buildCardImage(card),
+        emoji: card.emoji,
         label: card.label,
         state: 'hidden' as const,
       },
       {
         id: index * 2 + 1,
         pairKey: card.code,
-        image: this.buildCardImage(card),
+        emoji: card.emoji,
         label: card.label,
         state: 'hidden' as const,
       },
@@ -268,27 +263,6 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
     }
 
     return shuffledDeck;
-  }
-
-  private buildCardImage(card: MemoryPairTemplate): string {
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 420">
-        <defs>
-          <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
-            <stop offset="0%" stop-color="${card.color}" stop-opacity="0.95" />
-            <stop offset="100%" stop-color="#1f2430" stop-opacity="1" />
-          </linearGradient>
-        </defs>
-        <rect width="320" height="420" rx="28" fill="url(#bg)" />
-        <circle cx="160" cy="150" r="72" fill="rgba(255,255,255,0.18)" />
-        <circle cx="160" cy="150" r="46" fill="rgba(255,255,255,0.28)" />
-        <text x="160" y="285" text-anchor="middle" fill="#ffffff" font-size="28" font-family="Arial, sans-serif">
-          ${card.label}
-        </text>
-      </svg>
-    `.trim();
-
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
   private clearTimers(): void {

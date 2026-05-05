@@ -1,7 +1,33 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
 
 import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services/decks-pull';
+import {
+  CollectionsPull,
+  type CardCollection,
+  type CollectionCard,
+} from '../services/collections-pull';
+
+const MIN_DECK_CARDS = 16;
+const MAX_DECK_CARDS = 84;
+const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
+const UNCATEGORIZED_COLLECTION_ID = '__uncategorized__';
+
+interface BuilderCollectionCard {
+  id: string;
+  rarity: string;
+  image: string;
+  owned: boolean;
+}
+
+interface BuilderCardCollection {
+  id: string;
+  name: string;
+  total: number;
+  owned: number;
+  expanded: boolean;
+  cardsError: string;
+  cards: BuilderCollectionCard[];
+}
 
 @Component({
   selector: 'app-deck-builder',
@@ -11,7 +37,7 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
       <header class="builder-hero">
         <div class="builder-copy">
           <p class="eyebrow">Tus mazos</p>
-          <h1>Crea un mazo de 12 cartas</h1>
+          <h1>Crea un mazo de {{ minDeckCards }} a {{ maxDeckCards }} cartas</h1>
           <p>
             Usa cartas que ya posees, guarda varios mazos y deja uno preparado para entrar al lobby.
           </p>
@@ -41,7 +67,7 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
                   (click)="loadDeck(deck.id)"
                 >
                   <strong>{{ deck.name }}</strong>
-                  <span>{{ deck.cardIds.length }} / 12 cartas</span>
+                  <span>{{ deck.cardIds.length }} cartas</span>
                 </button>
               }
             </div>
@@ -66,12 +92,12 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
             <div class="deck-stats">
               <article class="stat-box">
                 <span>Seleccionadas</span>
-                <strong>{{ selectedCards().length }} / 12</strong>
+                <strong>{{ selectedCards().length }} / {{ maxDeckCards }}</strong>
               </article>
 
               <article class="stat-box">
                 <span>Estado</span>
-                <strong>{{ canSaveDeck() ? 'Listo' : 'Incompleto' }}</strong>
+                <strong>{{ deckStatusLabel() }}</strong>
               </article>
             </div>
           </div>
@@ -79,8 +105,7 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
           <section class="selected-grid">
             @for (cardId of selectedCards(); track $index) {
               <button type="button" class="selected-card filled" (click)="removeCard(cardId)">
-                <img [src]="findOwnedCard(cardId)?.image" [alt]="findOwnedCard(cardId)?.name || cardId" />
-                <span>{{ findOwnedCard(cardId)?.name || cardId }}</span>
+                <img [src]="findOwnedCard(cardId)?.image || fallbackCardImage" alt="" />
               </button>
             }
 
@@ -113,7 +138,7 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
 
           <section class="collection-panel">
             <div class="panel-heading">
-              <h2>Colección disponible</h2>
+              <h2>Colecciones disponibles</h2>
               <span>{{ ownedCards().length }} tipos</span>
             </div>
 
@@ -122,21 +147,58 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
             } @else if (ownedCards().length === 0) {
               <p class="panel-copy">No hay cartas disponibles para crear mazos.</p>
             } @else {
-              <div class="owned-grid">
-                @for (card of ownedCards(); track card.id) {
-                  <button
-                    type="button"
-                    class="owned-card"
-                    [class.disabled]="!canAddCard(card.id)"
-                    (click)="addCard(card.id)"
-                  >
-                    <img [src]="card.image" [alt]="card.name" />
-                    <div class="owned-copy">
-                      <strong>{{ card.name }}</strong>
-                      <span>{{ card.rarity }}</span>
-                    </div>
-                    <span class="owned-count">{{ isSelected(card.id) ? 'Elegida' : 'Libre' }}</span>
-                  </button>
+              <div class="collection-list">
+                @for (collection of cardCollections(); track collection.id) {
+                  <section class="deck-collection">
+                    <button
+                      type="button"
+                      class="deck-collection-header"
+                      [attr.aria-expanded]="collection.expanded"
+                      [attr.aria-controls]="'deck-collection-panel-' + collection.id"
+                      (click)="toggleCollection(collection.id)"
+                    >
+                      <h3>{{ collection.name }}</h3>
+                      <span class="collection-counter">{{ collection.owned }}/{{ collection.total }}</span>
+                      <span class="collection-chevron" aria-hidden="true">
+                        {{ collection.expanded ? 'v' : '>' }}
+                      </span>
+                    </button>
+
+                    @if (collection.expanded) {
+                      <div class="collection-cards" [id]="'deck-collection-panel-' + collection.id">
+                        @if (collection.cardsError) {
+                          <p class="panel-copy error">{{ collection.cardsError }}</p>
+                        } @else if (collection.cards.length === 0) {
+                          <p class="panel-copy">No hay cartas en esta coleccion.</p>
+                        } @else {
+                          <div class="owned-grid">
+                            @for (card of collection.cards; track card.id) {
+                              <button
+                                type="button"
+                                class="owned-card"
+                                [class.disabled]="!canAddCard(card.id)"
+                                [class.locked]="!card.owned"
+                                [class.selected]="isSelected(card.id)"
+                                [disabled]="!canAddCard(card.id)"
+                                (click)="addCard(card.id)"
+                              >
+                                <span class="card-image-wrap">
+                                  <img [src]="card.image" alt="Carta disponible" loading="lazy" />
+                                  @if (!card.owned) {
+                                    <span class="locked-overlay" aria-label="Carta bloqueada">Bloqueada</span>
+                                  }
+                                </span>
+                                <div class="owned-copy">
+                                  <span>{{ card.rarity }}</span>
+                                </div>
+                                <span class="owned-count">{{ cardStateLabel(card.id, card.owned) }}</span>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </section>
                 }
               </div>
             }
@@ -149,22 +211,55 @@ import { DecksPull, type OwnedDeckCard, type UserDeckSummary } from '../services
 })
 export class DeckBuilder {
   private readonly decksPull = inject(DecksPull);
+  private readonly collectionsPull = inject(CollectionsPull);
+
+  readonly minDeckCards = MIN_DECK_CARDS;
+  readonly maxDeckCards = MAX_DECK_CARDS;
+  readonly fallbackCardImage = DEFAULT_CARD_IMAGE;
 
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly errorMessage = signal('');
   readonly successMessage = signal('');
   readonly ownedCards = signal<OwnedDeckCard[]>([]);
+  readonly cardCollections = signal<BuilderCardCollection[]>([]);
   readonly decks = signal<UserDeckSummary[]>([]);
   readonly selectedDeckId = signal<string | null>(null);
   readonly deckName = signal('');
   readonly selectedCards = signal<string[]>([]);
 
   readonly emptySlots = computed(() =>
-    Array.from({ length: Math.max(12 - this.selectedCards().length, 0) }, (_, index) => this.selectedCards().length + index + 1)
+    Array.from(
+      { length: Math.max(MIN_DECK_CARDS - this.selectedCards().length, 0) },
+      (_, index) => this.selectedCards().length + index + 1
+    )
   );
 
-  readonly canSaveDeck = computed(() => this.deckName().trim().length > 0 && this.selectedCards().length === 12);
+  readonly canSaveDeck = computed(() => {
+    const selectedCount = this.selectedCards().length;
+    return (
+      this.deckName().trim().length > 0 &&
+      selectedCount >= MIN_DECK_CARDS &&
+      selectedCount <= MAX_DECK_CARDS
+    );
+  });
+
+  readonly deckStatusLabel = computed(() => {
+    const selectedCount = this.selectedCards().length;
+    if (selectedCount < MIN_DECK_CARDS) {
+      return `Faltan ${MIN_DECK_CARDS - selectedCount}`;
+    }
+
+    if (selectedCount > MAX_DECK_CARDS) {
+      return 'Exceso';
+    }
+
+    if (this.deckName().trim().length === 0) {
+      return 'Sin nombre';
+    }
+
+    return 'Listo';
+  });
 
   constructor() {
     void this.loadData();
@@ -222,11 +317,37 @@ export class DeckBuilder {
   }
 
   canAddCard(cardId: string): boolean {
-    if (this.selectedCards().length >= 12) {
+    if (this.selectedCards().length >= MAX_DECK_CARDS) {
       return false;
     }
 
     return !!this.findOwnedCard(cardId) && !this.isSelected(cardId);
+  }
+
+  toggleCollection(collectionId: string): void {
+    this.cardCollections.update((collections) =>
+      collections.map((collection) =>
+        collection.id === collectionId
+          ? { ...collection, expanded: !collection.expanded }
+          : collection
+      )
+    );
+  }
+
+  cardStateLabel(cardId: string, owned: boolean): string {
+    if (!owned) {
+      return 'Bloqueada';
+    }
+
+    if (this.isSelected(cardId)) {
+      return 'Elegida';
+    }
+
+    if (this.selectedCards().length >= MAX_DECK_CARDS) {
+      return 'Maximo';
+    }
+
+    return 'Libre';
   }
 
   selectedCountFor(cardId: string): number {
@@ -251,6 +372,7 @@ export class DeckBuilder {
     this.successMessage.set('');
 
     try {
+      const wasEditingDeck = !!this.selectedDeckId();
       const payload = {
         name: this.deckName().trim(),
         cardIds: [...this.selectedCards()],
@@ -262,7 +384,7 @@ export class DeckBuilder {
 
       await this.refreshDecks();
       this.loadDeck(deck.id);
-      this.successMessage.set(this.selectedDeckId() ? 'Mazo actualizado.' : 'Mazo creado.');
+      this.successMessage.set(wasEditingDeck ? 'Mazo actualizado.' : 'Mazo creado.');
     } catch (error: unknown) {
       this.errorMessage.set(error instanceof Error ? error.message : 'No se pudo guardar el mazo.');
     } finally {
@@ -297,12 +419,22 @@ export class DeckBuilder {
     this.errorMessage.set('');
 
     try {
-      const [ownedCards, decks] = await Promise.all([
+      const [ownedCards, decks, collections] = await Promise.all([
         this.decksPull.getOwnedCards(),
         this.decksPull.getUserDecks(),
+        this.collectionsPull.getCollections(),
       ]);
+      const collectionCardsResults = await Promise.allSettled(
+        collections.map(async (collection) => ({
+          collectionId: collection.id,
+          cards: await this.collectionsPull.getCollectionCards(collection.id),
+        }))
+      );
 
       this.ownedCards.set(ownedCards);
+      this.cardCollections.set(
+        this.toBuilderCollections(collections, collectionCardsResults, ownedCards)
+      );
       this.decks.set(decks);
       if (decks.length > 0) {
         this.loadDeck(decks[0].id);
@@ -317,5 +449,80 @@ export class DeckBuilder {
   private async refreshDecks(): Promise<void> {
     const decks = await this.decksPull.getUserDecks({ forceRefresh: true });
     this.decks.set(decks);
+  }
+
+  private toBuilderCollections(
+    collections: CardCollection[],
+    collectionCardsResults: PromiseSettledResult<{ collectionId: string; cards: CollectionCard[] }>[],
+    ownedCards: OwnedDeckCard[]
+  ): BuilderCardCollection[] {
+    const ownedCardsById = new Map(ownedCards.map((card) => [card.id, card]));
+    const categorizedOwnedCardIds = new Set<string>();
+    const cardsByCollection = new Map<string, CollectionCard[]>();
+    const failedCollectionIds = new Set<string>();
+
+    collectionCardsResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        cardsByCollection.set(result.value.collectionId, result.value.cards);
+        return;
+      }
+
+      const failedCollectionId = collections[index]?.id;
+      if (failedCollectionId) {
+        failedCollectionIds.add(failedCollectionId);
+      }
+    });
+
+    const builderCollections = collections.map((collection) => {
+      const cards = (cardsByCollection.get(collection.id) ?? []).map((card) => {
+        const ownedCard = ownedCardsById.get(card.idCard);
+        if (ownedCard) {
+          categorizedOwnedCardIds.add(card.idCard);
+        }
+
+        return {
+          id: card.idCard,
+          rarity: ownedCard?.rarity ?? card.rarity,
+          image: ownedCard?.image ?? card.imageUrl ?? DEFAULT_CARD_IMAGE,
+          owned: !!ownedCard,
+        } satisfies BuilderCollectionCard;
+      });
+
+      const owned = cards.filter((card) => card.owned).length;
+
+      return {
+        id: collection.id,
+        name: collection.name,
+        total: Math.max(collection.totalCards, cards.length),
+        owned,
+        expanded: false,
+        cardsError: failedCollectionIds.has(collection.id)
+          ? 'No se pudieron cargar las cartas de esta coleccion.'
+          : '',
+        cards,
+      } satisfies BuilderCardCollection;
+    });
+
+    const uncategorizedCards = ownedCards.filter(
+      (card) => !categorizedOwnedCardIds.has(card.id)
+    );
+    if (uncategorizedCards.length > 0) {
+      builderCollections.push({
+        id: UNCATEGORIZED_COLLECTION_ID,
+        name: 'Sin coleccion',
+        total: uncategorizedCards.length,
+        owned: uncategorizedCards.length,
+        expanded: false,
+        cardsError: '',
+        cards: uncategorizedCards.map((card) => ({
+          id: card.id,
+          rarity: card.rarity,
+          image: card.image || DEFAULT_CARD_IMAGE,
+          owned: true,
+        })),
+      });
+    }
+
+    return builderCollections;
   }
 }
