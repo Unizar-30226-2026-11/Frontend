@@ -1,117 +1,191 @@
-import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { SettingsPreferencesStore } from '../../../services/settings-preferences-store';
 import { Auth } from '../../../services/auth';
+import { BoardsPull } from '../../../services/boards-pull';
+import { CardPull } from '../../../services/card-pull';
 import { PlayerStore } from '../../../services/player-store';
 
 @Component({
   selector: 'app-options',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <section class="configuracion-layout">
-      <div class="configuracion-container">
-        <h1>Configuración:</h1>
-
-        <div class="contenido-scroll">
-          <div class="grupo-control">
-            <label>Sonido</label>
-            <div class="caja-control">
-              <input type="range" min="0" max="100" [(ngModel)]="volumenSonido" class="slider-rango">
+      @if (!auth.isLoggedIn()) {
+        <article class="estado-panel">
+          <h1>Sesion no iniciada</h1>
+          <p>Necesitas iniciar sesion para consultar tu cuenta.</p>
+        </article>
+      } @else {
+        @if (playerStore.player(); as player) {
+          <article class="perfil-resumen">
+            <div class="avatar-badge">
+              {{ player.username.charAt(0).toUpperCase() }}
             </div>
-          </div>
 
-          <div class="grupo-control">
-            <label>Música</label>
-            <div class="caja-control">
-              <input type="range" min="0" max="100" [(ngModel)]="volumenMusica" class="slider-rango">
+            <div class="perfil-texto">
+              <h1>{{ player.username }}</h1>
+              <p>{{ player.email }}</p>
+              <span class="estado-pill" [class.estado-pill--offline]="player.state !== 'CONNECTED'">
+                {{ describeStatus(player.state) }}
+              </span>
             </div>
-          </div>
-
-          <div class="grupo-control">
-            <label>Notificaciones</label>
-            <div class="caja-control caja-toggle">
-              <span class="etiqueta-estado" [class.inactivo]="!notificacionesActivas">Desactivadas</span>
-
-              <label class="switch">
-                <input type="checkbox" [(ngModel)]="notificacionesActivas">
-                <span class="slider-toggle redondo"></span>
-              </label>
-
-              <span class="etiqueta-estado" [class.activo]="notificacionesActivas">Activadas</span>
-            </div>
-          </div>
-
-          <div class="grupo-control">
-            <label>Mostrar estado online</label>
-            <div class="caja-control caja-toggle">
-              <span class="etiqueta-estado" [class.inactivo]="!estadoOnlineActivo">Desactivado</span>
-
-              <label class="switch">
-                <input type="checkbox" [(ngModel)]="estadoOnlineActivo">
-                <span class="slider-toggle redondo"></span>
-              </label>
-
-              <span class="etiqueta-estado" [class.activo]="estadoOnlineActivo">Activado</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="acciones-configuracion">
-        @if (saveMessage(); as message) {
-          <p class="estado-guardado">{{ message }}</p>
+          </article>
+        } @else if (playerStore.loading()) {
+          <article class="estado-panel">
+            <p>Cargando perfil...</p>
+          </article>
+        } @else {
+          <article class="estado-panel">
+            <h1>Perfil no disponible</h1>
+            <p>{{ playerStore.error() || 'No se pudo cargar la informacion de la cuenta.' }}</p>
+          </article>
         }
-        <button type="button" class="btn-config btn-secundario" (click)="restablecerValores()">
-          Restablecer configuraciones por defecto
-        </button>
-        <button type="button" class="btn-config btn-primario" (click)="guardarCambios()">
-          Guardar cambios
-        </button>
-        <button type="button" class="btn-config btn-cerrar-sesion" (click)="cerrarSesion()">
-          Cerrar sesión
-        </button>
-      </div>
+
+        <section class="metricas-grid">
+          <article class="metrica-card">
+            <span class="metrica-icono" aria-hidden="true">CR</span>
+            <strong>{{ cardsCount() }}</strong>
+            <span class="metrica-label">Cartas</span>
+          </article>
+
+          <article class="metrica-card">
+            <span class="metrica-icono" aria-hidden="true">TB</span>
+            <strong>{{ boardsCount() }}</strong>
+            <span class="metrica-label">Tableros</span>
+          </article>
+        </section>
+
+        @if (inventoryError()) {
+          <p class="mensaje-error">{{ inventoryError() }}</p>
+        }
+
+        @if (accountMessage(); as message) {
+          <p class="mensaje-estado">{{ message }}</p>
+        }
+
+        <div class="acciones-configuracion">
+          <button
+            type="button"
+            class="btn-config btn-peligro"
+            (click)="eliminarCuenta()"
+            [disabled]="accountSubmitting()"
+          >
+            @if (accountSubmitting()) {
+              Eliminando cuenta...
+            } @else {
+              Eliminar cuenta
+            }
+          </button>
+
+          <button
+            type="button"
+            class="btn-config btn-cerrar-sesion"
+            (click)="cerrarSesion()"
+            [disabled]="accountSubmitting()"
+          >
+            Cerrar sesion
+          </button>
+        </div>
+      }
     </section>
   `,
   styleUrls: ['./options.css'],
 })
 export class Options {
-  private readonly settingsStore = inject(SettingsPreferencesStore);
-  private readonly auth = inject(Auth);
-  private readonly playerStore = inject(PlayerStore);
+  readonly auth = inject(Auth);
+  readonly playerStore = inject(PlayerStore);
+
+  private readonly cardPull = inject(CardPull);
+  private readonly boardsPull = inject(BoardsPull);
   private readonly router = inject(Router);
 
-  saveMessage = signal<string | null>(null);
+  readonly cardsCount = signal<number | string>('...');
+  readonly boardsCount = signal<number | string>('...');
+  readonly inventoryError = signal<string | null>(null);
+  readonly accountMessage = signal<string | null>(null);
+  readonly accountSubmitting = signal(false);
 
-  volumenSonido = this.settingsStore.settings().soundVolume;
-  volumenMusica = this.settingsStore.settings().musicVolume;
-  notificacionesActivas = this.settingsStore.settings().notificationsEnabled;
-  estadoOnlineActivo = this.settingsStore.settings().showOnlineStatus;
-
-  restablecerValores(): void {
-    this.volumenSonido = 100;
-    this.volumenMusica = 100;
-    this.notificacionesActivas = false;
-    this.estadoOnlineActivo = false;
-    this.saveMessage.set(null);
+  constructor() {
+    this.loadProfile();
+    void this.loadInventorySummary();
   }
 
-  guardarCambios(): void {
-    this.settingsStore.save({
-      soundVolume: this.volumenSonido,
-      musicVolume: this.volumenMusica,
-      notificationsEnabled: this.notificacionesActivas,
-      showOnlineStatus: this.estadoOnlineActivo,
-    });
-    this.saveMessage.set('Configuracion guardada localmente');
+  async eliminarCuenta(): Promise<void> {
+    if (this.accountSubmitting()) {
+      return;
+    }
+
+    const confirmed = globalThis.confirm(
+      'Esta accion eliminara tu cuenta permanentemente. Quieres continuar?'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    this.accountSubmitting.set(true);
+    this.accountMessage.set(null);
+
+    try {
+      const message = await this.playerStore.deleteAccount();
+      this.auth.logOut();
+      await this.router.navigate(['/login']);
+      this.accountMessage.set(message);
+    } catch (error: unknown) {
+      this.accountMessage.set(
+        error instanceof Error ? error.message : 'No se pudo eliminar la cuenta'
+      );
+    } finally {
+      this.accountSubmitting.set(false);
+    }
   }
 
   cerrarSesion(): void {
     this.playerStore.clearPlayer();
     this.auth.logOut();
     void this.router.navigate(['/login']);
+  }
+
+  describeStatus(status: string): string {
+    return status === 'CONNECTED' ? 'Conectado' : 'Desconectado';
+  }
+
+  private loadProfile(): void {
+    if (!this.auth.isLoggedIn()) {
+      return;
+    }
+
+    if (!this.playerStore.player() && !this.playerStore.loading()) {
+      void this.playerStore.loadPlayer();
+    }
+  }
+
+  private async loadInventorySummary(): Promise<void> {
+    if (!this.auth.isLoggedIn()) {
+      this.cardsCount.set(0);
+      this.boardsCount.set(0);
+      return;
+    }
+
+    this.inventoryError.set(null);
+
+    try {
+      const [cards, boards] = await Promise.all([
+        this.cardPull.getCards(),
+        this.boardsPull.getUserBoards(),
+      ]);
+
+      this.cardsCount.set(cards.length);
+      this.boardsCount.set(boards.length);
+    } catch (error: unknown) {
+      this.cardsCount.set('-');
+      this.boardsCount.set('-');
+      this.inventoryError.set(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo cargar el resumen de cartas y tableros'
+      );
+    }
   }
 }

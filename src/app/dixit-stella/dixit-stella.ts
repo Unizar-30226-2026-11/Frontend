@@ -15,6 +15,7 @@ import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
 import { DixitMinijuego1 } from '../dixit/minijuegos/minijuego-1';
 import { DixitMinijuego2 } from '../dixit/minijuegos/minijuego-2/minijuego-2';
+import { DixitMinijuego3 } from '../dixit/minijuegos/minijuego-3/minijuego-3';
 import {
   FinalResultsOverlay,
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
@@ -46,7 +47,7 @@ const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 @Component({
   selector: 'app-dixit-stella',
   standalone: true,
-  imports: [FinalResultsOverlay, DixitMinijuego1, DixitMinijuego2],
+  imports: [FinalResultsOverlay, DixitMinijuego1, DixitMinijuego2, DixitMinijuego3],
   templateUrl: './dixit-stella.html',
   styleUrl: './dixit-stella.css',
 })
@@ -99,6 +100,7 @@ export class DixitStella implements OnInit, OnDestroy {
   activeMinigame: RealtimeMinigameStart | null = null;
   isMinigame1Open = false;
   isMinigame2Open = false;
+  isMinigame3Open = false;
   minigameUiState: 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled' = 'playing';
   minigameStatusMessage = '';
   private lastAppliedMinigameReceivedAt = 0;
@@ -524,6 +526,14 @@ export class DixitStella implements OnInit, OnDestroy {
     this.isMinigame2Open = false;
   }
 
+  closeMinigame3(): void {
+    if (this.activeMinigame) {
+      return;
+    }
+
+    this.isMinigame3Open = false;
+  }
+
   onMinigameFinished(result: { score: number }): void {
     if (!this.activeMinigame || this.minigameResultSent) {
       return;
@@ -838,6 +848,7 @@ export class DixitStella implements OnInit, OnDestroy {
     if (!this.isCurrentPlayerInActiveMinigame) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
       this.minigameStatusMessage =
         this.resolveMinigameView(minigame.type) === null
           ? 'Minijuego no disponible en este cliente. Esperando resolucion del servidor...'
@@ -849,15 +860,22 @@ export class DixitStella implements OnInit, OnDestroy {
     if (minigameView === null) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
       this.scheduleUnavailableMinigameSubmit(minigame.duration);
     } else if (minigameView === 2) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = true;
+      this.isMinigame3Open = false;
+    } else if (minigameView === 3) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.isMinigame3Open = true;
     } else {
       this.isMinigame1Open = true;
       this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
     }
   }
 
@@ -992,13 +1010,17 @@ export class DixitStella implements OnInit, OnDestroy {
     }
   }
 
-  private resolveMinigameView(type: number): 1 | 2 | null {
+  private resolveMinigameView(type: number): 1 | 2 | 3 | null {
     if (type === 0) {
       return 1;
     }
 
     if (type === 1) {
       return 2;
+    }
+
+    if (type === 2) {
+      return 3;
     }
 
     return null;
@@ -1043,6 +1065,7 @@ export class DixitStella implements OnInit, OnDestroy {
   private closeActiveMinigame(): void {
     this.isMinigame1Open = false;
     this.isMinigame2Open = false;
+    this.isMinigame3Open = false;
     this.clearMinigameUnavailableSubmitTimer();
     this.clearMinigameResolutionTimer();
     this.activeMinigame = null;

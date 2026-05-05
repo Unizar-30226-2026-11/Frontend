@@ -163,4 +163,19 @@ describe('PlayerInfoPull', () => {
     });
     expect(apiClientSpy.invalidateCache).toHaveBeenCalledWith('/users/profile');
   });
+
+  it('deletes the account through the profile endpoint', async () => {
+    apiClientSpy.request.and.resolveTo({ message: 'Cuenta eliminada correctamente' });
+
+    await expectAsync(service.deleteAccount()).toBeResolvedTo(
+      'Cuenta eliminada correctamente'
+    );
+
+    expect(apiClientSpy.request).toHaveBeenCalledWith('/users/profile', {
+      method: 'DELETE',
+      token: 'token-123',
+      useCache: false,
+    });
+    expect(apiClientSpy.invalidateCache).toHaveBeenCalledWith('/users/');
+  });
 });
