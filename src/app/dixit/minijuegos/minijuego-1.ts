@@ -187,7 +187,7 @@ export class DixitMinijuego1 implements OnInit, OnDestroy {
     this.moleIntervalId = setInterval(() => {
       this.showRandomMole();
       this.cdr.detectChanges();
-    }, 620);
+    }, 480);
   }
 
   private finishGame(): void {
