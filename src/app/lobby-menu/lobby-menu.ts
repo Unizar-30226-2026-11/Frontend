@@ -14,6 +14,7 @@ import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { MenuShowcase } from '../menu-showcase/menu-showcase';
 import { MenuShowcaseState } from '../menu-showcase/menu-showcase-base';
+import { readLocalStorage, writeLocalStorage } from '../utils/browser-storage';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 const LOBBY_MIN_PLAYERS = 3;
@@ -416,7 +417,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
         };
       }
       this.selectedDeckId = normalizedDeckId;
-      localStorage.setItem(this.buildLobbyDeckStorageKey(this.currentLobbyCode), this.selectedDeckId);
+      writeLocalStorage(this.buildLobbyDeckStorageKey(this.currentLobbyCode), this.selectedDeckId);
     } catch (error) {
       console.error('[LobbyMenu] Error al actualizar el mazo del lobby:', error);
       this.selectedDeckId = previousDeckId;
@@ -536,7 +537,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   }
 
   private restoreSelectedDeck(lobbyCode: string, backendSelectedDeckId: string | null): void {
-    const localDeckId = localStorage.getItem(this.buildLobbyDeckStorageKey(lobbyCode)) ?? '';
+    const localDeckId = readLocalStorage(this.buildLobbyDeckStorageKey(lobbyCode)) ?? '';
     const preferredDeckId = backendSelectedDeckId?.trim() || localDeckId;
     const hasPreferredDeck = this.deckOptions.some((deck) => deck.id === preferredDeckId);
     this.selectedDeckId = hasPreferredDeck ? preferredDeckId : '';

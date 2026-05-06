@@ -6,6 +6,7 @@ import {
   OnInit,
   effect,
   inject,
+  isDevMode,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -888,18 +889,20 @@ export class Dixit implements OnInit, OnDestroy {
     const storytellerName =
       this.playerRoster.find((player) => player.id === storytellerId)?.name ?? '';
 
-    console.info('[Dixit] Storyteller resolution', {
-      lobbyCode: this.id,
-      lastAction: lastAction ?? null,
-      storytellerId: storytellerId || null,
-      storytellerName: storytellerName || null,
-      currentUserId: this.currentUserId || null,
-      isCurrentPlayerStoryteller: storytellerId === this.currentUserId,
-      stateKeys: Object.keys(state),
-      currentRoundKeys: Object.keys(currentRoundState),
-      currentRound: currentRoundState,
-      currentClue: this.currentClue || null,
-    });
+    if (isDevMode()) {
+      console.info('[Dixit] Storyteller resolution', {
+        lobbyCode: this.id,
+        lastAction: lastAction ?? null,
+        storytellerId: storytellerId || null,
+        storytellerName: storytellerName || null,
+        currentUserId: this.currentUserId || null,
+        isCurrentPlayerStoryteller: storytellerId === this.currentUserId,
+        stateKeys: Object.keys(state),
+        currentRoundKeys: Object.keys(currentRoundState),
+        currentRound: currentRoundState,
+        currentClue: this.currentClue || null,
+      });
+    }
   }
 
   private resetPhasePresentationState(

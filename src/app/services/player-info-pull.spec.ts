@@ -32,9 +32,14 @@ describe('PlayerInfoPull', () => {
     service = TestBed.inject(PlayerInfoPull);
   });
 
+  function queueResponses(...responses: unknown[]): void {
+    let index = 0;
+    apiClientSpy.request.and.callFake(async <T>(): Promise<T> => responses[index++] as T);
+  }
+
   it('normalizes CONNECTED-like states from the profile response', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         profile: {
           id_user: 12,
           username: 'tester',
@@ -45,13 +50,15 @@ describe('PlayerInfoPull', () => {
           personal_state: 'ready',
           id: 'u_12',
         },
-      }),
-      Promise.resolve({
+      },
+      {
         balance: 250,
-      })
+      }
     );
 
-    await expectAsync(service.getPlayerInfo()).toBeResolvedTo({
+    const result = await service.getPlayerInfo();
+
+    expect(result).toEqual({
       id: 'u_12',
       legacyUserId: 12,
       username: 'tester',
@@ -65,8 +72,8 @@ describe('PlayerInfoPull', () => {
   });
 
   it('keeps UNKNOWN when the backend returns it', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         profile: {
           id_user: 12,
           username: 'tester',
@@ -77,15 +84,17 @@ describe('PlayerInfoPull', () => {
           personal_state: 'ready',
           id: 'u_12',
         },
-      }),
-      Promise.resolve({
+      },
+      {
         balance: {
           coins: 125,
         },
-      })
+      }
     );
 
-    await expectAsync(service.getPlayerInfo()).toBeResolvedTo({
+    const result = await service.getPlayerInfo();
+
+    expect(result).toEqual({
       id: 'u_12',
       legacyUserId: 12,
       username: 'tester',
@@ -99,8 +108,8 @@ describe('PlayerInfoPull', () => {
   });
 
   it('accepts the older nested balance field while migrating cached responses', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         profile: {
           id_user: 12,
           username: 'tester',
@@ -111,15 +120,17 @@ describe('PlayerInfoPull', () => {
           personal_state: 'ready',
           id: 'u_12',
         },
-      }),
-      Promise.resolve({
+      },
+      {
         balance: {
           balance: 80,
         },
-      })
+      }
     );
 
-    await expectAsync(service.getPlayerInfo()).toBeResolvedTo({
+    const result = await service.getPlayerInfo();
+
+    expect(result).toEqual({
       id: 'u_12',
       legacyUserId: 12,
       username: 'tester',
@@ -135,9 +146,9 @@ describe('PlayerInfoPull', () => {
   it('updates the username through the profile endpoint', async () => {
     apiClientSpy.request.and.resolveTo({ message: 'Nombre de usuario actualizado' });
 
-    await expectAsync(service.updateUsername('new_tester')).toBeResolvedTo(
-      'Nombre de usuario actualizado'
-    );
+    const message = await service.updateUsername('new_tester');
+
+    expect(message).toBe('Nombre de usuario actualizado');
 
     expect(apiClientSpy.request).toHaveBeenCalledWith('/users/profile', {
       method: 'PUT',
@@ -151,9 +162,9 @@ describe('PlayerInfoPull', () => {
   it('updates the player status through the status endpoint', async () => {
     apiClientSpy.request.and.resolveTo({ message: 'Estado actualizado' });
 
-    await expectAsync(service.updateStatus('DISCONNECTED')).toBeResolvedTo(
-      'Estado actualizado'
-    );
+    const message = await service.updateStatus('DISCONNECTED');
+
+    expect(message).toBe('Estado actualizado');
 
     expect(apiClientSpy.request).toHaveBeenCalledWith('/users/status', {
       method: 'PATCH',
@@ -167,9 +178,9 @@ describe('PlayerInfoPull', () => {
   it('deletes the account through the profile endpoint', async () => {
     apiClientSpy.request.and.resolveTo({ message: 'Cuenta eliminada correctamente' });
 
-    await expectAsync(service.deleteAccount()).toBeResolvedTo(
-      'Cuenta eliminada correctamente'
-    );
+    const message = await service.deleteAccount();
+
+    expect(message).toBe('Cuenta eliminada correctamente');
 
     expect(apiClientSpy.request).toHaveBeenCalledWith('/users/profile', {
       method: 'DELETE',

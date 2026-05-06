@@ -16,6 +16,7 @@ COPY --from=builder /app/dist/proyecto-software-front/browser /usr/share/nginx/h
 
 # Let nginx official entrypoint render the template with env vars.
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+ENV BACKEND_URL=https://api.keystudios.app
 
 EXPOSE 80
 

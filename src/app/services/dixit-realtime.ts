@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, isDevMode, signal } from '@angular/core';
 import {
   DixitConnectionStatus,
   DixitGameActionType,
@@ -24,11 +24,13 @@ import {
   RealtimeWalletUpdated,
 } from '../interfaces/dixit-realtime';
 import type { SocketIoClient } from '../../socket-io-client';
+import { io } from 'socket.io-client';
 import { ApiClient } from './api-client';
 import { Auth } from './auth';
 import { isApiRequestErrorStatus } from '../interfaces/api';
 import { PlayerStore } from './player-store';
 import type { LobbyEngine } from '../interfaces/game';
+import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../utils/browser-storage';
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
@@ -370,8 +372,8 @@ export class DixitRealtime {
     this.activeGameNoticeSignal.set('');
     this.toastSignal.set(null);
     this.lastGameStateReceivedAt = 0;
-    localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
-    localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+    removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
+    removeLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
   }
 
   // Evita abrir conexiones duplicadas para la misma sesion y serializa los intentos
@@ -409,7 +411,7 @@ export class DixitRealtime {
   // Construye la instancia real de Socket.IO con la autenticación adecuada y
   // enlaza todos los listeners de la sala.
   private async openSocketConnection(session: RealtimeSession): Promise<void> {
-    const socketFactory = window.io;
+    const socketFactory = window.io ?? io;
     if (!socketFactory) {
       const error = new Error('No se pudo cargar el cliente de Socket.IO');
       this.connectionStatusState.set('error');
@@ -852,11 +854,11 @@ export class DixitRealtime {
     } else {
       const storedSession = this.restoreSession();
       if (storedSession?.lobbyCode === lobbyCode) {
-        localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+        removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
       }
       const storedGameState = this.restoreGameState(lobbyCode);
       if (storedGameState) {
-        localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+        removeLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
       }
     }
 
@@ -869,9 +871,7 @@ export class DixitRealtime {
 
   // Fallback para entornos donde el backend no devuelve una URL explícita de socket.
   private resolveDefaultSocketUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const hostname = window.location.hostname || 'localhost';
-    return `${protocol}//${hostname}:3000`;
+    return window.location.origin;
   }
 
   // Normaliza el estado público de lobby para que el frontend opere siempre con
@@ -1166,7 +1166,7 @@ export class DixitRealtime {
     });
     this.auth.setActiveGameId(null);
     this.activeGameNoticeSignal.set('');
-    localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+    removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
     this.pushToast(message);
     this.debug('event game ended', payload);
   }
@@ -1326,7 +1326,7 @@ export class DixitRealtime {
       this.normalizeLobbyEngine(readString(wrappedData ?? undefined, 'engine')) ??
       this.resolveGameEngine(this.gameStateSignal()?.state) ??
       this.auth.activeGameEngine?.() ??
-      undefined
+      'Classic'
     );
   }
 
@@ -1605,7 +1605,7 @@ export class DixitRealtime {
   // la estructura mínima necesaria para reconectar.
   private restoreSession(): RealtimeSession | null {
     try {
-      const rawSession = localStorage.getItem(REALTIME_SESSION_STORAGE_KEY);
+      const rawSession = readLocalStorage(REALTIME_SESSION_STORAGE_KEY);
       if (!rawSession) {
         return null;
       }
@@ -1616,7 +1616,7 @@ export class DixitRealtime {
         typeof parsedSession.socketUrl !== 'string' ||
         (typeof parsedSession.ticket !== 'string' && typeof parsedSession.authToken !== 'string')
       ) {
-        localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+        removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
         return null;
       }
 
@@ -1638,7 +1638,7 @@ export class DixitRealtime {
         joinOnConnect: parsedSession.joinOnConnect !== false,
       };
     } catch {
-      localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+      removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
       return null;
     }
   }
@@ -1651,7 +1651,7 @@ export class DixitRealtime {
     }
 
     try {
-      const rawGameState = localStorage.getItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      const rawGameState = readLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
       if (!rawGameState) {
         return null;
       }
@@ -1667,7 +1667,7 @@ export class DixitRealtime {
           typeof parsedGameState.lastAction !== 'undefined') ||
         typeof parsedGameState.receivedAt !== 'number'
       ) {
-        localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+        removeLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
         return null;
       }
 
@@ -1677,7 +1677,7 @@ export class DixitRealtime {
         receivedAt: parsedGameState.receivedAt,
       };
     } catch {
-      localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      removeLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
       return null;
     }
   }
@@ -1685,11 +1685,11 @@ export class DixitRealtime {
   // Persiste solo la parte de sesion que sirve para reconectar en futuros refresh.
   private persistSession(session: RealtimeSession): void {
     if (!session.ticket) {
-      localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+      removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
       return;
     }
 
-    localStorage.setItem(
+    writeLocalStorage(
       REALTIME_SESSION_STORAGE_KEY,
       JSON.stringify({
         lobbyCode: session.lobbyCode,
@@ -1705,11 +1705,11 @@ export class DixitRealtime {
   private persistGameState(gameState: RealtimeGameStateUpdate): void {
     const lobbyCode = this.sessionState()?.lobbyCode;
     if (!lobbyCode) {
-      localStorage.removeItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      removeLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
       return;
     }
 
-    localStorage.setItem(
+    writeLocalStorage(
       REALTIME_GAME_STATE_STORAGE_KEY,
       JSON.stringify({
         lobbyCode,
@@ -1722,6 +1722,10 @@ export class DixitRealtime {
 
   // Logging unificado de la capa realtime para depurar secuencia de eventos websocket.
   private debug(message: string, payload?: unknown): void {
+    if (!isDevMode()) {
+      return;
+    }
+
     if (payload === undefined) {
       console.info(`${REALTIME_LOG_PREFIX} ${message}`);
       return;

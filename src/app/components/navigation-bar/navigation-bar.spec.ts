@@ -46,13 +46,19 @@ describe('NavigationBar', () => {
     await fixture.whenStable();
   });
 
+  async function openCommunityPanel(): Promise<void> {
+    component.switchCommunityPanel();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
 
   it('loads friends when opening the community panel', async () => {
-    component.switchCommunityPanel();
-    await fixture.whenStable();
+    await openCommunityPanel();
 
     expect(friendsPullSpy.getFriendsPanelData).toHaveBeenCalledTimes(1);
     expect(component.connectedPlayers.length).toBe(1);
@@ -66,8 +72,7 @@ describe('NavigationBar', () => {
       pendingRequests: [],
     });
 
-    component.switchCommunityPanel();
-    await fixture.whenStable();
+    await openCommunityPanel();
 
     expect(component.connectedPlayers.length).toBe(1);
     expect(component.disconnectedPlayers.length).toBe(0);
@@ -80,8 +85,7 @@ describe('NavigationBar', () => {
       pendingRequests: [],
     });
 
-    component.switchCommunityPanel();
-    await fixture.whenStable();
+    await openCommunityPanel();
 
     expect(component.connectedPlayers.length).toBe(0);
     expect(component.disconnectedPlayers.length).toBe(1);
@@ -94,9 +98,7 @@ describe('NavigationBar', () => {
       pendingRequests: [],
     });
 
-    component.switchCommunityPanel();
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await openCommunityPanel();
 
     const friendStatuses = fixture.nativeElement.querySelectorAll('.player-card .player-status');
     expect(friendStatuses.length).toBe(0);
@@ -105,7 +107,7 @@ describe('NavigationBar', () => {
   it('shows the API error below the user id input when sending a request fails', async () => {
     friendsPullSpy.sendFriendRequest.and.rejectWith(new Error('Usuario no encontrado'));
 
-    component.switchCommunityPanel();
+    await openCommunityPanel();
     component.switchSearchBox();
     fixture.detectChanges();
     await fixture.whenStable();

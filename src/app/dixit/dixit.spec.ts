@@ -554,7 +554,7 @@ describe('Dixit', () => {
     });
     expect(modifierBadge).not.toBeNull();
     expect(modifierBadge?.getAttribute('src')).toContain('assets/modificador_hand_limit_plus.png');
-    expect(modifierBadge?.getAttribute('title')).toContain('+1 carta');
+    expect(modifierBadge?.getAttribute('title')).toContain('+1 (1 carta)');
     expect(modifierBadge?.getAttribute('title')).toContain('2 turnos restantes');
   });
 
@@ -1022,9 +1022,8 @@ describe('Dixit', () => {
     expect(realtimeSpy.endGame).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the rival picker for backend duel simulation', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
+  it('opens the rival picker for backend duel simulation', async () => {
+    await initializeComponent(fixture);
 
     component.isSimulationDrawerOpen = true;
     fixture.detectChanges();
@@ -1042,7 +1041,7 @@ describe('Dixit', () => {
     expect(component.activeDuelChallenge).not.toBeNull();
     expect(component.simulationTriggerMode).toBe('duel');
     expect(component.isSimulationDrawerOpen).toBeFalse();
-  }));
+  });
 });
 
 async function initializeComponent(fixture: ComponentFixture<Dixit>): Promise<void> {

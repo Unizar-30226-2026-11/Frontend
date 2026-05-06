@@ -25,9 +25,14 @@ describe('FriendsPull', () => {
     service = TestBed.inject(FriendsPull);
   });
 
+  function queueResponses(...responses: unknown[]): void {
+    let index = 0;
+    apiClientSpy.request.and.callFake(async <T>(): Promise<T> => responses[index++] as T);
+  }
+
   it('loads friends and pending requests together', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         friends: [
           {
             id: 'u_456',
@@ -35,8 +40,8 @@ describe('FriendsPull', () => {
             status: 'online',
           },
         ],
-      }),
-      Promise.resolve({
+      },
+      {
         pendingRequests: [
           {
             id: 'req_001',
@@ -45,7 +50,7 @@ describe('FriendsPull', () => {
             createdAt: '2026-03-01T10:00:00Z',
           },
         ],
-      })
+      }
     );
 
     const result = await service.getFriendsPanelData();
@@ -71,11 +76,11 @@ describe('FriendsPull', () => {
   });
 
   it('falls back to fromUserId when a pending request has no fromUsername', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         friends: [],
-      }),
-      Promise.resolve({
+      },
+      {
         pendingRequests: [
           {
             id: 'req_16_1',
@@ -84,7 +89,7 @@ describe('FriendsPull', () => {
             createdAt: '2026-04-13T14:22:59.215Z',
           },
         ],
-      })
+      }
     );
 
     const result = await service.getFriendsPanelData();

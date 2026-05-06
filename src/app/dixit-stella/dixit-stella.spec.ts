@@ -216,7 +216,7 @@ describe('DixitStella', () => {
     fixture = TestBed.createComponent(DixitStella);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    await fixture.whenStable();
+    await Promise.resolve();
     fixture.detectChanges();
 
     expect(component.isMinigame1Open).toBeTrue();
@@ -237,7 +237,7 @@ describe('DixitStella', () => {
     fixture = TestBed.createComponent(DixitStella);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    await fixture.whenStable();
+    await Promise.resolve();
     fixture.detectChanges();
 
     expect(component.isMinigame1Open).toBeFalse();
@@ -264,7 +264,7 @@ describe('DixitStella', () => {
     fixture = TestBed.createComponent(DixitStella);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    await fixture.whenStable();
+    await Promise.resolve();
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;

@@ -7,6 +7,7 @@ import {
 } from '../services/collections-pull';
 import { BoardsPull, UserBoardSummary } from '../services/boards-pull';
 import { CardPull } from '../services/card-pull';
+import { readLocalStorage, writeLocalStorage } from '../utils/browser-storage';
 
 const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 const ACTIVE_BOARD_STORAGE_KEY = 'ator:selected-board';
@@ -162,7 +163,7 @@ export abstract class MenuShowcaseState {
       this.boards = boards;
 
       const preferredBoardId =
-        this.selectedBoardId || localStorage.getItem(ACTIVE_BOARD_STORAGE_KEY) || boards[0]?.id || '';
+        this.selectedBoardId || readLocalStorage(ACTIVE_BOARD_STORAGE_KEY) || boards[0]?.id || '';
       const hasPreferredBoard = boards.some((board) => board.id === preferredBoardId);
       this.selectedBoardId = hasPreferredBoard ? preferredBoardId : boards[0]?.id ?? '';
     } catch (error) {
@@ -194,7 +195,7 @@ export abstract class MenuShowcaseState {
 
     try {
       this.boardActionMessage = await this.boardsPull.activateBoard(this.selectedBoardId);
-      localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, this.selectedBoardId);
+      writeLocalStorage(ACTIVE_BOARD_STORAGE_KEY, this.selectedBoardId);
     } catch (error) {
       this.boardActionError =
         error instanceof Error ? error.message : 'No se pudo activar el tablero';

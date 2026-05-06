@@ -54,7 +54,7 @@ describe('BoardsPull', () => {
     ]);
   });
 
-  it('activates the selected board with board_id', async () => {
+  it('activates the selected board with boardId', async () => {
     apiClientSpy.request.and.resolveTo({
       message: 'Tablero activo actualizado.',
     });
@@ -64,7 +64,7 @@ describe('BoardsPull', () => {
     expect(apiClientSpy.request).toHaveBeenCalledWith('/users/boards/active', {
       method: 'POST',
       token: 'token-123',
-      body: { board_id: 'b_001' },
+      body: { boardId: 'b_001' },
       useCache: false,
     });
     expect(apiClientSpy.invalidateCache).toHaveBeenCalledWith('/users/boards');

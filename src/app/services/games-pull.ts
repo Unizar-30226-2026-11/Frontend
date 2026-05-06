@@ -88,7 +88,6 @@ export class GamesPull {
     const token = this.requireToken();
     const encodedLobbyCode = encodeURIComponent(lobbyCode);
 
-    // TODO: confirmar el contrato final del endpoint de arranque cuando backend lo cierre.
     return this.apiClient
       .request<LobbyStartResponse>(`/lobbies/${encodedLobbyCode}/start`, {
         method: 'POST',
