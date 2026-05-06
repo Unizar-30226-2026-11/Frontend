@@ -7,7 +7,7 @@
   },
   "newProjectRoot": "projects",
   "projects": {
-    "proyecto-software-front": {
+    "a-tale-of-recognition": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -78,10 +78,10 @@
           },
           "configurations": {
             "production": {
-              "buildTarget": "proyecto-software-front:build:production"
+              "buildTarget": "a-tale-of-recognition:build:production"
             },
             "development": {
-              "buildTarget": "proyecto-software-front:build:development"
+              "buildTarget": "a-tale-of-recognition:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -90,7 +90,7 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "tsConfig": "tsconfig.spec.json",
-            "buildTarget": "proyecto-software-front:build:testing",
+            "buildTarget": "a-tale-of-recognition:build:testing",
             "setupFiles": [
               "src/test-jasmine-shim.ts"
             ]

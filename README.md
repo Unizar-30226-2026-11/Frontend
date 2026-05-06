@@ -67,7 +67,7 @@ La aplicacion quedara disponible en `http://localhost:4200`.
 npm run build
 ```
 
-El resultado se genera en `dist/proyecto-software-front/`.
+El resultado se genera en `dist/a-tale-of-recognition/`.
 
 ### Despliegue Docker
 
@@ -98,7 +98,7 @@ Flujo:
 
 1. `npm ci`
 2. `ng build --configuration production`
-3. copia de `dist/proyecto-software-front/browser` a `/usr/share/nginx/html`
+3. copia de `dist/a-tale-of-recognition/browser` a `/usr/share/nginx/html`
 4. uso de `nginx/default.conf.template`
 5. proxy de `/api` y `/socket.io` usando `BACKEND_URL`
 

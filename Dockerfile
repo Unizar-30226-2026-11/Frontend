@@ -12,7 +12,7 @@ FROM nginx:1.27-alpine
 
 # Remove default static files and copy Angular build artifacts.
 RUN rm -rf /usr/share/nginx/html/*
-COPY --from=builder /app/dist/proyecto-software-front/browser /usr/share/nginx/html
+COPY --from=builder /app/dist/a-tale-of-recognition/browser /usr/share/nginx/html
 
 # Let nginx official entrypoint render the template with env vars.
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template

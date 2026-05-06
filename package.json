@@ -1,6 +1,6 @@
 {
-  "name": "proyecto-software-front",
-  "version": "0.0.0",
+  "name": "a-tale-of-recognition",
+  "version": "1.0.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
