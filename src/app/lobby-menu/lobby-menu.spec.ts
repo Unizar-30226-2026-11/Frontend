@@ -174,6 +174,27 @@ describe('LobbyMenu', () => {
     ]);
   });
 
+  it('renders the lobby as soon as the REST details arrive without waiting for realtime recovery', async () => {
+    let resolveRealtimeConnection = (): void => {};
+    realtimeSpy.ensureLobbyConnection.and.returnValue(
+      new Promise<void>((resolve) => {
+        resolveRealtimeConnection = resolve;
+      })
+    );
+
+    const freshFixture = TestBed.createComponent(LobbyMenu);
+    const freshComponent = freshFixture.componentInstance;
+    await freshComponent['loadLobby']('A1B2');
+
+    expect(freshComponent.roomLoading).toBeFalse();
+    expect(freshComponent.playersInRoom).toBe(2);
+    expect(freshComponent.roomSlots.length).toBe(4);
+    expect(freshComponent.joinLobbyLoading).toBeTrue();
+
+    resolveRealtimeConnection();
+    await Promise.resolve();
+  });
+
   it('shows the host action when the authenticated player owns the lobby', () => {
     expect(component.isHost).toBeTrue();
     expect(component.primaryActionButtonText).toBe('Empezar partida');
@@ -208,6 +229,15 @@ describe('LobbyMenu', () => {
     await component.joinCurrentLobby();
 
     expect(realtimeSpy.joinLobby).toHaveBeenCalledOnceWith('A1B2');
+  });
+
+  it('shows join errors only in the overlay when the explicit join action fails', async () => {
+    realtimeSpy.joinLobby.and.rejectWith(new Error('Timeout realtime'));
+
+    await component.joinCurrentLobby();
+
+    expect(component.joinOverlayError).toBe('Timeout realtime');
+    expect(component.primaryActionError).toBe('');
   });
 
   it('starts the lobby when the host presses the main action after joining', async () => {
