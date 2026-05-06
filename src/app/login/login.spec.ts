@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { Router } from '@angular/router';
 
 import { Auth } from '../services/auth';
 import { Login } from './login';
@@ -8,18 +8,20 @@ describe('Login', () => {
   let component: Login;
   let fixture: ComponentFixture<Login>;
   let authSpy: jasmine.SpyObj<Auth>;
-  let router: Router;
+  let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
     authSpy = jasmine.createSpyObj<Auth>('Auth', ['logIn']);
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigateByUrl']);
+    routerSpy.navigateByUrl.and.resolveTo(true);
 
     await TestBed.configureTestingModule({
       imports: [Login],
-      providers: [provideRouter([]), { provide: Auth, useValue: authSpy }],
+      providers: [
+        { provide: Router, useValue: routerSpy },
+        { provide: Auth, useValue: authSpy },
+      ],
     }).compileComponents();
-
-    router = TestBed.inject(Router);
-    spyOn(router, 'navigateByUrl').and.resolveTo(true);
 
     fixture = TestBed.createComponent(Login);
     component = fixture.componentInstance;
@@ -42,7 +44,7 @@ describe('Login', () => {
     await component.logIn('tester@example.com', 'secret');
 
     expect(authSpy.logIn).toHaveBeenCalledWith('tester@example.com', 'secret');
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/menu');
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/menu');
     expect(component.error).toBeNull();
     expect(component.submitting).toBeFalse();
   });
@@ -61,7 +63,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'secret');
 
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/game/A1B2');
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/game/A1B2');
   });
 
   it('shows the API error when authentication fails', async () => {
@@ -69,7 +71,7 @@ describe('Login', () => {
 
     await component.logIn('tester@example.com', 'wrong');
 
-    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
     expect(component.error).toBe('Credenciales invalidas');
     expect(component.submitting).toBeFalse();
   });

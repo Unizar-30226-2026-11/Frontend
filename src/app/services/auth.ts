@@ -10,6 +10,7 @@ import {
 import { isApiRequestErrorStatus } from '../interfaces/api';
 import { buildGameRoute, type LobbyEngine } from '../interfaces/game';
 import { ApiClient } from './api-client';
+import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../utils/browser-storage';
 
 const AUTH_STORAGE_KEY = 'ator.auth.session';
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
@@ -253,7 +254,7 @@ export class Auth {
 
   private restoreSession(): AuthSession | null {
     try {
-      const rawSession = localStorage.getItem(AUTH_STORAGE_KEY);
+      const rawSession = readLocalStorage(AUTH_STORAGE_KEY);
       if (!rawSession) {
         return null;
       }
@@ -301,12 +302,23 @@ export class Auth {
   }
 
   private persistSession(session: AuthSession): void {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    writeLocalStorage(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        token: session.token,
+        user: {
+          id: session.user.id,
+          username: session.user.username,
+        },
+        activeGameId: session.activeGameId,
+        activeGameEngine: session.activeGameEngine,
+      } satisfies Partial<AuthSession>)
+    );
   }
 
   private clearPersistedSession(): void {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(REALTIME_SESSION_STORAGE_KEY);
+    removeLocalStorage(AUTH_STORAGE_KEY);
+    removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
   }
 
   private normalizeActiveGameEngine(value: unknown): LobbyEngine | null {
@@ -319,7 +331,7 @@ export class Auth {
     }
 
     try {
-      const rawGameState = localStorage.getItem(REALTIME_GAME_STATE_STORAGE_KEY);
+      const rawGameState = readLocalStorage(REALTIME_GAME_STATE_STORAGE_KEY);
       if (!rawGameState) {
         return null;
       }

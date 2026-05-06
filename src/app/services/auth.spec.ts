@@ -31,7 +31,7 @@ describe('Auth', () => {
       ],
     });
 
-    service = TestBed.inject(Auth);
+    service = null as unknown as Auth;
   });
 
   it('should be created', () => {
@@ -40,8 +40,6 @@ describe('Auth', () => {
   });
 
   it('persists the session after login', async () => {
-    const service = TestBed.inject(Auth);
-
     apiClientSpy.request.and.resolveTo({
       message: 'Login completado',
       token: 'token-123',
@@ -53,6 +51,7 @@ describe('Auth', () => {
       },
     });
 
+    service = TestBed.inject(Auth);
     await service.logIn('tester@example.com', 'secret');
 
     expect(service.isLoggedIn()).toBeTrue();
@@ -64,14 +63,14 @@ describe('Auth', () => {
       user: {
         id: 'user-1',
         username: 'tester',
-        email: 'tester@example.com',
       },
     });
   });
 
   it('restores a persisted session from localStorage', () => {
+    const persistedToken = buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600);
     localStorage.setItem('ator.auth.session', JSON.stringify({
-      token: 'persisted-token',
+      token: persistedToken,
       activeGameId: 'GAME-42',
       activeGameEngine: 'Stella',
       user: {
@@ -84,7 +83,7 @@ describe('Auth', () => {
     const restoredService = TestBed.inject(Auth);
 
     expect(restoredService.isLoggedIn()).toBeTrue();
-    expect(restoredService.token()).toBe('persisted-token');
+    expect(restoredService.token()).toBe(persistedToken);
     expect(restoredService.username()).toBe('persisted-user');
     expect(restoredService.email()).toBe('persisted@example.com');
     expect(restoredService.activeGameId()).toBe('GAME-42');
@@ -94,7 +93,7 @@ describe('Auth', () => {
 
   it('derives the active game engine from the persisted realtime game state', () => {
     localStorage.setItem('ator.auth.session', JSON.stringify({
-      token: 'persisted-token',
+      token: buildJwtWithExp(Math.floor(Date.now() / 1000) + 3600),
       activeGameId: 'GAME-42',
       user: {
         id: 'user-2',
@@ -137,6 +136,7 @@ describe('Auth', () => {
   });
 
   it('refreshes the session on bootstrap and restores the active game id', async () => {
+    service = TestBed.inject(Auth);
     apiClientSpy.request.and.resolveTo({
       accessToken: 'token-456',
       activeGameId: 'ROOM-7',

@@ -26,6 +26,7 @@ export interface ApiRequestOptions {
   body?: unknown;
   forceRefresh?: boolean;
   ttlMs?: number;
+  timeoutMs?: number;
   cacheKey?: string;
   useCache?: boolean;
   credentials?: RequestCredentials;

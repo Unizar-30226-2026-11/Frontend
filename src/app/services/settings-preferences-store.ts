@@ -3,6 +3,7 @@ import {
   DEFAULT_SETTINGS_PREFERENCES,
   SettingsPreferences,
 } from '../interfaces/settings-preferences';
+import { readLocalStorage, writeLocalStorage } from '../utils/browser-storage';
 
 @Injectable({
   providedIn: 'root',
@@ -18,7 +19,7 @@ export class SettingsPreferencesStore {
   }
 
   load(): void {
-    const rawValue = this.getStorage()?.getItem(this.storageKey);
+    const rawValue = readLocalStorage(this.storageKey);
     if (!rawValue) {
       this.settings.set({ ...DEFAULT_SETTINGS_PREFERENCES });
       return;
@@ -40,11 +41,7 @@ export class SettingsPreferencesStore {
   save(nextSettings: SettingsPreferences): void {
     const sanitizedSettings = this.sanitize(nextSettings);
     this.settings.set(sanitizedSettings);
-    try {
-      this.getStorage()?.setItem(this.storageKey, JSON.stringify(sanitizedSettings));
-    } catch {
-      // If localStorage fails, the app still keeps the values in memory.
-    }
+    writeLocalStorage(this.storageKey, JSON.stringify(sanitizedSettings));
     this.lastSavedAt.set(Date.now());
   }
 
@@ -81,17 +78,5 @@ export class SettingsPreferencesStore {
       typeof candidate.notificationsEnabled === 'boolean' &&
       typeof candidate.showOnlineStatus === 'boolean'
     );
-  }
-
-  private getStorage(): Storage | null {
-    if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) {
-      return null;
-    }
-
-    try {
-      return globalThis.localStorage;
-    } catch {
-      return null;
-    }
   }
 }

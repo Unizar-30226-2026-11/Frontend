@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 
 import { vi } from 'vitest';
 import { ApiRequestError } from '../interfaces/api';
@@ -199,7 +199,7 @@ describe('DixitRealtime', () => {
     );
   });
 
-  it('keeps the stella engine when game started arrives without state.mode but with game.engine', fakeAsync(() => {
+  it('keeps the stella engine when game started arrives without state.mode but with game.engine', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
       .createSpy('socketFactory')
@@ -221,11 +221,10 @@ describe('DixitRealtime', () => {
     });
 
     const service = TestBed.inject(DixitRealtime);
-    void service.ensureLobbyConnection('A1B2');
-
-    tick();
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
     socket.trigger('connect');
-    tick();
+    await connectionPromise;
 
     socket.trigger('server:game:started', {
       lobbyCode: 'A1B2',
@@ -246,7 +245,7 @@ describe('DixitRealtime', () => {
         engine: 'Stella',
       })
     );
-  }));
+  });
 
   it('stores private hand updates from the documented server event', async () => {
     const socket = new FakeSocketIoClient();
@@ -397,7 +396,7 @@ describe('DixitRealtime', () => {
     );
   });
 
-  it('syncs the active game engine from state_updated when the mode is STELLA', fakeAsync(() => {
+  it('syncs the active game engine from state_updated when the mode is STELLA', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
       .createSpy('socketFactory')
@@ -419,11 +418,10 @@ describe('DixitRealtime', () => {
     });
 
     const service = TestBed.inject(DixitRealtime);
-    void service.ensureLobbyConnection('A1B2');
-
-    tick();
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
     socket.trigger('connect');
-    tick();
+    await connectionPromise;
 
     socket.trigger('server:game:state_updated', {
       state: {
@@ -439,9 +437,9 @@ describe('DixitRealtime', () => {
 
     expect(authStub.setActiveGameId).toHaveBeenCalledWith('A1B2', 'Stella');
     expect(service.gameState()?.state['mode']).toBe('STELLA');
-  }));
+  });
 
-  it('exposes server minigame starts and emits local minigame scores', fakeAsync(() => {
+  it('exposes server minigame starts and emits local minigame scores', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
       .createSpy('socketFactory')
@@ -463,11 +461,10 @@ describe('DixitRealtime', () => {
     });
 
     const service = TestBed.inject(DixitRealtime);
-    void service.ensureLobbyConnection('A1B2');
-
-    tick();
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
     socket.trigger('connect');
-    tick();
+    await connectionPromise;
 
     socket.trigger('server:game:minigame_start', {
       player1: 'u_1',
@@ -489,9 +486,12 @@ describe('DixitRealtime', () => {
 
     service.sendMinigameScore(12.7);
 
-    expect(socket.emissions).toContain(
+    const scoreEmission = socket.emissions.find(
+      (emission) => emission.event === 'client:game:action'
+    );
+
+    expect(scoreEmission).toEqual(
       jasmine.objectContaining({
-        event: 'client:game:action',
         payload: jasmine.objectContaining({
           lobbyCode: 'A1B2',
           actionType: 'SUBMIT_MINIGAME_SCORE',
@@ -501,9 +501,9 @@ describe('DixitRealtime', () => {
         }),
       })
     );
-  }));
+  });
 
-  it('stores mode change offers and exposes the normalized target mode', fakeAsync(() => {
+  it('stores mode change offers and exposes the normalized target mode', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
       .createSpy('socketFactory')
@@ -525,11 +525,10 @@ describe('DixitRealtime', () => {
     });
 
     const service = TestBed.inject(DixitRealtime);
-    void service.ensureLobbyConnection('A1B2');
-
-    tick();
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
     socket.trigger('connect');
-    tick();
+    await connectionPromise;
 
     socket.trigger('server:game:mode_change_offer', {
       message: 'Puedes cambiar a Stella.',
@@ -543,7 +542,7 @@ describe('DixitRealtime', () => {
       })
     );
     expect(service.toast()?.message).toBe('Puedes cambiar a Stella.');
-  }));
+  });
 
   it('keeps the final ranking available after server:game:ended and clears the active game id', async () => {
     const socket = new FakeSocketIoClient();

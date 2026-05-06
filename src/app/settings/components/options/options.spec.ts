@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { Auth } from '../../../services/auth';
 import { BoardsPull } from '../../../services/boards-pull';
 import { CardPull } from '../../../services/card-pull';
@@ -16,13 +16,15 @@ describe('Options', () => {
     loading: ReturnType<typeof signal>;
     error: ReturnType<typeof signal>;
   };
+  let routerSpy: jasmine.SpyObj<Router>;
   let cardPullSpy: jasmine.SpyObj<CardPull>;
   let boardsPullSpy: jasmine.SpyObj<BoardsPull>;
-  let router: Router;
 
   beforeEach(async () => {
     authSpy = jasmine.createSpyObj<Auth>('Auth', ['logOut', 'isLoggedIn']);
     authSpy.isLoggedIn.and.returnValue(true);
+    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
+    routerSpy.navigate.and.resolveTo(true);
 
     playerStoreSpy = Object.assign(
       jasmine.createSpyObj<PlayerStore>('PlayerStore', [
@@ -65,16 +67,13 @@ describe('Options', () => {
     await TestBed.configureTestingModule({
       imports: [Options],
       providers: [
-        provideRouter([]),
+        { provide: Router, useValue: routerSpy },
         { provide: Auth, useValue: authSpy },
         { provide: PlayerStore, useValue: playerStoreSpy },
         { provide: CardPull, useValue: cardPullSpy },
         { provide: BoardsPull, useValue: boardsPullSpy },
       ],
     }).compileComponents();
-
-    router = TestBed.inject(Router);
-    spyOn(router, 'navigate').and.resolveTo(true);
   });
 
   async function createComponent(): Promise<void> {
@@ -107,18 +106,22 @@ describe('Options', () => {
 
     expect(playerStoreSpy.clearPlayer).toHaveBeenCalledBefore(authSpy.logOut);
     expect(authSpy.logOut).toHaveBeenCalledOnceWith();
-    expect(router.navigate).toHaveBeenCalledOnceWith(['/login']);
+    expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/login']);
   });
 
   it('deletes the account after confirmation', async () => {
     await createComponent();
-    spyOn(window, 'confirm').and.returnValue(true);
+    const originalConfirm = window.confirm;
+    window.confirm = () => true;
 
-    await component.eliminarCuenta();
+    try {
+      await component.eliminarCuenta();
 
-    expect(window.confirm).toHaveBeenCalled();
-    expect(playerStoreSpy.deleteAccount).toHaveBeenCalledOnceWith();
-    expect(authSpy.logOut).toHaveBeenCalled();
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+      expect(playerStoreSpy.deleteAccount).toHaveBeenCalledOnceWith();
+      expect(authSpy.logOut).toHaveBeenCalled();
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/login']);
+    } finally {
+      window.confirm = originalConfirm;
+    }
   });
 });

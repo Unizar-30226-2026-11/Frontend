@@ -25,6 +25,22 @@ Frontend Angular del proyecto de juego basado en Dixit, con soporte para:
 - npm 11 o compatible
 - Backend disponible en `http://localhost:3000` para desarrollo local
 
+## Configuracion de entornos
+
+- Desarrollo local:
+  - `proxy.conf.json` redirige `/api` a `http://localhost:3000`
+  - solo afecta a `ng serve`
+- Produccion:
+  - el frontend se sirve estaticamente con nginx
+  - nginx proxifica `/api` y `/socket.io/` usando la variable de entorno `BACKEND_URL`
+  - `proxy.conf.json` no se usa en produccion
+
+Ejemplo de `BACKEND_URL`:
+
+```bash
+BACKEND_URL=http://backend:3000
+```
+
 ## Scripts
 
 ```bash
@@ -53,6 +69,19 @@ npm run build
 
 El resultado se genera en `dist/proyecto-software-front/`.
 
+### Despliegue Docker
+
+La imagen final usa nginx y requiere `BACKEND_URL` en runtime para reenviar:
+
+- `/api/*`
+- `/socket.io/*`
+
+Ejemplo:
+
+```bash
+docker run -p 8080:80 -e BACKEND_URL=http://backend:3000 ghcr.io/<org>/<repo>:latest
+```
+
 ### Tests
 
 ```bash
@@ -71,6 +100,15 @@ Flujo:
 2. `ng build --configuration production`
 3. copia de `dist/proyecto-software-front/browser` a `/usr/share/nginx/html`
 4. uso de `nginx/default.conf.template`
+5. proxy de `/api` y `/socket.io` usando `BACKEND_URL`
+
+## Seguridad y produccion
+
+- La app usa una `Content-Security-Policy` y cabeceras de seguridad desde `index.html` y nginx.
+- El cliente de Socket.IO se carga como dependencia del proyecto, no desde CDN.
+- La sesion se mantiene en `localStorage` por compatibilidad actual con backend.
+- Solo se persiste la informacion minima necesaria para restaurar sesion y reconexion.
+- El workflow de CI publica imagen Docker solo despues de pasar `build` y `test`.
 
 ## Rutas principales
 

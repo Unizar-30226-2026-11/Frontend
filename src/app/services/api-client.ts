@@ -18,6 +18,7 @@ export class ApiClient {
   readonly baseUrl = '/api';
 
   private readonly defaultTtlMs = 60000;
+  private readonly defaultTimeoutMs = 15000;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
 
@@ -114,12 +115,24 @@ export class ApiClient {
       headers['Authorization'] = `Bearer ${options.token}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: options.method,
-      headers,
-      credentials: options.credentials,
-      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-    });
+    const timeoutMs = options.timeoutMs ?? this.defaultTimeoutMs;
+    const controller = new AbortController();
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method: options.method,
+        headers,
+        credentials: options.credentials,
+        signal: controller.signal,
+        ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      });
+    } catch (error) {
+      throw this.resolveNetworkError(error, timeoutMs);
+    } finally {
+      globalThis.clearTimeout(timeoutId);
+    }
 
     const rawBody = await response.text();
     const parsedBody = rawBody ? this.parseBody(rawBody) : null;
@@ -148,5 +161,17 @@ export class ApiClient {
     }
 
     return 'La API devolvio un error inesperado';
+  }
+
+  private resolveNetworkError(error: unknown, timeoutMs: number): Error {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return new Error(`La peticion supero el tiempo limite de ${timeoutMs} ms`);
+    }
+
+    if (error instanceof Error) {
+      return new Error(`No se pudo conectar con la API: ${error.message}`);
+    }
+
+    return new Error('No se pudo conectar con la API');
   }
 }

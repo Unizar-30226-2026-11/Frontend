@@ -28,7 +28,10 @@ describe('DecksCard', () => {
     component.canBuy = true;
     component.deckImageSrc = '/assets/Tablero.png';
     component.deckName = 'Carta 4-12';
-    spyOn(component.buy, 'emit');
+    let emitted = false;
+    component.buy.subscribe(() => {
+      emitted = true;
+    });
 
     fixture.detectChanges();
 
@@ -38,6 +41,6 @@ describe('DecksCard', () => {
     expect(button.disabled).toBeTrue();
     expect(button.textContent).toContain('Ya lo tienes');
     expect(button.classList).toContain('deck-button--owned');
-    expect(component.buy.emit).not.toHaveBeenCalled();
+    expect(emitted).toBeFalse();
   });
 });

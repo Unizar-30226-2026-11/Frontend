@@ -677,7 +677,9 @@ export class DixitStella implements OnInit, OnDestroy {
     this.roomTitle = lobby.title?.trim() || this.roomTitle;
 
     lobby.players.forEach((playerId) => {
-      this.playerNames.set(playerId, this.playerNames.get(playerId) ?? playerId);
+      const fallbackName =
+        playerId === this.currentPlayerId ? this.auth.username() || playerId : playerId;
+      this.playerNames.set(playerId, this.playerNames.get(playerId) ?? fallbackName);
     });
   }
 
@@ -792,7 +794,9 @@ export class DixitStella implements OnInit, OnDestroy {
 
       return {
         id: playerId,
-        name: this.playerNames.get(playerId) ?? playerId,
+        name:
+          this.playerNames.get(playerId) ??
+          (playerId === this.currentPlayerId ? this.auth.username() || playerId : playerId),
         color: PLAYER_COLORS[index % PLAYER_COLORS.length],
         score: scores[playerId] ?? 0,
         selection,

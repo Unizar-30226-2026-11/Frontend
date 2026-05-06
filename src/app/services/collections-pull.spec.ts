@@ -22,9 +22,14 @@ describe('CollectionsPull', () => {
     service = TestBed.inject(CollectionsPull);
   });
 
+  function queueResponses(...responses: unknown[]): void {
+    let index = 0;
+    apiClientSpy.request.and.callFake(async <T>(): Promise<T> => responses[index++] as T);
+  }
+
   it('normalizes nested collections and cards responses', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         collections: {
           collections: [
             {
@@ -36,8 +41,8 @@ describe('CollectionsPull', () => {
             },
           ],
         },
-      }),
-      Promise.resolve({
+      },
+      {
         collection: {
           id: 'col_set1',
           name: 'Set Inicial',
@@ -58,7 +63,7 @@ describe('CollectionsPull', () => {
             ],
           },
         ],
-      })
+      }
     );
 
     const collections = await service.getCollectionsWithCards();
@@ -85,8 +90,8 @@ describe('CollectionsPull', () => {
   });
 
   it('ignores empty card containers without failing the whole lobby load', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         collections: {
           collections: [
             {
@@ -105,8 +110,8 @@ describe('CollectionsPull', () => {
             },
           ],
         },
-      }),
-      Promise.resolve({
+      },
+      {
         collection: {
           id: 'col_empty',
           name: 'Coleccion vacia',
@@ -120,8 +125,8 @@ describe('CollectionsPull', () => {
             cards: [],
           },
         ],
-      }),
-      Promise.resolve({
+      },
+      {
         collection: {
           id: 'col_full',
           name: 'Coleccion con cartas',
@@ -142,7 +147,7 @@ describe('CollectionsPull', () => {
             ],
           },
         ],
-      })
+      }
     );
 
     const collections = await service.getCollectionsWithCards();
@@ -176,8 +181,8 @@ describe('CollectionsPull', () => {
   });
 
   it('inherits the collection id from nested wrappers when child cards do not include it', async () => {
-    apiClientSpy.request.and.returnValues(
-      Promise.resolve({
+    queueResponses(
+      {
         collections: {
           collections: [
             {
@@ -189,8 +194,8 @@ describe('CollectionsPull', () => {
             },
           ],
         },
-      }),
-      Promise.resolve({
+      },
+      {
         collection: {
           id: 'col_1',
           name: 'Coleccion 1',
@@ -217,7 +222,7 @@ describe('CollectionsPull', () => {
             ],
           },
         ],
-      })
+      }
     );
 
     const collections = await service.getCollectionsWithCards();

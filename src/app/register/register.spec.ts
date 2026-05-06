@@ -1,6 +1,7 @@
-import { ComponentFixture, TestBed, fakeAsync, flushMicrotasks, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
+import { vi } from 'vitest';
 import { Register } from './register';
 import { Auth } from '../services/auth';
 import { RegisterForm } from './components/register-form/register-form';
@@ -12,6 +13,7 @@ describe('Register', () => {
   let authSpy: jasmine.SpyObj<Auth>;
 
   beforeEach(async () => {
+    vi.useRealTimers();
     routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
     routerSpy.navigate.and.resolveTo(true);
     authSpy = jasmine.createSpyObj<Auth>('Auth', ['register']);
@@ -38,6 +40,10 @@ describe('Register', () => {
     await fixture.whenStable();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
@@ -55,9 +61,11 @@ describe('Register', () => {
     expect(registerForm.register).toBe(component.registerUser);
   });
 
-  it('shows success feedback before redirecting to login', fakeAsync(() => {
-    void component.registerUser('tester@example.com', 'tester', 'abc123');
-    flushMicrotasks();
+  it('shows success feedback before redirecting to login', async () => {
+    vi.useFakeTimers();
+
+    const registerPromise = component.registerUser('tester@example.com', 'tester', 'abc123');
+    await registerPromise;
 
     expect(component.error).toBeNull();
     expect(component.successMessage).toBe(
@@ -67,29 +75,21 @@ describe('Register', () => {
     expect(authSpy.register).toHaveBeenCalledOnceWith('tester@example.com', 'tester', 'abc123');
     expect(routerSpy.navigate).not.toHaveBeenCalled();
 
-    tick(1500);
+    await vi.advanceTimersByTimeAsync(1500);
 
     expect(routerSpy.navigate).toHaveBeenCalledOnceWith(['/login']);
-  }));
+  });
 
-  it('shows the duplicate-user error returned during registration', fakeAsync(() => {
+  it('shows the duplicate-user error returned during registration', async () => {
     authSpy.register.and.rejectWith(new Error('El usuario ya existe'));
 
-    component.registerForm.setValue({
-      email: 'tester@example.com',
-      username: 'tester',
-      password: 'abc123',
-      confirmPassword: 'abc123',
-    });
-
-    void component.onSubmit();
-    flushMicrotasks();
+    await component.registerUser('tester@example.com', 'tester', 'abc123');
 
     expect(component.error).toBe('El usuario ya existe');
     expect(component.successMessage).toBeNull();
     expect(component.isRedirecting).toBeFalsy();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
-  }));
+  });
 
   it('navigates to login when clicking the existing-account button', () => {
     component.goLogin();
