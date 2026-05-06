@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/codex-spec",
+    "types": ["jasmine"]
+  },
+  "include": [
+    "src/app/app.spec.ts",
+    "src/app/dixit/dixit.spec.ts",
+    "src/app/dixit-stella/dixit-stella.spec.ts",
+    "src/app/test/unified/unified-test-shell.spec.ts",
+    "src/app/test/unified/unified-test-realtime.spec.ts",
+    "src/app/services/dixit-realtime.spec.ts",
+    "src/**/*.d.ts"
+  ]
+}

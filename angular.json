@@ -2,11 +2,12 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": false
   },
   "newProjectRoot": "projects",
   "projects": {
-    "proyecto-software-front": {
+    "a-tale-of-recognition": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -25,6 +26,11 @@
               },
               {
                 "glob": "**/*",
+                "input": "fonts",
+                "output": "fonts"
+              },
+              {
+                "glob": "**/*",
                 "input": "assets",
                 "output": "assets"
               }
@@ -38,13 +44,13 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "1MB",
+                  "maximumError": "2MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "20kB",
+                  "maximumError": "30kB"
                 }
               ],
               "outputHashing": "all"
@@ -53,24 +59,42 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "testing": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "polyfills": [
+                "zone.js"
+              ]
             }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          },
           "configurations": {
             "production": {
-              "buildTarget": "proyecto-software-front:build:production"
+              "buildTarget": "a-tale-of-recognition:build:production"
             },
             "development": {
-              "buildTarget": "proyecto-software-front:build:development"
+              "buildTarget": "a-tale-of-recognition:build:development"
             }
           },
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "buildTarget": "a-tale-of-recognition:build:testing",
+            "setupFiles": [
+              "src/test-jasmine-shim.ts"
+            ]
+          }
         }
       }
     }

@@ -1,0 +1,374 @@
+<section class="dixit-table">
+      <nav class="dixit-topbar" aria-label="Barra de partida">
+        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
+        <div class="topbar-spacer" aria-hidden="true"></div>
+
+        <div class="topbar-actions">
+          <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
+          <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
+        </div>
+      </nav>
+
+      @if (loading) {
+        <article class="status-card">
+          <p>Conectando con la mesa...</p>
+        </article>
+      } @else if (blockingErrorMessage && !showConnectionOverlay) {
+        <article class="status-card error">
+          <p>{{ blockingErrorMessage }}</p>
+        </article>
+      } @else if (phase === 'choice' && choiceCards.length === 0) {
+        <article class="status-card">
+          <p>Esperando a que el servidor envie las cartas para votar.</p>
+        </article>
+      } @else {
+        @if (showConnectionOverlay) {
+          <article class="connection-overlay" role="status" aria-live="polite">
+            <p>{{ connectionOverlayMessage }}</p>
+          </article>
+        }
+
+        <div class="table-main">
+          @if (phase === 'choice') {
+            <app-dixit-choice-phase
+              class="table-phase table-phase-choice"
+              [currentClue]="currentClue"
+              [cards]="choiceCards"
+              [selectedCardCode]="selectedChoiceCardCode"
+              [disabledCardCode]="currentPlayerPlayedCardCode"
+              [canVote]="!isCurrentPlayerStoryteller"
+              [voteSubmitted]="voteSubmitted"
+              (cardSelected)="onChoiceCardSelected($event)"
+              (voteSubmitRequested)="submitVoteSelection()"
+            />
+          } @else if (phase === 'points') {
+            <app-dixit-points-phase
+              class="table-phase"
+              [boardTokens]="boardTokens"
+              [boardImageUrl]="boardImageUrl"
+              [waitingVotes]="pointsStage === 'waiting'"
+              [votesReceived]="pointsVotesReceived"
+              [votesTotal]="pointsVotesTotal"
+              [revealedCards]="pointsRevealedCards"
+              [ranking]="pointsRanking"
+              [showRanking]="pointsStage === 'ranking'"
+              [canAdvanceToNextRound]="isCurrentPlayerHost"
+              (skipWaitingRequested)="simulateResultsReveal()"
+              (rankingRequested)="simulateRankingShown()"
+              (nextRoundRequested)="requestNextRound()"
+            />
+          } @else if (phase === 'hand') {
+            <app-dixit-hand-phase
+              class="table-phase"
+              [currentClue]="currentClue"
+              [cards]="cards"
+              [selectedCardCode]="selectedHandCardCode"
+              [clueDraft]="clueDraft"
+              [storytellerName]="currentStorytellerName"
+              [isCurrentPlayerStoryteller]="isCurrentPlayerStoryteller"
+              [handSubmitted]="handSubmitted"
+              [isStorySubmitDisabled]="isStorySubmitDisabled"
+              [isHandSubmitDisabled]="isHandSubmitDisabled"
+              [handSubmitButtonText]="handSubmitButtonText"
+              [players]="playerRows"
+              [boardTokens]="boardTokens"
+              [boardImageUrl]="boardImageUrl"
+              [handLimitModifier]="handLimitModifier"
+              [eventBackCells]="eventBackCellPositions"
+              [eventForwardCells]="eventForwardCellPositions"
+              [chat]="handChatComposer"
+              (cardSelected)="onHandCardSelected($event)"
+              (clearSelectionRequested)="clearHandSelection()"
+              (storySubmitRequested)="submitStoryClue()"
+              (handSubmitRequested)="submitHandSelection()"
+              (clueDraftChanged)="updateClueDraft($event)"
+              (chatDraftChanged)="updateChatDraft($event)"
+              (chatSubmitRequested)="submitChatMessage()"
+            />
+          } @else {
+            <article class="status-card">
+              <p>La partida ha terminado. Abre el resumen final para revisar tu resultado.</p>
+            </article>
+          }
+        </div>
+
+        @if (isSimulationDrawerOpen) {
+          <button
+            type="button"
+            class="sim-drawer-backdrop"
+            aria-label="Cerrar panel de simulacion"
+            (click)="closeSimulationDrawer()"
+          ></button>
+        }
+
+        <button
+          type="button"
+          class="sim-drawer-toggle"
+          [class.open]="isSimulationDrawerOpen"
+          (click)="toggleSimulationDrawer()"
+        >
+          {{ isSimulationDrawerOpen ? 'Cerrar' : 'Estado' }}
+        </button>
+
+        <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
+          <article class="sim-card">
+            <p class="overlay-label">Estado realtime</p>
+            <p>LobbyCode: {{ activeRealtimeLobbyCode }}</p>
+            <h3>Socket</h3>
+
+            <p>Conexion: {{ connectionStatusLabel }}</p>
+            <p>Ultima accion: {{ lastRealtimeAction || 'Sin eventos todavia' }}</p>
+            <p>Cuenta-cuentos: {{ currentStorytellerName || 'No resuelto todavia' }}</p>
+            <p>Storyteller ID: {{ currentStorytellerId || 'No presente en state.currentRound' }}</p>
+            <p>Claves state: {{ stateDebugKeysText }}</p>
+            <p>Claves currentRound: {{ currentRoundDebugKeysText }}</p>
+            <p>Pista actual: {{ currentClue || 'Esperando pista' }}</p>
+
+            @if (chatPreview.length > 0) {
+              <div class="chat-preview">
+                @for (message of chatPreview; track message.timestamp + message.username) {
+                  <p><strong>{{ message.username }}:</strong> {{ message.text }}</p>
+                }
+              </div>
+            } @else {
+              <p>No hay mensajes de chat recibidos.</p>
+            }
+
+            @if (gameEnded) {
+              <p>La partida se ha marcado como finalizada en el servidor.</p>
+            }
+
+            <div class="duel-options">
+              <button type="button" class="sidebar-action" (click)="emitEndGameFromStateDrawer()">
+                Emitir client:game:end
+              </button>
+              <button type="button" class="sidebar-action" (click)="simulateDuelSquareLanding()">
+                Simular casilla de duelo backend
+              </button>
+            </div>
+            <p class="duel-copy">
+              Este boton usa el flujo real del backend: eliges rival y se envia el duelo por socket.
+            </p>
+          </article>
+        </aside>
+      }
+    </section>
+
+    <app-falling-star-overlay
+      [star]="activeStar"
+      [claimEnabled]="canClaimActiveStar"
+      [winnerLabel]="starWinnerLabel"
+      [winnerSequence]="starClaimSequence"
+      (claimRequested)="claimVisibleStar()"
+    />
+
+    @if (activeEffectPopup; as popup) {
+      <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="effect-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Casilla especial</p>
+          <h2 id="effect-popup-title">{{ popup.title }}</h2>
+          <div class="wildcard-popup-card">
+            <span class="wildcard-icon large" aria-hidden="true">{{ popup.icon }}</span>
+            <div class="wildcard-copy">
+              <strong>{{ popup.title }}</strong>
+              <p>{{ popup.description }}</p>
+            </div>
+          </div>
+          <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
+            Continuar
+          </button>
+        </article>
+      </div>
+    }
+
+    @if (activeModeChangeOffer; as offer) {
+      <div class="wildcard-popup-backdrop" (click)="closeModeChangeOffer()">
+        <article
+          class="wildcard-popup mode-change-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mode-change-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Cambio de juego</p>
+          <h2 id="mode-change-title">Quieres pasar a {{ modeChangeTargetLabel }}?</h2>
+          <p class="duel-copy">{{ offer.message }}</p>
+          <p class="mode-change-timer">
+            Disponible durante esta fase. Se cerrara en {{ modeChangeOfferSecondsLeft }} s.
+          </p>
+
+          <div class="final-results-actions">
+            <button type="button" class="sidebar-action" (click)="acceptModeChangeOffer()">
+              Cambiar a {{ modeChangeTargetLabel }}
+            </button>
+            <button type="button" class="secondary-action" (click)="closeModeChangeOffer()">
+              Seguir igual
+            </button>
+          </div>
+        </article>
+      </div>
+    }
+
+    @if (phase === 'finished') {
+      <app-final-results-overlay
+        eyebrow="Fin de partida"
+        [title]="finalOverlayTitle"
+        [copy]="currentPlayerFinalResult ? '' : 'Esperando a que el servidor termine de publicar tu resultado final.'"
+        [accentText]="finalWalletBalance !== null ? 'Saldo total actualizado: ' + finalWalletBalance + ' monedas.' : ''"
+        [errorText]="finalResultsError ? 'Se termino la partida, pero hubo un problema al guardar las estadisticas: ' + finalResultsError : ''"
+        primaryActionLabel="Ir al inicio"
+        [secondaryActionLabel]="showFinalRanking ? 'Ocultar clasificacion' : 'Ver clasificacion'"
+        [secondaryActionDisabled]="!hasFinalRanking"
+        [showRanking]="showFinalRanking"
+        [stats]="finalOverlayStats"
+        [rankingRows]="sharedFinalRankingRows"
+        (primaryAction)="returnToGames()"
+        (secondaryAction)="toggleFinalRanking()"
+      />
+    }
+
+    @if (activeDuelChallenge) {
+      <div class="wildcard-popup-backdrop" (click)="closeDuelModal()">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="duel-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Duelo</p>
+          <h2 id="duel-popup-title">Elige un rival</h2>
+          <p class="duel-copy">
+            Has caido en una casilla de duelo. Selecciona el jugador contra el que quieres resolverlo.
+          </p>
+
+          <div class="duel-options">
+            @for (player of duelTargetPlayers; track player.id) {
+              <button
+                type="button"
+                class="duel-option"
+                (click)="resolveDuel(player.id)"
+              >
+                <span class="player-dot" [style.background]="player.color"></span>
+                <span>{{ player.name }}</span>
+              </button>
+            }
+          </div>
+
+          @if (duelTargetPlayers.length === 0) {
+            <p class="duel-copy">No hay rivales disponibles ahora mismo.</p>
+          }
+
+          <button type="button" class="sidebar-action" (click)="closeDuelModal()">
+            Cerrar
+          </button>
+        </article>
+      </div>
+    }
+
+    @if (activeMinigame && !isCurrentPlayerInActiveMinigame) {
+      <div class="wildcard-popup-backdrop">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="minigame-watch-title"
+        >
+          <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+          <h2 id="minigame-watch-title">Minijuego en curso</h2>
+          <p class="duel-copy">
+            {{ activeMinigamePlayerOneName }} vs {{ activeMinigamePlayerTwoName }}
+          </p>
+          <p class="duel-copy">{{ minigameStatusMessage || 'Esperando al servidor...' }}</p>
+        </article>
+      </div>
+    }
+
+    @if (activeMinigame && isCurrentPlayerInActiveMinigame && isUnavailableMinigameType) {
+      <div class="wildcard-popup-backdrop">
+        <article
+          class="wildcard-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="minigame-unavailable-title"
+        >
+          <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+          <h2 id="minigame-unavailable-title">Minijuego no disponible</h2>
+          <p class="duel-copy">
+            {{ activeMinigamePlayerOneName }} vs {{ activeMinigamePlayerTwoName }}
+          </p>
+          <p class="duel-copy">{{ minigameStatusMessage }}</p>
+        </article>
+      </div>
+    }
+
+    @if (isMinigame1Open) {
+      <app-dixit-minijuego-1
+        [durationMs]="activeMinigameDurationMs"
+        [opponentNickname]="activeMinigameOpponentName"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        (close)="closeMinigame1()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="wildcard-popup-backdrop">
+          <article class="wildcard-popup" role="dialog" aria-modal="true" aria-labelledby="minigame-state-title">
+            <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h2 id="minigame-state-title">{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h2>
+            <p class="duel-copy">
+              {{ minigameStatusMessage }}
+            </p>
+          </article>
+        </div>
+      }
+    }
+
+    @if (isMinigame2Open) {
+      <app-dixit-minijuego-2
+        [durationMs]="activeMinigameDurationMs"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        [seedKey]="activeMinigameSeedKey"
+        (close)="closeMinigame2()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="wildcard-popup-backdrop">
+          <article class="wildcard-popup" role="dialog" aria-modal="true" aria-labelledby="minigame-state-title-2">
+            <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h2 id="minigame-state-title-2">{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h2>
+            <p class="duel-copy">
+              {{ minigameStatusMessage }}
+            </p>
+          </article>
+        </div>
+      }
+    }
+
+    @if (isMinigame3Open) {
+      <app-dixit-minijuego-3
+        [durationMs]="activeMinigameDurationMs"
+        [allowRestart]="!activeMinigame"
+        [closable]="!activeMinigame"
+        (close)="closeMinigame3()"
+        (finished)="onMinigameFinished($event)"
+      />
+      @if (activeMinigame && minigameUiState !== 'playing') {
+        <div class="wildcard-popup-backdrop">
+          <article class="wildcard-popup" role="dialog" aria-modal="true" aria-labelledby="minigame-state-title-3">
+            <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h2 id="minigame-state-title-3">{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h2>
+            <p class="duel-copy">
+              {{ minigameStatusMessage }}
+            </p>
+          </article>
+        </div>
+      }
+    }

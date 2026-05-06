@@ -1,0 +1,27 @@
+    <div class="page-center">
+      <div class="img-box">
+        <form class="img-login-form" [formGroup]="profileForm" (ngSubmit)="onSubmit()">
+          <div class="form-grid">
+            <label for="email">Email:</label>
+            <input id="email" type="email" formControlName="email" name="email" />
+            <label for="password">Contrasena:</label>
+            <input id="password" type="password" formControlName="password" name="password" />
+            <button class="form-submit" type="submit" [disabled]="!profileForm.valid || submitting">
+              @if (submitting) {
+                Iniciando...
+              } @else {
+                Iniciar sesion
+              }
+            </button>
+          </div>
+
+          @if (errorMessage) {
+            <div class="form-error" role="alert" aria-live="polite">
+              <span class="form-error-icon" aria-hidden="true">!</span>
+              <p>{{ errorMessage }}</p>
+            </div>
+          }
+        </form>
+        <img src="/assets/LoginFormImage.png" alt="Imagen para formulario de login" />
+      </div>
+    </div>

@@ -1,0 +1,44 @@
+    <article class="decks-card">
+      <div class="deck-img">
+        <img [src]="deckImageSrc" [alt]="deckName || 'Item de tienda'" />
+        <div class="deck-copy">
+          <h3>{{ deckName }}</h3>
+          @if (deckType) {
+            <p class="deck-type">{{ deckType }}</p>
+          }
+          @if (deckDescription) {
+            <p class="deck-description">{{ deckDescription }}</p>
+          }
+        </div>
+      </div>
+      <div class="deck-footer">
+        @if (secondaryActionLabel && secondaryActionLink) {
+          <a class="deck-secondary-action" [routerLink]="secondaryActionLink">
+            {{ secondaryActionLabel }}
+          </a>
+        }
+        <div class="deck-controls">
+          <button
+            type="button"
+            class="deck-button"
+            [class.deck-button--owned]="purchased"
+            [disabled]="buying || purchased || !canBuy"
+            (click)="onBuyClick()"
+          >
+            @if (buying) {
+              Comprando...
+            } @else if (purchased) {
+              Ya lo tienes
+            } @else if (!canBuy) {
+              Sin saldo
+            } @else {
+              {{ actionLabel }}
+            }
+          </button>
+          <div class="deck-price">
+            <span class="coin-icon" aria-hidden="true"></span>
+            <span>{{ deckPrice }}</span>
+          </div>
+        </div>
+      </div>
+    </article>

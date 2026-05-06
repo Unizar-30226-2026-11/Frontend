@@ -1,0 +1,239 @@
+:host {
+  display: block;
+}
+
+.configuracion-layout {
+  --surface: rgb(255 255 255 / 90%);
+  --surface-strong: rgb(255 255 255 / 95%);
+  --surface-soft: rgb(244 250 247 / 92%);
+  --text-main: #223044;
+  --text-muted: #66758a;
+  --success: #5d8870;
+  --success-bg: #e4efe8;
+  --danger: #c84b3d;
+  --danger-soft: #f6d7d3;
+  --logout-soft: #efded9;
+  --shadow: 0 16px 40px rgb(18 35 52 / 12%);
+
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 2.25rem;
+  display: grid;
+  gap: 1.25rem;
+  box-sizing: border-box;
+}
+
+.perfil-resumen,
+.estado-panel,
+.metrica-card {
+  background: var(--surface);
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+
+.perfil-resumen,
+.estado-panel {
+  padding: 1.5rem;
+}
+
+.perfil-resumen {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.avatar-badge {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 3px solid rgb(155 194 178 / 55%);
+  background: linear-gradient(180deg, #f4fbf7 0%, #e6f0eb 100%);
+  color: var(--text-main);
+  font-size: 3rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.perfil-texto {
+  min-width: 0;
+}
+
+.perfil-texto h1,
+.estado-panel h1 {
+  margin: 0;
+  color: var(--text-main);
+}
+
+.perfil-texto h1 {
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  line-height: 1.05;
+}
+
+.perfil-texto p,
+.estado-panel p {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+}
+
+.perfil-texto p {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.estado-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.estado-pill::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.estado-pill--offline {
+  background: #eceff3;
+  color: var(--text-muted);
+}
+
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.metrica-card {
+  padding: 1.5rem 1rem;
+  background: var(--surface-strong);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.metrica-icono {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.9rem;
+  border-radius: 18px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.metrica-card strong {
+  display: block;
+  width: 100%;
+  color: var(--text-main);
+  font-size: clamp(2rem, 5vw, 2.4rem);
+  line-height: 1;
+  text-align: center;
+}
+
+.metrica-label {
+  display: block;
+  width: 100%;
+  margin-top: 0.55rem;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  text-align: center;
+}
+
+.mensaje-error,
+.mensaje-estado {
+  margin: 0;
+  padding: 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.mensaje-error {
+  color: var(--danger);
+}
+
+.mensaje-estado {
+  color: var(--text-main);
+}
+
+.acciones-configuracion {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.btn-config {
+  width: 100%;
+  border: 0;
+  border-radius: 20px;
+  padding: 1rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgb(18 35 52 / 10%);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.btn-config:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgb(18 35 52 / 14%);
+}
+
+.btn-config:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.btn-peligro {
+  background: var(--surface);
+  color: var(--danger);
+  border: 1px solid rgb(200 75 61 / 18%);
+}
+
+.btn-cerrar-sesion {
+  background: var(--logout-soft);
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .configuracion-layout {
+    padding-inline: 0.75rem;
+  }
+
+  .perfil-resumen {
+    padding: 1.25rem;
+    align-items: flex-start;
+  }
+
+  .avatar-badge {
+    width: 88px;
+    height: 88px;
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .perfil-resumen {
+    flex-direction: column;
+  }
+
+  .metricas-grid {
+    grid-template-columns: 1fr;
+  }
+}
