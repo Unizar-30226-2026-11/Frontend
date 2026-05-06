@@ -11,9 +11,6 @@ import { LobbyMenu } from './lobby-menu/lobby-menu';
 import { Settings } from './settings/settings';
 import { Login } from './login/login';
 import { Profile } from './profile/profile';
-import { DixitTestShell } from './test/dixit/dixit-test-shell';
-import { StellaTestShell } from './test/stella/stella-test-shell';
-import { StarTest } from './test/star/star-test';
 import { Auth } from './services/auth';
 import { GameShell } from './game-shell/game-shell';
 
@@ -130,11 +127,6 @@ export const routes: Routes = [
         redirectTo: 'game/:id',
     },
     {
-        path: 'stella-test',
-        pathMatch: 'full',
-        redirectTo: 'test/stella/TEST-STELLA',
-    },
-    {
         path: 'register',
         title: 'Register',
         component: Register,
@@ -150,38 +142,6 @@ export const routes: Routes = [
         title: 'Profile',
         component: Profile,
         canActivate: [requireAuthGuard],
-    },
-    {
-        path: 'test/dixit',
-        pathMatch: 'full',
-        redirectTo: 'test/dixit/TEST-DIXIT',
-    },
-    {
-        path: 'test/dixit/:id',
-        title: 'Dixit Test',
-        component: DixitTestShell,
-    },
-    {
-        path: 'test/stella',
-        pathMatch: 'full',
-        redirectTo: 'test/stella/TEST-STELLA',
-    },
-    {
-        path: 'test/stella/:id',
-        title: 'Stella Test',
-        component: StellaTestShell,
-    },
-    {
-        path: 'test/unif',
-        pathMatch: 'full',
-        redirectTo: 'test/unif/TEST-UNIF',
-    },
-    {
-        path: 'test/star',
-        title: 'Test Star',
-        // Ruta aislada para depurar el flujo visual de la estrella fugaz
-        // sin depender de una partida realtime activa.
-        component: StarTest,
     },
     {
         path: '**',
