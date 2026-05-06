@@ -292,6 +292,22 @@ h2 {
   background-repeat: no-repeat;
 }
 
+.choice-select:focus {
+  outline: 2px solid rgba(219, 194, 123, 0.7);
+  outline-offset: 2px;
+  border-color: rgba(219, 194, 123, 0.55);
+}
+
+.choice-select option {
+  background: #f6f8fc;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.choice-select option:disabled {
+  color: #6b7280;
+}
+
 .queue-btn {
   margin: 10px auto 0;
   border: 1px solid rgba(214, 195, 145, 0.22);

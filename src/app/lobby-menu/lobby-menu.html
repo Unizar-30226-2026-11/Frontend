@@ -45,7 +45,7 @@
   <section class="right-column">
     <article class="panel lobby-info-panel">
       <p class="lobby-info-eyebrow">Sala</p>
-      <h2>{{ lobbyDisplayName }}</h2>
+      <!-- <h2>{{ lobbyDisplayName }}</h2> -->
       <div class="lobby-code-row">
         <span>Codigo</span>
         <strong>{{ lobbyDisplayCode }}</strong>
@@ -76,23 +76,33 @@
     </article>
 
     <label class="select-label">
-      Seleccion Mapa
-      <select class="choice-select">
-        @for (map of maps; track map) {
-          <option>{{ map }}</option>
-        }
-      </select>
-    </label>
-
-    <label class="select-label">
       Seleccion Mazo
-      <select class="choice-select" [value]="selectedDeckId" (change)="onDeckSelected($event)">
+      <select
+        class="choice-select"
+        [value]="selectedDeckId"
+        [disabled]="deckSelectionLoading || deckOptions.length === 0"
+        (change)="onDeckSelected($event)"
+      >
         <option value="">Sin seleccionar</option>
         @for (deck of deckOptions; track deck.id) {
           <option [value]="deck.id">{{ deck.name }}</option>
         }
       </select>
     </label>
+
+    @if (deckSelectionError) {
+      <p class="action-feedback error">{{ deckSelectionError }}</p>
+    }
+
+    @if (isHost) {
+      <label class="select-label">
+        DynamicPool
+        <select class="choice-select" [value]="useDynamicPool ? 'true' : 'false'" (change)="onDynamicPoolChanged($event)">
+          <option value="true">Activado</option>
+          <option value="false">Desactivado</option>
+        </select>
+      </label>
+    }
 
     @if (primaryActionMessage) {
       <p class="action-feedback success">{{ primaryActionMessage }}</p>

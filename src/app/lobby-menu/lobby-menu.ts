@@ -54,10 +54,11 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   primaryActionMessage = '';
   joinLobbyLoading = false;
   isReady = false;
+  useDynamicPool = true;
   deckOptions: UserDeckSummary[] = [];
   selectedDeckId = '';
-
-  maps = ['Costa Sumergida', 'Bosque Inverso', 'Ciudad Onirica'];
+  deckSelectionLoading = false;
+  deckSelectionError = '';
 
   roomSlots: RoomSlot[] = [];
 
@@ -124,9 +125,9 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     return !!this.currentLobby && this.currentPlayerId === this.currentLobby.hostId;
   }
 
-  get lobbyDisplayName(): string {
-    return this.currentLobby?.title?.trim() || (this.roomLoading ? 'Cargando sala...' : 'Sala sin nombre');
-  }
+  // get lobbyDisplayName(): string {
+  //   return this.currentLobby?.title?.trim() || (this.roomLoading ? 'Cargando sala...' : 'Sala sin nombre');
+  // }
 
   get lobbyDisplayCode(): string {
     return this.currentLobbyCode || '----';
@@ -309,10 +310,13 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.roomError = '';
     this.isReady = false;
     this.resetPrimaryActionFeedback();
+    this.deckSelectionError = '';
     this.roomCapacity = 0;
     this.playersInRoom = 0;
     this.currentLobbyPlayers = [];
     this.roomSlots = [];
+
+    await this.loadDeckOptions();
 
     const lobbyResult = await this.gamesPull
       .getGameDetails(lobbyCode, { forceRefresh: true })
@@ -322,8 +326,6 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     if (this.currentLobbyCode !== lobbyCode) {
       return;
     }
-
-    await this.loadDeckOptions();
 
     if (lobbyResult.status === 'fulfilled') {
       const lobby = lobbyResult.value;
@@ -369,15 +371,60 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     }
   }
 
-  onDeckSelected(event: Event): void {
-    const target = event.target;
-    if (!(target instanceof HTMLSelectElement)) {
+  onDynamicPoolChanged(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    if (!target) {
       return;
     }
 
-    this.selectedDeckId = target.value;
-    if (this.currentLobbyCode) {
+    this.useDynamicPool = target.value !== 'false';
+  }
+
+  async onDeckSelected(event: Event): Promise<void> {
+    const target = event.target as HTMLSelectElement | null;
+    if (!target || !this.currentLobbyCode || this.deckSelectionLoading) {
+      return;
+    }
+
+    const nextDeckId = target.value.trim();
+    const normalizedDeckId = nextDeckId || '';
+    const previousDeckId = this.selectedDeckId;
+    const selectedDeck = this.deckOptions.find((deck) => deck.id === normalizedDeckId);
+
+    if (normalizedDeckId && !selectedDeck) {
+      this.deckSelectionError = 'El mazo seleccionado no esta disponible.';
+      this.selectedDeckId = previousDeckId;
+      return;
+    }
+
+    this.selectedDeckId = normalizedDeckId;
+    this.deckSelectionLoading = true;
+    this.deckSelectionError = '';
+
+    try {
+      if (selectedDeck) {
+        await this.decksPull.updateUserDeck(selectedDeck.id, {
+          name: selectedDeck.name,
+          cardIds: [...selectedDeck.cardIds],
+        });
+      }
+
+      if (this.currentLobby) {
+        this.currentLobby = {
+          ...this.currentLobby,
+          selectedDeckId: normalizedDeckId || null,
+        };
+      }
+      this.selectedDeckId = normalizedDeckId;
       localStorage.setItem(this.buildLobbyDeckStorageKey(this.currentLobbyCode), this.selectedDeckId);
+    } catch (error) {
+      console.error('[LobbyMenu] Error al actualizar el mazo del lobby:', error);
+      this.selectedDeckId = previousDeckId;
+      this.deckSelectionError =
+        error instanceof Error ? error.message : 'No se pudo actualizar el mazo seleccionado.';
+    } finally {
+      this.deckSelectionLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -447,7 +494,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.resetPrimaryActionFeedback();
 
     try {
-      this.realtime.startLobby();
+      this.realtime.startLobby(this.useDynamicPool);
       if (this.currentLobbyCode !== lobbyCode) {
         return;
       }
@@ -483,6 +530,8 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     } catch (error) {
       console.error('[LobbyMenu] Error al cargar mazos del usuario:', error);
       this.deckOptions = [];
+      this.deckSelectionError =
+        error instanceof Error ? error.message : 'No se pudieron cargar tus mazos.';
     }
   }
 

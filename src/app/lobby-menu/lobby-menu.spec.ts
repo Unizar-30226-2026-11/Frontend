@@ -6,6 +6,7 @@ import { LobbyMenu } from './lobby-menu';
 import { Game } from '../interfaces/game';
 import { CardCollection, CollectionCard, CollectionsPull } from '../services/collections-pull';
 import { Auth } from '../services/auth';
+import { DecksPull } from '../services/decks-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { CardPull } from '../services/card-pull';
@@ -15,6 +16,7 @@ describe('LobbyMenu', () => {
   let fixture: ComponentFixture<LobbyMenu>;
   let collectionsPullSpy: jasmine.SpyObj<CollectionsPull>;
   let cardPullSpy: jasmine.SpyObj<CardPull>;
+  let decksPullSpy: jasmine.SpyObj<DecksPull>;
   let gamesPullSpy: jasmine.SpyObj<GamesPull>;
   let realtimeSpy: jasmine.SpyObj<DixitRealtime>;
   let routerSpy: jasmine.SpyObj<Router>;
@@ -32,7 +34,17 @@ describe('LobbyMenu', () => {
     collectionsPullSpy.getCollectionCards.and.resolveTo(createCollectionCardsFixture());
     cardPullSpy = jasmine.createSpyObj<CardPull>('CardPull', ['getCards']);
     cardPullSpy.getCards.and.resolveTo(createOwnedCardsFixture());
-    gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', ['getGameDetails', 'startLobby']);
+    decksPullSpy = jasmine.createSpyObj<DecksPull>('DecksPull', ['getUserDecks', 'updateUserDeck']);
+    decksPullSpy.getUserDecks.and.resolveTo(createUserDecksFixture());
+    decksPullSpy.updateUserDeck.and.callFake(async (deckId: string, payload: { name: string; cardIds: string[] }) => ({
+      id: deckId,
+      name: payload.name,
+      cardIds: [...payload.cardIds],
+    }));
+    gamesPullSpy = jasmine.createSpyObj<GamesPull>('GamesPull', [
+      'getGameDetails',
+      'startLobby',
+    ]);
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
     gamesPullSpy.startLobby.and.resolveTo({
       message: 'Partida iniciada',
@@ -69,6 +81,7 @@ describe('LobbyMenu', () => {
       providers: [
         { provide: CollectionsPull, useValue: collectionsPullSpy },
         { provide: CardPull, useValue: cardPullSpy },
+        { provide: DecksPull, useValue: decksPullSpy },
         { provide: GamesPull, useValue: gamesPullSpy },
         { provide: DixitRealtime, useValue: realtimeSpy },
         { provide: Router, useValue: routerSpy },
@@ -150,6 +163,7 @@ describe('LobbyMenu', () => {
     });
     expect(realtimeSpy.ensureLobbyConnection).toHaveBeenCalledOnceWith('A1B2');
     expect(realtimeSpy.joinLobby).not.toHaveBeenCalled();
+    expect(decksPullSpy.getUserDecks).toHaveBeenCalledOnceWith({ forceRefresh: true });
     expect(component.playersInRoom).toBe(2);
     expect(component.roomCapacity).toBe(4);
     expect(component.roomSlots).toEqual([
@@ -202,9 +216,34 @@ describe('LobbyMenu', () => {
 
     await component.onPrimaryAction();
 
-    expect(realtimeSpy.startLobby).toHaveBeenCalledTimes(1);
+    expect(realtimeSpy.startLobby).toHaveBeenCalledOnceWith(true);
     expect(component.primaryActionMessage).toContain('Solicitud de inicio enviada');
     expect(component.primaryActionButtonText).toBe('Empezar partida');
+  });
+
+  it('updates the selected deck through the lobby api', async () => {
+    await component.onDeckSelected({
+      target: { value: 'deck_2' },
+    } as unknown as Event);
+
+    expect(decksPullSpy.updateUserDeck).toHaveBeenCalledOnceWith('deck_2', {
+      name: 'Mazo Secundario',
+      cardIds: ['c_4', 'c_5', 'c_6'],
+    });
+    expect(component.selectedDeckId).toBe('deck_2');
+  });
+
+  it('sends useDynamicPool as false when the host disables it before starting', async () => {
+    realtimeSpy.connectionStatus.and.returnValue('connected');
+    realtimeSpy.activeLobbyCode.and.returnValue('A1B2');
+
+    component.onDynamicPoolChanged({
+      target: { value: 'false' },
+    } as unknown as Event);
+
+    await component.onPrimaryAction();
+
+    expect(realtimeSpy.startLobby).toHaveBeenCalledOnceWith(false);
   });
 
   it('normalizes the minimum players placeholder error when starting the lobby', async () => {
@@ -292,6 +331,21 @@ function createOwnedCardsFixture() {
   ];
 }
 
+function createUserDecksFixture() {
+  return [
+    {
+      id: 'deck_1',
+      name: 'Mazo Principal',
+      cardIds: ['c_1', 'c_2', 'c_3'],
+    },
+    {
+      id: 'deck_2',
+      name: 'Mazo Secundario',
+      cardIds: ['c_4', 'c_5', 'c_6'],
+    },
+  ];
+}
+
 function createLobbyFixture(): Game {
   return {
     id: 'A1B2',
@@ -305,5 +359,6 @@ function createLobbyFixture(): Game {
     engine: 'Classic',
     status: 'waiting',
     isPrivate: false,
+    selectedDeckId: 'deck_1',
   };
 }
