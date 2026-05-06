@@ -1,0 +1,258 @@
+:host {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+  display: block;
+}
+
+.harvest-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  overflow: auto;
+  place-items: center;
+  padding: 24px;
+  background: rgba(9, 16, 18, 0.68);
+  backdrop-filter: blur(8px);
+}
+
+.harvest-shell {
+  width: min(94vw, 58rem);
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 226, 118, 0.16), transparent 30%),
+    linear-gradient(165deg, rgba(30, 54, 35, 0.98), rgba(56, 88, 42, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 64px rgba(0, 0, 0, 0.34);
+  color: #f8fff5;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: rgba(255, 236, 181, 0.85);
+}
+
+.harvest-header,
+.harvest-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.harvest-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.harvest-copy h2 {
+  margin: 0;
+  font-family: "FuenteDilana", sans-serif;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+  line-height: 1.03;
+  color: #fff7df;
+}
+
+.harvest-copy p,
+.harvest-footer p {
+  margin: 0;
+  line-height: 1.5;
+  color: rgba(248, 255, 245, 0.88);
+}
+
+.harvest-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.stat-card span {
+  font-size: 0.85rem;
+  color: rgba(223, 242, 215, 0.76);
+}
+
+.stat-card strong {
+  font-size: clamp(1.3rem, 2vw, 1.85rem);
+  color: #ffffff;
+}
+
+.harvest-board-wrap {
+  padding: 8px 0 4px;
+}
+
+.harvest-board {
+  position: relative;
+  min-height: 27rem;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 254, 225, 0.58), transparent 28%),
+    linear-gradient(180deg, #9bd8ff 0%, #c9efff 34%, #9dd36e 34%, #5fa14a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 -18px 40px rgba(40, 70, 25, 0.3);
+  touch-action: none;
+}
+
+.sky-glow,
+.tree-canopy {
+  position: absolute;
+  pointer-events: none;
+}
+
+.sky-glow {
+  inset: auto auto 72% 50%;
+  width: 14rem;
+  height: 14rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 252, 215, 0.45);
+  filter: blur(12px);
+}
+
+.tree-canopy {
+  top: -4%;
+  width: 42%;
+  height: 26%;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(171, 234, 123, 0.92), transparent 22%),
+    radial-gradient(circle at 60% 44%, rgba(105, 173, 63, 0.95), transparent 24%),
+    radial-gradient(circle at 76% 38%, rgba(132, 196, 84, 0.96), transparent 22%),
+    #4d8738;
+  filter: drop-shadow(0 10px 10px rgba(24, 57, 15, 0.24));
+}
+
+.tree-canopy.left {
+  left: -6%;
+}
+
+.tree-canopy.right {
+  right: -6%;
+}
+
+.falling-item {
+  position: absolute;
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  text-shadow: 0 10px 14px rgba(0, 0, 0, 0.2);
+  user-select: none;
+}
+
+.falling-item.apple {
+  filter: saturate(1.05);
+}
+
+.falling-item.bomb {
+  font-size: 1.9rem;
+}
+
+.basket {
+  position: absolute;
+  bottom: 8%;
+  width: 18%;
+  min-width: 5.8rem;
+  max-width: 8.8rem;
+  transform: translateX(0);
+}
+
+.basket-score-badge {
+  height: 1.5rem;
+  text-align: center;
+  font-weight: 800;
+  color: #fffaf0;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.basket-body {
+  position: relative;
+  height: 3.6rem;
+  border-radius: 1.2rem 1.2rem 1.6rem 1.6rem;
+  background:
+    linear-gradient(180deg, rgba(245, 202, 132, 0.94), rgba(150, 92, 37, 0.98)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 229, 186, 0.15) 0,
+      rgba(255, 229, 186, 0.15) 8px,
+      rgba(110, 62, 23, 0.18) 8px,
+      rgba(110, 62, 23, 0.18) 16px
+    );
+  border: 3px solid rgba(119, 66, 18, 0.65);
+  box-shadow:
+    inset 0 8px 0 rgba(255, 237, 201, 0.3),
+    0 10px 22px rgba(41, 24, 8, 0.26);
+}
+
+.basket-body::before {
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: calc(100% - 0.45rem);
+  height: 1.7rem;
+  border: 0.3rem solid rgba(115, 68, 27, 0.78);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+}
+
+.close-button,
+.restart-button {
+  border: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 700;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.close-button {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f4fff1;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.restart-button {
+  background: linear-gradient(135deg, #f4d45f, #fff0b6);
+  color: #1f2a12;
+}
+
+@media (max-width: 760px) {
+  .harvest-backdrop {
+    padding: 12px;
+  }
+
+  .harvest-shell {
+    padding: 18px;
+  }
+
+  .harvest-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .harvest-board {
+    min-height: 22rem;
+  }
+
+  .basket {
+    width: 24%;
+  }
+}

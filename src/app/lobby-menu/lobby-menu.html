@@ -1,0 +1,127 @@
+<section class="menu-layout">
+  <section class="lobby-preview">
+    <app-menu-showcase
+      [collections]="collections"
+      [totalCards]="totalCards"
+      [collectedCards]="collectedCards"
+      [cardsLoading]="cardsLoading"
+      [cardsError]="cardsError"
+      [boards]="boards"
+      [selectedBoard]="selectedBoard"
+      [selectedBoardId]="selectedBoardId"
+      [boardsLoading]="boardsLoading"
+      [boardsError]="boardsError"
+      [boardActionMessage]="boardActionMessage"
+      [boardActionError]="boardActionError"
+      [activatingBoard]="activatingBoard"
+      [boardTitle]="'Seleccion de tableros:'"
+      (boardSelectionChange)="onBoardSelected($event)"
+      (activateBoard)="activateSelectedBoard()"
+      (toggleCollection)="toggleCollection($event)"
+    />
+
+    @if (shouldShowJoinOverlay) {
+      <div class="join-overlay">
+        <div class="join-overlay-card">
+          <p class="join-overlay-eyebrow">Lobby en vista previa</p>
+          <h2>Unete para abrir la conexion realtime</h2>
+          <p>{{ joinOverlayMessage }}</p>
+          @if (primaryActionError && !hasJoinedLobby) {
+            <p class="action-feedback error">{{ primaryActionError }}</p>
+          }
+          <button
+            type="button"
+            class="join-overlay-button"
+            [disabled]="roomLoading || joinLobbyLoading"
+            (click)="joinCurrentLobby()"
+          >
+            {{ joinLobbyLoading ? 'Uniendome...' : 'Unirme' }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="right-column">
+    <article class="panel lobby-info-panel">
+      <p class="lobby-info-eyebrow">Sala</p>
+      <!-- <h2>{{ lobbyDisplayName }}</h2> -->
+      <div class="lobby-code-row">
+        <span>Codigo</span>
+        <strong>{{ lobbyDisplayCode }}</strong>
+      </div>
+    </article>
+
+    <article class="panel">
+      <header class="panel-header">
+        <h2>Sala actual:</h2>
+        <span class="badge">{{ playersInRoom }}/{{ roomCapacity }}</span>
+      </header>
+      <div class="room-scroll">
+        @if (roomLoading) {
+          <p class="room-status">Cargando sala...</p>
+        } @else if (roomError) {
+          <p class="room-status">{{ roomError }}</p>
+        } @else if (roomSlots.length === 0) {
+          <p class="room-status">No hay jugadores en la sala.</p>
+        } @else {
+          @for (slot of roomSlots; track slot.slotId) {
+            <div class="room-slot" [class.ready]="slot.state === 'listo'">
+              <span class="slot-name">{{ slot.name }}</span>
+              <span class="slot-state">{{ slot.state }}</span>
+            </div>
+          }
+        }
+      </div>
+    </article>
+
+    <label class="select-label">
+      Seleccion Mazo
+      <select
+        class="choice-select"
+        [value]="selectedDeckId"
+        [disabled]="deckSelectionLoading || deckOptions.length === 0"
+        (change)="onDeckSelected($event)"
+      >
+        <option value="">Sin seleccionar</option>
+        @for (deck of deckOptions; track deck.id) {
+          <option [value]="deck.id">{{ deck.name }}</option>
+        }
+      </select>
+    </label>
+
+    @if (deckSelectionError) {
+      <p class="action-feedback error">{{ deckSelectionError }}</p>
+    }
+
+    @if (isHost) {
+      <label class="select-label">
+        DynamicPool
+        <select class="choice-select" [value]="useDynamicPool ? 'true' : 'false'" (change)="onDynamicPoolChanged($event)">
+          <option value="true">Activado</option>
+          <option value="false">Desactivado</option>
+        </select>
+      </label>
+    }
+
+    @if (primaryActionMessage) {
+      <p class="action-feedback success">{{ primaryActionMessage }}</p>
+    }
+
+    @if (primaryActionError) {
+      <p class="action-feedback error">{{ primaryActionError }}</p>
+    }
+
+    <button
+      type="button"
+      class="queue-btn"
+      [disabled]="isPrimaryActionDisabled"
+      (click)="onPrimaryAction()"
+    >
+      {{ primaryActionButtonText }}
+    </button>
+
+    <p class="action-hint">{{ primaryActionHint }}</p>
+    <p class="action-hint">{{ realtimeStatusText }}</p>
+  </section>
+</section>

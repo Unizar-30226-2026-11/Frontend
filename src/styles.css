@@ -1,8 +1,41 @@
 /* You can add global styles to this file, and also import other style files */
+@font-face {
+    font-family: "FuenteDilana";
+    src: url("/fonts/fuente_dilana.ttf") format("truetype");
+    font-display: swap;
+}
+
 :root{
     color-scheme: light dark;
+    --page-padding-x: clamp(1rem, 2vw, 2rem);
+    --page-padding-y: clamp(1rem, 2.5vh, 2rem);
+    --panel-width: min(92vw, 28rem);
+    --panel-width-wide: min(94vw, 32rem);
+    --button-padding-y: clamp(0.75rem, 1.4vh, 1rem);
+    --button-padding-x: clamp(1.1rem, 2.4vw, 1.8rem);
+    --button-radius: clamp(0.75rem, 1.2vw, 1rem);
+    --field-padding-y: clamp(0.8rem, 1.6vh, 1rem);
+    --field-padding-x: clamp(0.9rem, 1.8vw, 1rem);
+    --field-radius: clamp(0.65rem, 1vw, 0.9rem);
+    --title-size-hero: clamp(2.8rem, 6vw, 6.25rem);
+    --title-size-page: clamp(2.6rem, 7vw, 6.25rem);
+    --body-size: clamp(1rem, 1.2vw, 1.15rem);
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+app-root {
+    display: block;
+    min-height: 100%;
 }
 
 body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-size: var(--body-size);
 }
