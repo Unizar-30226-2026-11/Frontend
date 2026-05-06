@@ -54,6 +54,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   primaryActionError = '';
   primaryActionMessage = '';
   joinLobbyLoading = false;
+  joinOverlayError = '';
   isReady = false;
   useDynamicPool = true;
   deckOptions: UserDeckSummary[] = [];
@@ -90,9 +91,6 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
         if (this.currentLobby === null) {
           this.roomError = realtimeError;
           this.roomLoading = false;
-        } else {
-          this.primaryActionMessage = '';
-          this.primaryActionError = realtimeError;
         }
 
         this.cdr.detectChanges();
@@ -273,6 +271,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.joinLobbyLoading = true;
     this.primaryActionError = '';
     this.primaryActionMessage = '';
+    this.joinOverlayError = '';
 
     try {
       await this.realtime.joinLobby(this.currentLobbyCode);
@@ -282,7 +281,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
       }
     } catch (error) {
       console.error('[LobbyMenu] Error al unirse a la sala:', error);
-      this.primaryActionError =
+      this.joinOverlayError =
         error instanceof Error
           ? error.message
           : 'No se pudo abrir la conexion realtime con la sala';
@@ -311,13 +310,13 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.roomError = '';
     this.isReady = false;
     this.resetPrimaryActionFeedback();
+    this.joinOverlayError = '';
     this.deckSelectionError = '';
     this.roomCapacity = 0;
     this.playersInRoom = 0;
     this.currentLobbyPlayers = [];
     this.roomSlots = [];
-
-    await this.loadDeckOptions();
+    const deckOptionsPromise = this.loadDeckOptions();
 
     const lobbyResult = await this.gamesPull
       .getGameDetails(lobbyCode, { forceRefresh: true })
@@ -331,42 +330,34 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     if (lobbyResult.status === 'fulfilled') {
       const lobby = lobbyResult.value;
       this.currentLobby = lobby;
-      this.restoreSelectedDeck(lobbyCode, lobby.selectedDeckId ?? null);
       this.roomCapacity = lobby.maxPlayers;
       this.playersInRoom = lobby.playerCount;
       this.roomSlots = this.toRoomSlots(lobby);
-
-      if (this.shouldRestoreRealtimeConnection(lobby)) {
-        this.joinLobbyLoading = true;
-        try {
-          await this.realtime.ensureLobbyConnection(lobbyCode);
-        } catch (error) {
-          console.error('[LobbyMenu] Error al restaurar la conexion realtime:', error);
-          this.primaryActionMessage = '';
-          this.primaryActionError =
-            error instanceof Error
-              ? error.message
-              : 'No se pudo restaurar la conexion realtime con la sala';
-        } finally {
-          if (this.currentLobbyCode === lobbyCode) {
-            this.joinLobbyLoading = false;
-          }
-        }
-      }
 
       const realtimeLobbyState = this.realtime.lobbyState();
       if (this.realtime.activeLobbyCode() === lobbyCode && realtimeLobbyState?.code === lobbyCode) {
         this.applyRealtimeLobbyState(realtimeLobbyState);
       }
+
+      this.roomLoading = false;
+      this.cdr.detectChanges();
+
+      void deckOptionsPromise.then(() => {
+        if (this.currentLobbyCode !== lobbyCode || this.currentLobby?.id !== lobby.id) {
+          return;
+        }
+
+        this.restoreSelectedDeck(lobbyCode, lobby.selectedDeckId ?? null);
+        this.cdr.detectChanges();
+      });
+
+      this.restoreRealtimeConnectionInBackground(lobbyCode, lobby);
     } else if (this.currentLobbyPlayers.length === 0) {
       console.error('[LobbyMenu] Error al cargar la sala:', lobbyResult.reason);
       this.roomError =
         lobbyResult.reason instanceof Error
           ? lobbyResult.reason.message
           : 'No se pudo cargar la sala';
-    }
-
-    if (this.currentLobbyCode === lobbyCode) {
       this.roomLoading = false;
       this.cdr.detectChanges();
     }
@@ -469,6 +460,42 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
   private shouldRestoreRealtimeConnection(lobby: Game): boolean {
     const currentPlayerId = this.currentPlayerId;
     return !!currentPlayerId && lobby.players.includes(currentPlayerId);
+  }
+
+  private restoreRealtimeConnectionInBackground(lobbyCode: string, lobby: Game): void {
+    if (!this.shouldRestoreRealtimeConnection(lobby)) {
+      return;
+    }
+
+    this.joinLobbyLoading = true;
+    this.cdr.detectChanges();
+
+    void this.realtime
+      .ensureLobbyConnection(lobbyCode)
+      .then(() => {
+        if (this.currentLobbyCode !== lobbyCode) {
+          return;
+        }
+
+        const realtimeLobbyState = this.realtime.lobbyState();
+        if (this.realtime.activeLobbyCode() === lobbyCode && realtimeLobbyState?.code === lobbyCode) {
+          this.applyRealtimeLobbyState(realtimeLobbyState);
+        }
+      })
+      .catch((error) => {
+        console.error('[LobbyMenu] Error al restaurar la conexion realtime:', error);
+        if (this.currentLobbyCode !== lobbyCode) {
+          return;
+        }
+
+        this.primaryActionMessage = '';
+      })
+      .finally(() => {
+        if (this.currentLobbyCode === lobbyCode) {
+          this.joinLobbyLoading = false;
+          this.cdr.detectChanges();
+        }
+      });
   }
 
   private toggleReadyState(): void {

@@ -26,8 +26,8 @@
           <p class="join-overlay-eyebrow">Lobby en vista previa</p>
           <h2>Unete para abrir la conexion realtime</h2>
           <p>{{ joinOverlayMessage }}</p>
-          @if (primaryActionError && !hasJoinedLobby) {
-            <p class="action-feedback error">{{ primaryActionError }}</p>
+          @if (joinOverlayError && !hasJoinedLobby) {
+            <p class="action-feedback error">{{ joinOverlayError }}</p>
           }
           <button
             type="button"

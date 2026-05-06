@@ -24,7 +24,6 @@ import {
   RealtimeWalletUpdated,
 } from '../interfaces/dixit-realtime';
 import type { SocketIoClient } from '../../socket-io-client';
-import { io } from 'socket.io-client';
 import { ApiClient } from './api-client';
 import { Auth } from './auth';
 import { isApiRequestErrorStatus } from '../interfaces/api';
@@ -134,7 +133,6 @@ export class DixitRealtime {
       this.connectionStatusState.set('connected');
       return;
     }
-
     this.connectionStatusState.set('joining');
     this.lastErrorSignal.set('');
     this.gameEndedSignal.set(null);
@@ -411,7 +409,7 @@ export class DixitRealtime {
   // Construye la instancia real de Socket.IO con la autenticación adecuada y
   // enlaza todos los listeners de la sala.
   private async openSocketConnection(session: RealtimeSession): Promise<void> {
-    const socketFactory = window.io ?? io;
+    const socketFactory = window.io;
     if (!socketFactory) {
       const error = new Error('No se pudo cargar el cliente de Socket.IO');
       this.connectionStatusState.set('error');
@@ -871,7 +869,9 @@ export class DixitRealtime {
 
   // Fallback para entornos donde el backend no devuelve una URL explícita de socket.
   private resolveDefaultSocketUrl(): string {
-    return window.location.origin;
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const hostname = window.location.hostname || 'localhost';
+    return `${protocol}//${hostname}:3000`;
   }
 
   // Normaliza el estado público de lobby para que el frontend opere siempre con
