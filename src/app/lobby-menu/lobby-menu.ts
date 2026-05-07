@@ -124,9 +124,12 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     return !!this.currentLobby && this.currentPlayerId === this.currentLobby.hostId;
   }
 
-  // get lobbyDisplayName(): string {
-  //   return this.currentLobby?.title?.trim() || (this.roomLoading ? 'Cargando sala...' : 'Sala sin nombre');
-  // }
+  get lobbyDisplayName(): string {
+    return (
+      this.currentLobby?.title?.trim() ||
+      (this.roomLoading ? 'Cargando sala...' : 'Sala sin nombre')
+    );
+  }
 
   get lobbyDisplayCode(): string {
     return this.currentLobbyCode || '----';

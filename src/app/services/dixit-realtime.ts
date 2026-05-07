@@ -33,7 +33,7 @@ import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../util
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
-const SOCKET_CONNECT_TIMEOUT_MS = 5_000;
+const SOCKET_CONNECT_TIMEOUT_MS = 15_000;
 const REALTIME_LOG_PREFIX = '[DixitRealtime]';
 const DEFAULT_ACTIVE_GAME_NOTICE = 'Tienes una partida activa.';
 const LOBBY_MIN_PLAYERS = 3;
