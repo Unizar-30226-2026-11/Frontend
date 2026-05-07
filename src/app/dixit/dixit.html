@@ -308,6 +308,25 @@
       </div>
     }
 
+    @if (isMinigameCountdownVisible) {
+      <div class="wildcard-popup-backdrop">
+        <article
+          class="wildcard-popup minigame-countdown-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="minigame-countdown-title"
+          aria-live="polite"
+        >
+          <p class="overlay-label">Desempate</p>
+          <h2 id="minigame-countdown-title">
+            ¡Vaya, has empatado con {{ activeMinigameOpponentName }}!
+          </h2>
+          <p class="duel-copy">El minijuego empezara en</p>
+          <strong class="minigame-countdown-number">{{ minigameCountdownSecondsLeft }}</strong>
+        </article>
+      </div>
+    }
+
     @if (isMinigame1Open) {
       <app-dixit-minijuego-1
         [durationMs]="activeMinigameDurationMs"

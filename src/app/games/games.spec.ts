@@ -98,6 +98,16 @@ describe('Games', () => {
     });
   });
 
+  it('refreshes the lobby list forcing fresh data', async () => {
+    gamesPullSpy.getGames.calls.reset();
+
+    await component.refreshLobbies();
+
+    expect(gamesPullSpy.getGames).toHaveBeenCalledOnceWith(1, 20, {
+      forceRefresh: true,
+    });
+  });
+
   it('normalizes a private lobby code and navigates to it', async () => {
     component.privateLobbyCode = 'a1-b2';
 

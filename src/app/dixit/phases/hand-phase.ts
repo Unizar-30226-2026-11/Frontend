@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  AfterViewChecked,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  ViewChild,
+} from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
 import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
 import {
@@ -148,7 +157,7 @@ import {
           <p class="overlay-label">Chat</p>
           <h3>Sala</h3>
 
-          <div class="chat-list">
+          <div class="chat-list" #chatList>
             @if (chat.messages.length === 0) {
               <p class="chat-empty">Todavia no hay mensajes.</p>
             } @else {
@@ -801,7 +810,7 @@ import {
     }
   `,
 })
-export class DixitHandPhase {
+export class DixitHandPhase implements AfterViewChecked {
   @Input() currentClue = '';
   @Input() cards: DeckCard[] = [];
   @Input() selectedCardCode = '';
@@ -831,9 +840,11 @@ export class DixitHandPhase {
   @Output() readonly clueDraftChanged = new EventEmitter<string>();
   @Output() readonly chatDraftChanged = new EventEmitter<string>();
   @Output() readonly chatSubmitRequested = new EventEmitter<void>();
+  @ViewChild('chatList') private chatList?: ElementRef<HTMLElement>;
 
   draggedHandCardCode = '';
   isDropZoneActive = false;
+  private lastScrolledChatKey = '';
 
   get selectedCard(): DeckCard | undefined {
     return this.cards.find((card) => card.code === this.selectedCardCode);
@@ -865,6 +876,16 @@ export class DixitHandPhase {
     const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
     const signedValue = value > 0 ? `+${absoluteValue}` : value < 0 ? `-${absoluteValue}` : '0';
     return `${signedValue} (${cardsLabel})`;
+  }
+
+  ngAfterViewChecked(): void {
+    const nextChatKey = this.buildChatScrollKey();
+    if (nextChatKey === this.lastScrolledChatKey) {
+      return;
+    }
+
+    this.lastScrolledChatKey = nextChatKey;
+    this.scrollChatToBottom();
   }
 
   onClueDraftChanged(event: Event): void {
@@ -941,5 +962,28 @@ export class DixitHandPhase {
 
     this.cardSelected.emit(droppedCard);
     this.draggedHandCardCode = '';
+  }
+
+  private buildChatScrollKey(): string {
+    const lastMessage = this.chat.messages.at(-1);
+    if (!lastMessage) {
+      return 'empty';
+    }
+
+    return [
+      this.chat.messages.length,
+      lastMessage.timestamp,
+      lastMessage.username,
+      lastMessage.text,
+    ].join('|');
+  }
+
+  private scrollChatToBottom(): void {
+    const chatList = this.chatList?.nativeElement;
+    if (!chatList) {
+      return;
+    }
+
+    chatList.scrollTop = chatList.scrollHeight;
   }
 }
