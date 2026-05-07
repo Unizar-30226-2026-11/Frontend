@@ -33,7 +33,7 @@ import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../util
 
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
-const SOCKET_CONNECT_TIMEOUT_MS = 5_000;
+const SOCKET_CONNECT_TIMEOUT_MS = 15_000;
 const REALTIME_LOG_PREFIX = '[DixitRealtime]';
 const DEFAULT_ACTIVE_GAME_NOTICE = 'Tienes una partida activa.';
 const LOBBY_MIN_PLAYERS = 3;
@@ -423,6 +423,13 @@ export class DixitRealtime {
     this.lastErrorSignal.set('');
 
     const credential = this.extractSocketCredential(session);
+    if (!credential) {
+      const error = new Error('No se pudo abrir el websocket: falta auth.token en el handshake');
+      this.connectionStatusState.set('error');
+      this.lastErrorSignal.set(error.message);
+      throw error;
+    }
+
     const socket = socketFactory(session.socketUrl, {
       transports: ['websocket'],
       timeout: SOCKET_CONNECT_TIMEOUT_MS,
@@ -869,9 +876,14 @@ export class DixitRealtime {
 
   // Fallback para entornos donde el backend no devuelve una URL explícita de socket.
   private resolveDefaultSocketUrl(): string {
+    if (window.location.origin?.trim()) {
+      return window.location.origin;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
     const hostname = window.location.hostname || 'localhost';
-    return `${protocol}//${hostname}:3000`;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    return `${protocol}//${hostname}${port}`;
   }
 
   // Normaliza el estado público de lobby para que el frontend opere siempre con
@@ -1388,6 +1400,12 @@ export class DixitRealtime {
   // Da prioridad al mensaje explícito del error nativo de Socket.IO cuando existe.
   private resolveSocketErrorMessage(payload: unknown): string {
     if (payload instanceof Error && payload.message.trim()) {
+      if (
+        payload.message.includes('WebSocket is closed before the connection is established')
+      ) {
+        return 'No se pudo abrir el websocket. Revisa la URL publica del backend, el proxy WebSocket y el auth.token del handshake.';
+      }
+
       return payload.message;
     }
 
