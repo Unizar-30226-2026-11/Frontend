@@ -140,6 +140,87 @@ describe('DixitRealtime', () => {
     expect(service.connectionStatus()).toBe('connected');
   });
 
+  it('falls back to the current origin when the backend does not return socketUrl', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+
+    expect(socketFactory).toHaveBeenCalledOnceWith(
+      window.location.origin,
+      jasmine.objectContaining({
+        auth: {
+          token: 'fresh-ticket',
+        },
+      })
+    );
+
+    socket.trigger('connect');
+    await connectionPromise;
+  });
+
+  it('surfaces a clear error when socket.io closes before the handshake completes', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+
+    socket.trigger(
+      'connect_error',
+      new Error('WebSocket is closed before the connection is established.')
+    );
+
+    let rejectedError: unknown = null;
+    try {
+      await connectionPromise;
+    } catch (error) {
+      rejectedError = error;
+    }
+
+    expect(rejectedError).toEqual(jasmine.any(Error));
+    expect(service.connectionStatus()).toBe('error');
+    expect(service.lastError()).toBe(
+      'No se pudo abrir el websocket. Revisa la URL publica del backend, el proxy WebSocket y el auth.token del handshake.'
+    );
+  });
+
   it('accepts the public server:game:started event and exposes storyteller data from currentRound', async () => {
     const socket = new FakeSocketIoClient();
     const socketFactory = jasmine
