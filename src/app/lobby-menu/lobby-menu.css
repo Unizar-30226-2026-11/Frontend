@@ -164,7 +164,27 @@
   overflow-wrap: anywhere;
 }
 
-.lobby-code-row {
+.lobby-name-row {
+  display: grid;
+  gap: 4px;
+}
+
+.lobby-name-row span {
+  color: var(--panel-text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lobby-name-row strong {
+  color: #ece1c4;
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.lobby-detail-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -177,15 +197,20 @@
   box-shadow: 0 10px 18px rgba(9, 13, 21, 0.18);
 }
 
-.lobby-code-row span {
+.lobby-detail-row span {
   font-size: 0.86rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.lobby-code-row strong {
+.lobby-detail-row strong {
   color: #ece1c4;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.lobby-code-row strong {
   font-size: clamp(1.3rem, 2vw, 1.8rem);
   letter-spacing: 0.14em;
 }
