@@ -944,10 +944,7 @@ export class DixitStella implements OnInit, OnDestroy {
       return;
     }
 
-    this.isMinigame1Open = false;
-    this.isMinigame2Open = false;
-    this.isMinigame3Open = false;
-    this.isMinigameCountdownOpen = true;
+    this.openMinigameView(minigameView);
   }
 
   private openMinigameView(minigameView: 1 | 2 | 3 | null): void {
