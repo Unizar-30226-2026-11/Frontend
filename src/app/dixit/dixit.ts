@@ -160,6 +160,7 @@ export class Dixit implements OnInit, OnDestroy {
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoNextRoundDisabledForRound: number | null = null;
   private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingBoardTokens: TrackBoardToken[] | null = null;
   private nextRoundTimerRoundNumber: number | null = null;
@@ -826,6 +827,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (nextRoundNumber !== this.roundNumber) {
       this.resetHandSubmissionState();
+      this.autoNextRoundDisabledForRound = null;
     }
 
     this.phase = resolvedPhaseState.phase;
@@ -2502,6 +2504,11 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.autoNextRoundDisabledForRound === this.roundNumber) {
+      this.clearNextRoundTimer();
+      return;
+    }
+
     if (this.nextRoundTimer !== null && this.nextRoundTimerRoundNumber === this.roundNumber) {
       return;
     }
@@ -2641,6 +2648,9 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    // Si esta ronda desemboca en minijuego, el host no debe auto-avanzarla.
+    this.autoNextRoundDisabledForRound = this.roundNumber;
+    this.clearNextRoundTimer();
     this.isMinigameCountdownOpen = false;
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
