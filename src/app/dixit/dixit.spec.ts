@@ -253,15 +253,16 @@ describe('Dixit', () => {
     expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
     expect(component.isMinigameCountdownOpen).toBeTrue();
+    expect(component.activeMinigameDurationMs).toBe(12_000);
     expect(fixture.nativeElement.textContent as string).toContain('Vaya, has empatado con cpu_1');
-    expect(fixture.nativeElement.textContent as string).toContain('5');
+    expect(fixture.nativeElement.textContent as string).toContain('3');
 
     await vi.advanceTimersByTimeAsync(1000);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent as string).toContain('4');
+    expect(fixture.nativeElement.textContent as string).toContain('2');
 
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(2000);
     fixture.detectChanges();
 
     expect(component.isMinigameCountdownOpen).toBeFalse();

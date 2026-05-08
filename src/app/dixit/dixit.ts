@@ -70,7 +70,10 @@ import {
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
   type FinalResultsStat,
 } from '../shared/final-results-overlay';
-import { MinigameCountdownOverlay } from '../shared/minigame-countdown-overlay';
+import {
+  MINIGAME_COUNTDOWN_MS,
+  MinigameCountdownOverlay,
+} from '../shared/minigame-countdown-overlay';
 
 @Component({
   selector: 'app-dixit',
@@ -680,7 +683,8 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   get activeMinigameDurationMs(): number {
-    return this.activeMinigame?.duration ?? 15_000;
+    const durationMs = this.activeMinigame?.duration ?? 15_000;
+    return Math.max(500, durationMs - MINIGAME_COUNTDOWN_MS);
   }
 
   get isMinigameCountdownVisible(): boolean {

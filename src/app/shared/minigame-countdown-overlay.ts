@@ -8,6 +8,9 @@ import {
   SimpleChanges,
 } from '@angular/core';
 
+export const MINIGAME_COUNTDOWN_SECONDS = 3;
+export const MINIGAME_COUNTDOWN_MS = MINIGAME_COUNTDOWN_SECONDS * 1000;
+
 @Component({
   selector: 'app-minigame-countdown-overlay',
   standalone: true,
@@ -98,12 +101,12 @@ export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
   @Input() eyebrow = 'Desempate';
   @Input() title = 'Minijuego';
   @Input() copy = 'El minijuego empezara en';
-  @Input() seconds = 5;
+  @Input() seconds = MINIGAME_COUNTDOWN_SECONDS;
   @Input() resetKey = '';
 
   @Output() readonly finished = new EventEmitter<void>();
 
-  secondsLeft = 5;
+  secondsLeft = MINIGAME_COUNTDOWN_SECONDS;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   get displayTitle(): string {
