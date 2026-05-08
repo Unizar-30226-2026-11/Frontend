@@ -44,9 +44,8 @@
 
   <section class="right-column">
     <article class="panel lobby-info-panel">
-      <p class="lobby-info-eyebrow">Sala</p>
-      <div class="lobby-name-row">
-        <span>Nombre</span>
+      <div class="lobby-detail-row">
+        <span>Sala</span>
         <strong>{{ lobbyDisplayName }}</strong>
       </div>
       <div class="lobby-detail-row lobby-code-row">
@@ -55,9 +54,9 @@
       </div>
     </article>
 
-    <article class="panel">
+    <article class="panel players-panel">
       <header class="panel-header">
-        <h2>Sala actual:</h2>
+        <h2>Jugadores</h2>
         <span class="badge">{{ playersInRoom }}/{{ roomCapacity }}</span>
       </header>
       <div class="room-scroll">
@@ -124,7 +123,7 @@
       {{ primaryActionButtonText }}
     </button>
 
-    <p class="action-hint">{{ primaryActionHint }}</p>
-    <p class="action-hint">{{ realtimeStatusText }}</p>
+    <!-- <p class="action-hint">{{ primaryActionHint }}</p>
+    <p class="action-hint">{{ realtimeStatusText }}</p> -->
   </section>
 </section>

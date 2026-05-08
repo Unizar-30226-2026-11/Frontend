@@ -146,42 +146,8 @@
 
 .lobby-info-panel {
   min-height: auto;
-  gap: 12px;
-  padding: 20px 22px;
-}
-
-.lobby-info-eyebrow {
-  margin: 0;
-  color: #c9b277;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.lobby-info-panel h2 {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.lobby-name-row {
-  display: grid;
-  gap: 4px;
-}
-
-.lobby-name-row span {
-  color: var(--panel-text);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.lobby-name-row strong {
-  color: #ece1c4;
-  font-size: clamp(1.35rem, 2vw, 1.85rem);
-  line-height: 1.08;
-  overflow-wrap: anywhere;
+  gap: 10px;
+  padding: 16px 18px;
 }
 
 .lobby-detail-row {
@@ -198,7 +164,7 @@
 }
 
 .lobby-detail-row span {
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -208,10 +174,24 @@
   color: #ece1c4;
   text-align: right;
   overflow-wrap: anywhere;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.players-panel {
+  min-height: auto;
+}
+
+.players-panel .panel-header {
+  margin-bottom: 12px;
+}
+
+.players-panel h2 {
+  font-size: clamp(1.15rem, 1.5vw, 1.45rem);
 }
 
 .lobby-code-row strong {
-  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
   letter-spacing: 0.14em;
 }
 
@@ -248,26 +228,27 @@ h2 {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding-right: 6px;
+  max-height: min(30dvh, 260px);
 }
 
 .room-status {
   margin: 0;
   color: var(--panel-text);
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .room-slot {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(135deg, rgba(59, 71, 92, 0.96), rgba(31, 38, 50, 0.96));
   border: 1px solid rgba(112, 132, 165, 0.18);
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: #eef0f4;
-  font-size: 1rem;
+  font-size: 0.95rem;
   box-shadow: 0 10px 18px rgba(9, 13, 21, 0.18);
 }
 
@@ -277,12 +258,16 @@ h2 {
 
 .slot-name {
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slot-state {
   margin-left: auto;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   color: #d8dded;
+  white-space: nowrap;
 }
 
 .select-label {
