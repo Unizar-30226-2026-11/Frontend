@@ -277,6 +277,8 @@ import {
     }
 
     .hand-phase-layout {
+      --support-panel-height: clamp(14.5rem, 30vh, 20rem);
+      --track-board-max-height: calc(100svh - var(--support-panel-height) - 8.5rem);
       display: grid;
       gap: 12px;
     }
@@ -301,6 +303,10 @@ import {
       width: min(920px, calc(100% - 24px));
       margin: clamp(-28rem, -24vw, -20rem) auto 0;
       pointer-events: auto;
+      transform: translate(
+        min(15vw, calc((100vw - 46rem - 28px) / 2)),
+        clamp(-34px, -2vw, -20px)
+      );
     }
 
     .story-card {
@@ -528,7 +534,6 @@ import {
     }
 
     .table-support {
-      --support-panel-height: clamp(14.5rem, 30vh, 20rem);
       display: grid;
       grid-template-columns: clamp(240px, 24vw, 320px) minmax(0, 1fr) clamp(220px, 22vw, 280px);
       gap: 12px;
@@ -802,6 +807,7 @@ import {
       .floating-hand-overlay-shell {
         width: 100%;
         margin-top: -10rem;
+        transform: none;
       }
 
       .hand-overlay {

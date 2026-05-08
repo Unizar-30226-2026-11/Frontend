@@ -21,6 +21,7 @@ import {
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
   type FinalResultsStat,
 } from '../shared/final-results-overlay';
+import { MinigameCountdownOverlay } from '../shared/minigame-countdown-overlay';
 import {
   BOARD_COLUMNS,
   BOARD_ROWS,
@@ -47,7 +48,13 @@ const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
 @Component({
   selector: 'app-dixit-stella',
   standalone: true,
-  imports: [FinalResultsOverlay, DixitMinijuego1, DixitMinijuego2, DixitMinijuego3],
+  imports: [
+    FinalResultsOverlay,
+    MinigameCountdownOverlay,
+    DixitMinijuego1,
+    DixitMinijuego2,
+    DixitMinijuego3,
+  ],
   templateUrl: './dixit-stella.html',
   styleUrl: './dixit-stella.css',
 })
@@ -93,6 +100,7 @@ export class DixitStella implements OnInit, OnDestroy {
   scoringSummary: ScoringSummaryRow[] = [];
   finalWinners: StellaPlayerState[] = [];
   selectionMessage = 'Esperando estado realtime de Stella.';
+  pendingRevealCardCode = '';
   lastResolutionTitle = 'Esperando revelaciones';
   limitFeedbackActive = false;
   inspectedCard: DeckCard | null = null;
@@ -103,6 +111,7 @@ export class DixitStella implements OnInit, OnDestroy {
   isMinigame3Open = false;
   minigameUiState: 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled' = 'playing';
   minigameStatusMessage = '';
+  isMinigameCountdownOpen = false;
   private lastAppliedMinigameReceivedAt = 0;
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -353,6 +362,19 @@ export class DixitStella implements OnInit, OnDestroy {
     );
   }
 
+  get pendingRevealCardLabel(): string {
+    return this.pendingRevealCardCode ? this.getCardLabel(this.pendingRevealCardCode) : '';
+  }
+
+  get canSubmitRevealSelection(): boolean {
+    return (
+      this.phase === 'STELLA_REVEAL' &&
+      this.isCurrentUserExplorer &&
+      this.isCardRevealable(this.pendingRevealCardCode) &&
+      this.realtime.connectionStatus() === 'connected'
+    );
+  }
+
   get activeExplorer(): StellaPlayerState | undefined {
     return this.players.find((player) => player.id === this.activeExplorerId);
   }
@@ -387,9 +409,13 @@ export class DixitStella implements OnInit, OnDestroy {
       case 'STELLA_MARKING':
         return 'Marca entre 1 y 10 cartas y confirma cuando termines.';
       case 'STELLA_REVEAL':
-        return this.isCurrentUserExplorer
-          ? 'Te toca revelar: pulsa una de tus cartas marcadas que aun no se haya revelado.'
-          : 'Espera a que el jugador explorador revele su siguiente carta.';
+        if (!this.isCurrentUserExplorer) {
+          return 'Espera a que el jugador explorador revele su siguiente carta.';
+        }
+
+        return this.pendingRevealCardCode
+          ? `Carta preparada: ${this.pendingRevealCardLabel}. Pulsa Seleccionar carta para enviarla.`
+          : 'Elige una carta marcada del tablero y confirma con Seleccionar carta.';
       case 'SCORING':
         return 'El servidor ya ha aplicado puntuacion y penalizaciones.';
       case 'FINISHED':
@@ -429,6 +455,23 @@ export class DixitStella implements OnInit, OnDestroy {
     return this.activeMinigame?.duration ?? 15_000;
   }
 
+  get isMinigameCountdownVisible(): boolean {
+    return (
+      this.activeMinigame !== null &&
+      this.isCurrentPlayerInActiveMinigame &&
+      this.minigameUiState === 'playing' &&
+      this.isMinigameCountdownOpen
+    );
+  }
+
+  get activeMinigameCountdownEyebrow(): string {
+    return this.activeMinigame?.isDuel ? 'Duelo' : 'Desempate';
+  }
+
+  get activeMinigameCountdownTitle(): string {
+    return `¡Vaya! has empatado con ${this.activeMinigameOpponentName}`;
+  }
+
   get activeMinigameOpponentName(): string {
     if (!this.activeMinigame) {
       return 'Rival';
@@ -461,6 +504,7 @@ export class DixitStella implements OnInit, OnDestroy {
       this.activeMinigame.type,
       this.activeMinigame.duration,
       this.activeMinigame.isDuel ? 'duel' : 'conflict',
+      this.activeMinigame.receivedAt,
     ].join('|');
   }
 
@@ -585,6 +629,10 @@ export class DixitStella implements OnInit, OnDestroy {
     return this.getRemainingSelectionCodes(explorer).includes(cardCode);
   }
 
+  isPendingRevealCard(cardCode: string): boolean {
+    return this.pendingRevealCardCode === cardCode;
+  }
+
   canInteractWithCard(cardCode: string): boolean {
     if (this.phase === 'STELLA_MARKING') {
       return !this.currentPlayer.submitted && this.boardCardIdsByCode.has(cardCode);
@@ -604,11 +652,30 @@ export class DixitStella implements OnInit, OnDestroy {
     }
 
     if (this.phase === 'STELLA_REVEAL' && this.isCardRevealable(cardCode)) {
-      const cardId = this.boardCardIdsByCode.get(cardCode);
-      if (typeof cardId === 'number') {
-        this.realtime.sendGameAction('STELLA_REVEAL_MARK', { cardId });
-      }
+      this.pendingRevealCardCode = this.pendingRevealCardCode === cardCode ? '' : cardCode;
+      this.selectionMessage = this.pendingRevealCardCode
+        ? `Carta preparada: ${this.getCardLabel(cardCode)}. Pulsa Seleccionar carta para enviarla.`
+        : 'Elige una de tus marcas sin revelar.';
     }
+  }
+
+  submitRevealSelection(): void {
+    if (!this.canSubmitRevealSelection) {
+      this.selectionMessage = this.isCurrentUserExplorer
+        ? 'Elige una de tus marcas sin revelar antes de confirmar.'
+        : 'Espera a que el scout elija su carta.';
+      return;
+    }
+
+    const cardId = this.boardCardIdsByCode.get(this.pendingRevealCardCode);
+    if (typeof cardId !== 'number') {
+      this.selectionMessage = 'No se pudo identificar la carta seleccionada.';
+      return;
+    }
+
+    this.realtime.sendGameAction('STELLA_REVEAL_MARK', { cardId });
+    this.pendingRevealCardCode = '';
+    this.selectionMessage = 'Carta seleccionada. Esperando respuesta del tablero.';
   }
 
   submitSelection(): void {
@@ -649,7 +716,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
   getRevealPrompt(player: StellaPlayerState): string {
     return player.isCurrentUser
-      ? 'Es tu turno. Pulsa una de tus cartas marcadas para revelarla.'
+      ? 'Es tu turno. Elige una de tus cartas marcadas y confirma con Seleccionar carta.'
       : `Esperando a que ${player.name} revele una de sus cartas.`;
   }
 
@@ -761,6 +828,7 @@ export class DixitStella implements OnInit, OnDestroy {
       this.revealLogSequence = 0;
       this.firstScoutId = '';
       this.previousRoundSnapshot = null;
+      this.pendingRevealCardCode = '';
       this.inspectedCard = null;
     }
 
@@ -817,6 +885,10 @@ export class DixitStella implements OnInit, OnDestroy {
       this.draftSelectionIds = [];
     }
 
+    if (phase !== 'STELLA_REVEAL' || !this.isCardRevealable(this.pendingRevealCardCode)) {
+      this.pendingRevealCardCode = '';
+    }
+
     this.appendRevealLog(previousSnapshot, {
       playerMarks,
       revealedCards,
@@ -841,6 +913,7 @@ export class DixitStella implements OnInit, OnDestroy {
     }
 
     this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    this.isMinigameCountdownOpen = false;
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
     this.activeMinigame = minigame;
@@ -868,6 +941,23 @@ export class DixitStella implements OnInit, OnDestroy {
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
       this.scheduleUnavailableMinigameSubmit(minigame.duration);
+      return;
+    }
+
+    this.isMinigame1Open = false;
+    this.isMinigame2Open = false;
+    this.isMinigame3Open = false;
+    this.isMinigameCountdownOpen = true;
+  }
+
+  private openMinigameView(minigameView: 1 | 2 | 3 | null): void {
+    if (minigameView === null) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
+      this.minigameUiState = 'waiting';
+      this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
+      this.scheduleUnavailableMinigameSubmit(this.activeMinigameDurationMs);
     } else if (minigameView === 2) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = true;
@@ -883,12 +973,23 @@ export class DixitStella implements OnInit, OnDestroy {
     }
   }
 
+  onMinigameCountdownFinished(): void {
+    this.isMinigameCountdownOpen = false;
+    const activeMinigame = this.activeMinigame;
+    if (!activeMinigame || this.minigameUiState !== 'playing') {
+      return;
+    }
+
+    this.openMinigameView(this.resolveMinigameView(activeMinigame.type));
+  }
+
   private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
     if (!this.activeMinigame) {
       return;
     }
 
     if (specialEvent.effect === 'CONFLICT_RESOLVED') {
+      this.isMinigameCountdownOpen = false;
       if (specialEvent.winnerId === this.currentPlayerId) {
         this.minigameUiState = 'won';
         this.minigameStatusMessage = 'Victoria';
@@ -905,6 +1006,7 @@ export class DixitStella implements OnInit, OnDestroy {
     }
 
     if (specialEvent.effect === 'CONFLICT_CANCELLED' || specialEvent.effect === 'CONFLICT_DRAW') {
+      this.isMinigameCountdownOpen = false;
       this.minigameUiState = 'cancelled';
       this.minigameStatusMessage =
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
@@ -993,7 +1095,9 @@ export class DixitStella implements OnInit, OnDestroy {
         break;
       case 'STELLA_REVEAL':
         this.selectionMessage = this.isCurrentUserExplorer
-          ? 'Tu turno: elige una de tus marcas sin revelar.'
+          ? this.pendingRevealCardCode
+            ? `Carta preparada: ${this.pendingRevealCardLabel}. Pulsa Seleccionar carta para enviarla.`
+            : 'Tu turno: elige una de tus marcas sin revelar y confirma con Seleccionar carta.'
           : this.activeExplorer
             ? `Esperando la jugada de ${this.activeExplorer.name}.`
             : 'Esperando el siguiente scout.';
@@ -1070,6 +1174,7 @@ export class DixitStella implements OnInit, OnDestroy {
     this.isMinigame1Open = false;
     this.isMinigame2Open = false;
     this.isMinigame3Open = false;
+    this.isMinigameCountdownOpen = false;
     this.clearMinigameUnavailableSubmitTimer();
     this.clearMinigameResolutionTimer();
     this.activeMinigame = null;

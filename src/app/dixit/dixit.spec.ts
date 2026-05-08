@@ -252,20 +252,19 @@ describe('Dixit', () => {
     expect(component.activeDuelChallenge).toBeNull();
     expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
-    expect(component.minigameCountdownSecondsLeft).toBe(5);
-    expect(fixture.nativeElement.textContent as string).toContain(
-      'Vaya, has empatado con cpu_1'
-    );
+    expect(component.isMinigameCountdownOpen).toBeTrue();
+    expect(fixture.nativeElement.textContent as string).toContain('Vaya, has empatado con cpu_1');
+    expect(fixture.nativeElement.textContent as string).toContain('5');
 
     await vi.advanceTimersByTimeAsync(1000);
     fixture.detectChanges();
 
-    expect(component.minigameCountdownSecondsLeft).toBe(4);
+    expect(fixture.nativeElement.textContent as string).toContain('4');
 
     await vi.advanceTimersByTimeAsync(4000);
     fixture.detectChanges();
 
-    expect(component.minigameCountdownSecondsLeft).toBe(0);
+    expect(component.isMinigameCountdownOpen).toBeFalse();
     expect(component.isMinigame1Open).toBeTrue();
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });

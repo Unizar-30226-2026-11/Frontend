@@ -37,6 +37,15 @@ import { Auth } from '../services/auth';
           >
             {{ isPrivateLobbyPanelOpen() ? 'Cerrar' : 'Insertar codigo' }}
           </button>
+
+          <button
+            type="button"
+            class="create-lobby-button"
+            [disabled]="!auth.isLoggedIn() || loading()"
+            (click)="refreshLobbies()"
+          >
+            {{ loading() ? 'Actualizando...' : 'Actualizar lobbies' }}
+          </button>
         </div>
       </header>
 
@@ -419,12 +428,19 @@ export class Games {
     }
   }
 
-  loadGames(page: number, pageSize: number): Promise<void> {
+  loadGames(
+    page: number,
+    pageSize: number,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
 
-    return this.gameService
-      .getGames(page, pageSize)
+    const gamesRequest = options.forceRefresh
+      ? this.gameService.getGames(page, pageSize, { forceRefresh: true })
+      : this.gameService.getGames(page, pageSize);
+
+    return gamesRequest
       .then((games) => {
         this.games.set(games);
       })
@@ -434,6 +450,14 @@ export class Games {
       .finally(() => {
         this.loading.set(false);
       });
+  }
+
+  refreshLobbies(): Promise<void> {
+    if (!this.auth.isLoggedIn() || this.loading()) {
+      return Promise.resolve();
+    }
+
+    return this.loadGames(1, 20, { forceRefresh: true });
   }
 
   canCreateLobby(): boolean {

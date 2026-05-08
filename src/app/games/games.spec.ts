@@ -65,6 +65,24 @@ describe('Games', () => {
     expect(component).toBeTruthy();
   });
 
+  it('renders a button to refresh the lobbies', () => {
+    fixture.detectChanges();
+
+    const buttonTexts = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
+    ).map((button) => button.textContent?.trim());
+
+    expect(buttonTexts).toContain('Actualizar lobbies');
+  });
+
+  it('refreshes lobbies with a forced API request', async () => {
+    gamesPullSpy.getGames.calls.reset();
+
+    await component.refreshLobbies();
+
+    expect(gamesPullSpy.getGames).toHaveBeenCalledOnceWith(1, 20, { forceRefresh: true });
+  });
+
   it('creates a classic lobby and navigates to it', async () => {
     component.createLobbyName = 'Sala de prueba';
     component.createLobbyMaxPlayers = 5;
