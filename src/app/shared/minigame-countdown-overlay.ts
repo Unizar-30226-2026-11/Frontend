@@ -21,7 +21,7 @@ import {
         aria-live="polite"
       >
         <p class="overlay-label">{{ eyebrow }}</p>
-        <h2 id="minigame-countdown-title">{{ title }}</h2>
+        <h2 id="minigame-countdown-title">{{ displayTitle }}</h2>
         <p class="duel-copy">{{ copy }}</p>
         <strong class="countdown-number">{{ secondsLeft }}</strong>
       </article>
@@ -105,6 +105,10 @@ export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
 
   secondsLeft = 5;
   private timer: ReturnType<typeof setInterval> | null = null;
+
+  get displayTitle(): string {
+    return this.title.replace(/^(?:Â)?¡Vaya! has empatado con /, 'Vaya, has empatado con ');
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['seconds'] || changes['resetKey']) {
