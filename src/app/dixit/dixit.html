@@ -53,8 +53,6 @@
               [ranking]="pointsRanking"
               [showRanking]="pointsStage === 'ranking'"
               [canAdvanceToNextRound]="isCurrentPlayerHost"
-              (skipWaitingRequested)="simulateResultsReveal()"
-              (rankingRequested)="simulateRankingShown()"
               (nextRoundRequested)="requestNextRound()"
             />
           } @else if (phase === 'hand') {
@@ -92,65 +90,6 @@
           }
         </div>
 
-        @if (isSimulationDrawerOpen) {
-          <button
-            type="button"
-            class="sim-drawer-backdrop"
-            aria-label="Cerrar panel de simulacion"
-            (click)="closeSimulationDrawer()"
-          ></button>
-        }
-
-        <button
-          type="button"
-          class="sim-drawer-toggle"
-          [class.open]="isSimulationDrawerOpen"
-          (click)="toggleSimulationDrawer()"
-        >
-          {{ isSimulationDrawerOpen ? 'Cerrar' : 'Estado' }}
-        </button>
-
-        <aside class="sim-drawer" [class.open]="isSimulationDrawerOpen">
-          <article class="sim-card">
-            <p class="overlay-label">Estado realtime</p>
-            <p>LobbyCode: {{ activeRealtimeLobbyCode }}</p>
-            <h3>Socket</h3>
-
-            <p>Conexion: {{ connectionStatusLabel }}</p>
-            <p>Ultima accion: {{ lastRealtimeAction || 'Sin eventos todavia' }}</p>
-            <p>Cuenta-cuentos: {{ currentStorytellerName || 'No resuelto todavia' }}</p>
-            <p>Storyteller ID: {{ currentStorytellerId || 'No presente en state.currentRound' }}</p>
-            <p>Claves state: {{ stateDebugKeysText }}</p>
-            <p>Claves currentRound: {{ currentRoundDebugKeysText }}</p>
-            <p>Pista actual: {{ currentClue || 'Esperando pista' }}</p>
-
-            @if (chatPreview.length > 0) {
-              <div class="chat-preview">
-                @for (message of chatPreview; track message.timestamp + message.username) {
-                  <p><strong>{{ message.username }}:</strong> {{ message.text }}</p>
-                }
-              </div>
-            } @else {
-              <p>No hay mensajes de chat recibidos.</p>
-            }
-
-            @if (gameEnded) {
-              <p>La partida se ha marcado como finalizada en el servidor.</p>
-            }
-
-            <div class="duel-options">
-              <button type="button" class="sidebar-action" (click)="emitEndGameFromStateDrawer()">
-                Emitir client:game:end
-              </button>
-              <button type="button" class="sidebar-action" (click)="simulateDuelSquareLanding()">
-                Simular casilla de duelo backend
-              </button>
-            </div>
-            <p class="duel-copy">
-              Este boton usa el flujo real del backend: eliges rival y se envia el duelo por socket.
-            </p>
-          </article>
-        </aside>
       }
     </section>
 

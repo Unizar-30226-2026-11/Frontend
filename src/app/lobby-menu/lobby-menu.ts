@@ -505,7 +505,7 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.isReady = !this.isReady;
     this.primaryActionError = '';
     this.primaryActionMessage = this.isReady
-      ? 'Estado listo actualizado en local. Falta conectar el evento real con el backend.'
+      ? 'Esperando al resto de jugadores...'
       : 'Has vuelto al estado pendiente.';
 
     if (this.currentLobby) {

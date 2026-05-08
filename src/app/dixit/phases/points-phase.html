@@ -12,9 +12,6 @@
           <h3>Esperando votos...</h3>
           <p>{{ votesReceived }} / {{ votesTotal }} jugadores han votado</p>
           <progress [value]="votesReceived" [max]="votesTotal || 1"></progress>
-          <div class="waiting-actions">
-            <button type="button" (click)="skipWaitingRequested.emit()">Forzar revelado</button>
-          </div>
         </div>
       } @else if (!showRanking) {
         <div class="reveal-block">
@@ -32,7 +29,6 @@
               </article>
             }
           </div>
-          <button type="button" (click)="rankingRequested.emit()">Ver clasificacion</button>
         </div>
       } @else {
         <div class="ranking-block">

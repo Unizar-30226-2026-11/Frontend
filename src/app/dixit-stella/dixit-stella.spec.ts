@@ -196,19 +196,6 @@ describe('DixitStella', () => {
     );
   });
 
-  it('shows the state drawer with the lobby code and emits client:game:end from there', () => {
-    component.isStateDrawerOpen = true;
-    fixture.detectChanges();
-
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('LobbyCode: STELLA1');
-    expect(text).toContain('Emitir client:game:end');
-
-    component.emitEndGameFromStateDrawer();
-
-    expect(realtimeStub.endGame).toHaveBeenCalledTimes(1);
-  });
-
   it('reuses the classic minigame components when a realtime minigame starts in stella', async () => {
     realtimeStub.minigameStart.and.returnValue({
       player1: 'u_111',

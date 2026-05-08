@@ -36,12 +36,6 @@
     justify-self: start;
   }
 
-  .sim-drawer-toggle {
-    top: auto;
-    bottom: 14px;
-    transform: none;
-  }
-
   .final-results-overlay {
     padding: 22px;
   }

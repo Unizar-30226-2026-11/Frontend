@@ -104,7 +104,6 @@ export class DixitStella implements OnInit, OnDestroy {
   lastResolutionTitle = 'Esperando revelaciones';
   limitFeedbackActive = false;
   inspectedCard: DeckCard | null = null;
-  isStateDrawerOpen = false;
   activeMinigame: RealtimeMinigameStart | null = null;
   isMinigame1Open = false;
   isMinigame2Open = false;
@@ -423,27 +422,6 @@ export class DixitStella implements OnInit, OnDestroy {
     }
   }
 
-  get connectionStatusLabel(): string {
-    switch (this.realtime.connectionStatus()) {
-      case 'joining':
-        return 'Solicitando acceso';
-      case 'connecting':
-        return 'Conectando';
-      case 'connected':
-        return 'Conectado';
-      case 'disconnected':
-        return 'Desconectado';
-      case 'error':
-        return 'Error realtime';
-      default:
-        return 'Pendiente';
-    }
-  }
-
-  get activeRealtimeLobbyCode(): string {
-    return this.realtime.activeLobbyCode() || this.id;
-  }
-
   get isCurrentPlayerInActiveMinigame(): boolean {
     return !!this.activeMinigame && (
       this.activeMinigame.player1 === this.currentPlayerId ||
@@ -534,24 +512,6 @@ export class DixitStella implements OnInit, OnDestroy {
 
   closeInspection(): void {
     this.inspectedCard = null;
-  }
-
-  toggleStateDrawer(): void {
-    this.isStateDrawerOpen = !this.isStateDrawerOpen;
-  }
-
-  closeStateDrawer(): void {
-    this.isStateDrawerOpen = false;
-  }
-
-  emitEndGameFromStateDrawer(): void {
-    try {
-      this.realtime.endGame();
-      this.errorMessage = '';
-    } catch (error) {
-      this.errorMessage =
-        error instanceof Error ? error.message : 'No se pudo enviar el fin de partida';
-    }
   }
 
   closeMinigame1(): void {
