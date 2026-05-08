@@ -21,18 +21,23 @@
         @for (cell of boardCells; track cell.index) {
           <div
             class="track-cell"
+            [class.basic-cell]="cell.tone === 'normal' && !cell.specialKind"
             [class.goal]="cell.tone === 'goal'"
-            [class.gold]="cell.tone === 'gold'"
-            [class.pink]="cell.tone === 'pink'"
-            [class.blue]="cell.tone === 'blue'"
             [class.wildcard]="cell.tone === 'wildcard'"
             [class.finish]="cell.tone === 'finish'"
-            [class.event-back]="cell.tone === 'event-back'"
-            [class.event-forward]="cell.tone === 'event-forward'"
+            [class.special-cell]="!!cell.specialKind"
+            [class.special-odd]="cell.specialKind === 'odd'"
+            [class.special-even]="cell.specialKind === 'even'"
+            [class.special-bonus]="cell.specialKind === 'bonus'"
+            [class.special-shuffle]="cell.specialKind === 'shuffle'"
+            [class.special-duel]="cell.specialKind === 'duel'"
+            [class.special-equilibrium]="cell.specialKind === 'equilibrium'"
             [style.left.%]="cell.x"
             [style.top.%]="cell.y"
+            [attr.aria-label]="cell.ariaLabel"
+            [attr.title]="cell.ariaLabel"
           >
-            <span class="cell-number">{{ cell.index + 1 }}</span>
+            <span class="cell-number">{{ cell.index }}</span>
             @if (cell.badge) {
               <span class="cell-badge" aria-hidden="true">{{ cell.badge }}</span>
             }

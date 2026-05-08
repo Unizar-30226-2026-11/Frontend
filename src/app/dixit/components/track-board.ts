@@ -13,14 +13,24 @@ import {
 
 type TrackCellTone =
   | 'normal'
-  | 'gold'
-  | 'pink'
-  | 'blue'
   | 'goal'
   | 'finish'
-  | 'wildcard'
-  | 'event-back'
-  | 'event-forward';
+  | 'wildcard';
+
+export type TrackBoardSpecialCellKind =
+  | 'odd'
+  | 'even'
+  | 'bonus'
+  | 'shuffle'
+  | 'duel'
+  | 'equilibrium';
+
+export interface TrackBoardSpecialCell {
+  index: number;
+  kind: TrackBoardSpecialCellKind;
+  badge: string;
+  label: string;
+}
 
 interface TrackCell {
   index: number;
@@ -28,6 +38,8 @@ interface TrackCell {
   y: number;
   tone: TrackCellTone;
   badge?: string;
+  ariaLabel: string;
+  specialKind?: TrackBoardSpecialCellKind;
 }
 
 interface TrackPoint {
@@ -90,13 +102,17 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
   @Input() interactive = true;
   @Input() cellPath: TrackPoint[] | null = null;
   @Input() wildcardCells: number[] = [];
-  @Input() eventBackCells: number[] = [];
-  @Input() eventForwardCells: number[] = [];
+  @Input() specialCells: readonly TrackBoardSpecialCell[] = [];
 
   @Output() readonly tokensChanged = new EventEmitter<TrackBoardToken[]>();
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['cellPath'] || this.boardCells.length === 0) {
+    if (
+      changes['cellPath'] ||
+      changes['wildcardCells'] ||
+      changes['specialCells'] ||
+      this.boardCells.length === 0
+    ) {
       this.boardCells = this.buildBoardCells();
     }
 
@@ -350,14 +366,22 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     const path = this.cellPath && this.cellPath.length > 0 ? this.cellPath : this.buildDefaultCellPath();
     const maxCol = Math.max(...path.map((point) => point.col), 1);
     const maxRow = Math.max(...path.map((point) => point.row), 1);
+    const specialCellsByIndex = new Map(this.specialCells.map((cell) => [cell.index, cell]));
 
-    return path.map((point, index) => ({
-      index,
-      x: 6.5 + (point.col / maxCol) * 87,
-      y: 10 + (point.row / maxRow) * 79,
-      tone: this.resolveCellTone(index, path.length - 1),
-      badge: this.resolveCellBadge(index, path.length - 1),
-    }));
+    return path.map((point, index) => {
+      const tone = this.resolveCellTone(index, path.length - 1);
+      const specialCell = specialCellsByIndex.get(index);
+
+      return {
+        index,
+        x: 6.5 + (point.col / maxCol) * 87,
+        y: 10 + (point.row / maxRow) * 79,
+        tone,
+        badge: specialCell?.badge ?? this.resolveCellBadge(index, path.length - 1),
+        ariaLabel: this.resolveCellAriaLabel(index, tone, path.length - 1, specialCell),
+        specialKind: specialCell?.kind,
+      };
+    });
   }
 
   private buildDefaultCellPath(): TrackPoint[] {
@@ -396,21 +420,6 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     if (this.wildcardCells.includes(index)) {
       return 'wildcard';
     }
-    if (this.eventBackCells.includes(index)) {
-      return 'event-back';
-    }
-    if (this.eventForwardCells.includes(index)) {
-      return 'event-forward';
-    }
-    if (index % 10 === 3) {
-      return 'pink';
-    }
-    if (index % 7 === 0) {
-      return 'gold';
-    }
-    if (index % 5 === 0) {
-      return 'blue';
-    }
     return 'normal';
   }
 
@@ -421,13 +430,28 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     if (this.wildcardCells.includes(index)) {
       return '*';
     }
-    if (this.eventBackCells.includes(index)) {
-      return '<<';
-    }
-    if (this.eventForwardCells.includes(index)) {
-      return '>>';
-    }
 
     return undefined;
+  }
+
+  private resolveCellAriaLabel(
+    index: number,
+    tone: TrackCellTone,
+    finishIndex: number,
+    specialCell?: TrackBoardSpecialCell
+  ): string {
+    const visibleNumber = index;
+
+    if (index === finishIndex) {
+      return `Casilla ${visibleNumber}, final`;
+    }
+    if (specialCell) {
+      return `Casilla ${visibleNumber}, ${specialCell.label}`;
+    }
+    if (tone === 'wildcard') {
+      return `Casilla ${visibleNumber}, comodin`;
+    }
+
+    return `Casilla ${visibleNumber}`;
   }
 }

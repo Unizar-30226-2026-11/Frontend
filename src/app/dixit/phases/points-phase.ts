@@ -1,6 +1,10 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
-import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
+import {
+  DixitTrackBoard,
+  TrackBoardSpecialCell,
+  TrackBoardToken,
+} from '../components/track-board';
 
 export interface DixitRevealedCard {
   card: DeckCard;
@@ -27,6 +31,7 @@ export interface DixitRankingRow {
         [subtitle]="'Preparado para recibir posiciones y eventos reales del backend.'"
         [tokens]="boardTokens"
         [boardImageUrl]="boardImageUrl"
+        [specialCells]="specialCells"
         [showControls]="false"
         [interactive]="false"
       />
@@ -244,6 +249,7 @@ export interface DixitRankingRow {
 export class DixitPointsPhase {
   @Input() boardTokens: TrackBoardToken[] = [];
   @Input() boardImageUrl = '';
+  @Input() specialCells: readonly TrackBoardSpecialCell[] = [];
   @Input() waitingVotes = false;
   @Input() votesReceived = 0;
   @Input() votesTotal = 0;

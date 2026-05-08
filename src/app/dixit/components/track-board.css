@@ -80,11 +80,12 @@
       --cell-base-2: #e9edf4;
       --cell-border: rgba(56, 63, 78, 0.5);
       --cell-inset: rgba(255, 255, 255, 0.55);
+      --cell-rotation: 0deg;
       position: absolute;
       z-index: 2;
       width: clamp(26px, 3.55cqw, 54px);
       aspect-ratio: 1;
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%) rotate(var(--cell-rotation));
       isolation: isolate;
       overflow: hidden;
       border-radius: 9px;
@@ -143,8 +144,62 @@
     }
 
     .track-cell:hover {
-      transform: translate(-50%, -50%) scale(1.02);
+      transform: translate(-50%, -50%) rotate(var(--cell-rotation)) scale(1.02);
       filter: brightness(1.03);
+    }
+
+    .track-cell.basic-cell {
+      --cell-base: #f3f4ec;
+      --cell-base-2: #cbd5cc;
+      --cell-border: rgba(53, 67, 74, 0.68);
+      --cell-inset: rgba(255, 255, 248, 0.82);
+      color: #202a31;
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0 18%, rgba(255, 255, 255, 0) 19%),
+        radial-gradient(circle at 72% 78%, rgba(58, 78, 86, 0.15), rgba(58, 78, 86, 0) 45%),
+        repeating-linear-gradient(
+          135deg,
+          rgba(39, 55, 63, 0.055) 0 2px,
+          rgba(255, 255, 255, 0) 2px 8px
+        ),
+        linear-gradient(145deg, var(--cell-base), var(--cell-base-2));
+      box-shadow:
+        0 9px 15px rgba(0, 0, 0, 0.24),
+        inset 0 1px 0 var(--cell-inset),
+        inset 0 -4px 9px rgba(28, 40, 46, 0.18),
+        inset 4px 0 8px rgba(255, 255, 255, 0.18);
+    }
+
+    .track-cell.basic-cell::before {
+      inset: 4px;
+      border-radius: 7px;
+      border-color: rgba(38, 50, 57, 0.2);
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 48%),
+        linear-gradient(315deg, rgba(31, 46, 53, 0.09), rgba(255, 255, 255, 0) 42%);
+    }
+
+    .track-cell.basic-cell::after {
+      content: '';
+      position: absolute;
+      inset: 7px;
+      z-index: 1;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: inset 0 0 8px rgba(27, 40, 47, 0.12);
+      pointer-events: none;
+    }
+
+    .track-cell.basic-cell .cell-number {
+      min-width: clamp(13px, 1.35cqw, 21px);
+      padding: 1px 3px;
+      border-radius: 999px;
+      background: rgba(255, 255, 250, 0.58);
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.52),
+        inset 0 0 0 1px rgba(39, 55, 63, 0.12);
+      text-align: center;
     }
 
     .track-cell.goal {
@@ -188,36 +243,15 @@
       border-color: rgba(75, 42, 5, 0.26);
     }
 
-    .track-cell.gold {
-      --cell-base: #f6d8b4;
-      --cell-base-2: #ebb67f;
-      --cell-border: rgba(130, 76, 28, 0.52);
-      --cell-inset: rgba(255, 236, 214, 0.62);
-    }
-
-    .track-cell.pink {
-      --cell-base: #f0c3ea;
-      --cell-base-2: #dd9fd5;
-      --cell-border: rgba(114, 51, 104, 0.52);
-      --cell-inset: rgba(255, 228, 250, 0.62);
-    }
-
-    .track-cell.blue {
-      --cell-base: #c2cbed;
-      --cell-base-2: #97a6da;
-      --cell-border: rgba(58, 70, 126, 0.56);
-      --cell-inset: rgba(228, 236, 255, 0.62);
-    }
-
     .track-cell.wildcard {
       --cell-base: #ffe58f;
       --cell-base-2: #f4a6ff;
       --cell-border: rgba(126, 45, 133, 0.78);
       --cell-inset: rgba(255, 252, 236, 0.82);
+      --cell-rotation: 45deg;
       color: #51136a;
       border-width: 2px;
       border-radius: 16px;
-      transform: translate(-50%, -50%) rotate(45deg);
       box-shadow:
         0 0 0 2px rgba(255, 232, 166, 0.45),
         0 0 22px rgba(224, 117, 255, 0.48),
@@ -230,6 +264,10 @@
     .track-cell.wildcard .cell-number,
     .track-cell.wildcard .cell-badge {
       transform: rotate(-45deg);
+    }
+
+    .track-cell.wildcard .cell-badge {
+      transform: translateX(-50%) rotate(-45deg);
     }
 
     .track-cell.wildcard::before {
@@ -269,68 +307,215 @@
       }
     }
 
-    .track-cell.event-back {
-      --cell-base: #ffe4cf;
-      --cell-base-2: #f0a06d;
-      --cell-border: rgba(150, 74, 33, 0.78);
-      --cell-inset: rgba(255, 247, 238, 0.82);
-      color: #662712;
+    .track-cell.special-cell {
+      --special-ink: #38240a;
+      --special-border: rgba(136, 87, 16, 0.9);
+      --special-glow: rgba(242, 180, 54, 0.38);
+      --special-stripe: rgba(137, 89, 23, 0.18);
+      --special-badge-bg: rgba(255, 250, 235, 0.92);
+      --cell-base: #fff7da;
+      --cell-base-2: #f1bd4d;
+      --cell-border: var(--special-border);
+      --cell-inset: rgba(255, 252, 236, 0.88);
+      z-index: 3;
+      color: var(--special-ink);
       border-width: 2px;
-      border-radius: 18px 10px 18px 10px;
+      border-radius: 8px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0 20%, rgba(255, 255, 255, 0) 21%),
+        repeating-linear-gradient(
+          -45deg,
+          var(--special-stripe) 0 4px,
+          rgba(255, 255, 255, 0) 4px 9px
+        ),
+        linear-gradient(145deg, var(--cell-base), var(--cell-base-2));
+      text-shadow: none;
       box-shadow:
-        0 0 0 2px rgba(255, 224, 205, 0.34),
-        0 12px 20px rgba(91, 34, 13, 0.24),
+        0 0 0 3px rgba(255, 255, 255, 0.52),
+        0 0 0 5px var(--special-glow),
+        0 13px 20px rgba(0, 0, 0, 0.3),
         inset 0 1px 0 var(--cell-inset),
-        inset 0 -3px 10px rgba(99, 35, 21, 0.14);
+        inset 0 -5px 11px rgba(48, 30, 10, 0.18);
     }
 
-    .track-cell.event-forward {
-      --cell-base: #dbf4de;
-      --cell-base-2: #86cea0;
-      --cell-border: rgba(35, 107, 61, 0.78);
-      --cell-inset: rgba(244, 255, 247, 0.84);
-      color: #184c2b;
+    .track-cell.special-odd {
+      --special-ink: #5b143d;
+      --special-border: rgba(151, 48, 112, 0.9);
+      --special-glow: rgba(232, 93, 171, 0.38);
+      --special-stripe: rgba(142, 41, 104, 0.2);
+      --special-badge-bg: rgba(255, 239, 249, 0.92);
+      --cell-base: #fff0f8;
+      --cell-base-2: #ea72bd;
+    }
+
+    .track-cell.special-even {
+      --special-ink: #173d68;
+      --special-border: rgba(46, 104, 165, 0.9);
+      --special-glow: rgba(88, 159, 230, 0.38);
+      --special-stripe: rgba(41, 95, 155, 0.2);
+      --special-badge-bg: rgba(238, 247, 255, 0.94);
+      --cell-base: #edf7ff;
+      --cell-base-2: #6dafee;
+    }
+
+    .track-cell.special-bonus {
+      --special-ink: #172056;
+      --special-border: rgba(93, 80, 196, 0.94);
+      --special-glow: rgba(91, 218, 245, 0.36);
+      --special-stripe: rgba(80, 211, 235, 0.18);
+      --special-badge-bg: rgba(238, 250, 255, 0.96);
+      --cell-base: #ecfbff;
+      --cell-base-2: #a69cff;
+      --cell-rotation: 45deg;
+      border-radius: 13px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9) 0 13%, rgba(102, 232, 255, 0.42) 14% 29%, rgba(111, 86, 226, 0.44) 30% 45%, rgba(23, 32, 86, 0.2) 46% 58%, rgba(255, 255, 255, 0) 59%),
+        conic-gradient(from 20deg, rgba(75, 219, 246, 0.42), rgba(113, 88, 226, 0.48), rgba(235, 250, 255, 0.28), rgba(75, 219, 246, 0.42)),
+        linear-gradient(145deg, var(--cell-base), var(--cell-base-2));
+      animation: bonus-diamond-pulse 2s ease-in-out infinite;
+    }
+
+    .track-cell.special-bonus .cell-number {
+      transform: rotate(-45deg);
+      transform-origin: center;
+    }
+
+    .track-cell.special-bonus .cell-badge {
+      transform: translateX(-50%) rotate(-45deg);
+    }
+
+    .track-cell.special-shuffle {
+      --special-ink: #401568;
+      --special-border: rgba(101, 54, 164, 0.9);
+      --special-glow: rgba(158, 110, 234, 0.4);
+      --special-stripe: rgba(89, 45, 146, 0.2);
+      --special-badge-bg: rgba(247, 239, 255, 0.94);
+      --cell-base: #f6efff;
+      --cell-base-2: #9f78df;
+    }
+
+    .track-cell.special-duel {
+      --special-ink: #5a1912;
+      --special-border: rgba(151, 45, 33, 0.92);
+      --special-glow: rgba(226, 84, 65, 0.38);
+      --special-stripe: rgba(128, 36, 27, 0.22);
+      --special-badge-bg: rgba(255, 241, 238, 0.94);
+      --cell-base: #fff1ed;
+      --cell-base-2: #e86d5b;
+    }
+
+    .track-cell.special-equilibrium {
+      --special-ink: #113d3f;
+      --special-border: rgba(35, 119, 123, 0.92);
+      --special-glow: rgba(68, 191, 194, 0.38);
+      --special-stripe: rgba(30, 111, 114, 0.2);
+      --special-badge-bg: rgba(238, 255, 255, 0.94);
+      --cell-base: #ecfbfb;
+      --cell-base-2: #62cacd;
+    }
+
+    .track-cell.special-cell::before {
+      inset: 4px;
       border-width: 2px;
-      border-radius: 10px 18px 10px 18px;
-      box-shadow:
-        0 0 0 2px rgba(220, 247, 227, 0.34),
-        0 12px 20px rgba(18, 79, 39, 0.2),
-        inset 0 1px 0 var(--cell-inset),
-        inset 0 -3px 10px rgba(23, 79, 40, 0.14);
+      border-style: solid;
+      border-color: rgba(255, 255, 255, 0.58);
+      background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0) 64%);
     }
 
-    .track-cell.event-back::before,
-    .track-cell.event-forward::before {
-      inset: 3px;
-      border-width: 2px;
-      border-style: dashed;
-    }
-
-    .track-cell.event-back::after,
-    .track-cell.event-forward::after {
+    .track-cell.special-cell::after {
       content: '';
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 18px;
-      height: 18px;
-      transform: translate(-50%, -38%);
+      z-index: 1;
+      width: clamp(15px, 1.65cqw, 24px);
+      height: clamp(15px, 1.65cqw, 24px);
+      transform: translate(-50%, -42%);
       pointer-events: none;
+      border-radius: 999px;
       opacity: 0.28;
+      background: radial-gradient(circle, var(--special-ink), rgba(255, 255, 255, 0) 66%);
     }
 
-    .track-cell.event-back::after {
+    .track-cell.special-bonus::after {
+      width: clamp(18px, 1.95cqw, 30px);
+      height: clamp(18px, 1.95cqw, 30px);
+      border-radius: 999px;
       background:
-        linear-gradient(135deg, transparent 46%, rgba(102, 39, 18, 0.95) 47% 53%, transparent 54%),
-        linear-gradient(225deg, transparent 46%, rgba(102, 39, 18, 0.95) 47% 53%, transparent 54%);
-      clip-path: polygon(0 50%, 55% 0, 55% 28%, 100% 28%, 100% 72%, 55% 72%, 55% 100%);
+        radial-gradient(circle, rgba(255, 255, 255, 0.74) 0 12%, rgba(105, 236, 255, 0.34) 13% 34%, rgba(116, 86, 230, 0.42) 35% 58%, rgba(255, 255, 255, 0) 60%),
+        conic-gradient(from 0deg, rgba(102, 235, 255, 0.85), rgba(111, 89, 227, 0.82), rgba(255, 255, 255, 0.62), rgba(102, 235, 255, 0.85));
+      opacity: 0.58;
+      mix-blend-mode: screen;
+      animation: bonus-portal-swirl 1.72s linear infinite;
     }
 
-    .track-cell.event-forward::after {
-      background:
-        linear-gradient(135deg, transparent 46%, rgba(24, 76, 43, 0.95) 47% 53%, transparent 54%),
-        linear-gradient(225deg, transparent 46%, rgba(24, 76, 43, 0.95) 47% 53%, transparent 54%);
-      clip-path: polygon(45% 0, 100% 50%, 45% 100%, 45% 72%, 0 72%, 0 28%, 45% 28%);
+    .track-cell.special-cell .cell-number {
+      position: absolute;
+      top: 3px;
+      left: 4px;
+      padding: 0 3px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--special-ink);
+      font-size: clamp(7px, 0.62cqw, 10px);
+      line-height: 1.15;
+    }
+
+    .track-cell.special-cell .cell-badge {
+      inset: auto auto 3px 50%;
+      min-width: clamp(17px, 1.7cqw, 25px);
+      padding: 1px 4px;
+      border: 1px solid rgba(255, 255, 255, 0.64);
+      border-radius: 999px;
+      background: var(--special-badge-bg);
+      color: var(--special-ink);
+      font-size: clamp(9px, 0.95cqw, 14px);
+      letter-spacing: 0;
+      line-height: 1.05;
+      text-shadow: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    }
+
+    @keyframes bonus-diamond-pulse {
+      0%,
+      100% {
+        filter: saturate(1.02) brightness(1);
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 0.46),
+          0 0 13px rgba(91, 218, 245, 0.28),
+          0 0 18px rgba(102, 87, 225, 0.22),
+          0 12px 18px rgba(0, 0, 0, 0.28),
+          inset 0 1px 0 var(--cell-inset),
+          inset 0 -5px 11px rgba(48, 30, 10, 0.18);
+      }
+
+      50% {
+        filter: saturate(1.12) brightness(1.04);
+        box-shadow:
+          0 0 0 4px rgba(255, 255, 255, 0.54),
+          0 0 27px rgba(91, 218, 245, 0.52),
+          0 0 38px rgba(102, 87, 225, 0.4),
+          0 13px 20px rgba(0, 0, 0, 0.3),
+          inset 0 1px 0 var(--cell-inset),
+          inset 0 -5px 11px rgba(48, 30, 10, 0.18);
+      }
+    }
+
+    @keyframes bonus-portal-swirl {
+      0% {
+        opacity: 0.48;
+        transform: translate(-50%, -42%) rotate(0deg) scale(0.88);
+      }
+
+      50% {
+        opacity: 0.86;
+        transform: translate(-50%, -42%) rotate(180deg) scale(1.16);
+      }
+
+      100% {
+        opacity: 0.48;
+        transform: translate(-50%, -42%) rotate(360deg) scale(0.88);
+      }
     }
 
     .token-piece {

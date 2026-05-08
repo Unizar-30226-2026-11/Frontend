@@ -9,7 +9,11 @@ import {
   ViewChild,
 } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
-import { DixitTrackBoard, TrackBoardToken } from '../components/track-board';
+import {
+  DixitTrackBoard,
+  TrackBoardSpecialCell,
+  TrackBoardToken,
+} from '../components/track-board';
 import {
   DixitChatComposer,
   DixitHandLimitModifier,
@@ -29,8 +33,7 @@ import {
           [subtitle]="''"
           [tokens]="boardTokens"
           [boardImageUrl]="boardImageUrl"
-          [eventBackCells]="eventBackCells"
-          [eventForwardCells]="eventForwardCells"
+          [specialCells]="specialCells"
           [showControls]="false"
           [interactive]="false"
         />
@@ -831,8 +834,7 @@ export class DixitHandPhase implements AfterViewChecked {
   @Input() boardTokens: TrackBoardToken[] = [];
   @Input() boardImageUrl = '';
   @Input() handLimitModifier: DixitHandLimitModifier | null = null;
-  @Input() eventBackCells: number[] = [];
-  @Input() eventForwardCells: number[] = [];
+  @Input() specialCells: readonly TrackBoardSpecialCell[] = [];
   @Input() chat: DixitChatComposer = {
     draft: '',
     canSend: false,
@@ -871,10 +873,8 @@ export class DixitHandPhase implements AfterViewChecked {
       return '';
     }
 
-    const absoluteValue = Math.abs(modifier.value);
-    const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
     const turnsLabel = modifier.turnsLeft === 1 ? '1 turno restante' : `${modifier.turnsLeft} turnos restantes`;
-    return `Modificador de mano activo: ${this.formatModifierValue(modifier.value)}. ${turnsLabel}.`;
+    return `${this.resolveHandLimitModifierMeaning(modifier.value)} ${turnsLabel}.`;
   }
 
   formatModifierValue(value: number): string {
@@ -882,6 +882,21 @@ export class DixitHandPhase implements AfterViewChecked {
     const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
     const signedValue = value > 0 ? `+${absoluteValue}` : value < 0 ? `-${absoluteValue}` : '0';
     return `${signedValue} (${cardsLabel})`;
+  }
+
+  private resolveHandLimitModifierMeaning(value: number): string {
+    const absoluteValue = Math.abs(value);
+    const cardsLabel = absoluteValue === 1 ? '1 carta' : `${absoluteValue} cartas`;
+
+    if (value > 0) {
+      return `Bonus de mano: puedes tener ${cardsLabel} mas de lo normal.`;
+    }
+
+    if (value < 0) {
+      return `Penalizacion de mano: puedes tener ${cardsLabel} menos de lo normal.`;
+    }
+
+    return 'Modificador de mano sin cambio de cartas.';
   }
 
   ngAfterViewChecked(): void {

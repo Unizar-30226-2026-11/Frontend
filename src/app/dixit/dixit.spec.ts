@@ -576,7 +576,8 @@ describe('Dixit', () => {
     });
     expect(modifierBadge).not.toBeNull();
     expect(modifierBadge?.getAttribute('src')).toContain('assets/modificador_hand_limit_plus.png');
-    expect(modifierBadge?.getAttribute('title')).toContain('+1 (1 carta)');
+    expect(modifierBadge?.getAttribute('title')).toContain('Bonus de mano');
+    expect(modifierBadge?.getAttribute('title')).toContain('1 carta mas de lo normal');
     expect(modifierBadge?.getAttribute('title')).toContain('2 turnos restantes');
   });
 
