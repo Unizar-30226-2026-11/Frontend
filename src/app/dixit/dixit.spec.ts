@@ -697,7 +697,7 @@ describe('Dixit', () => {
     component.submitVoteSelection();
 
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledOnceWith('CAST_VOTE', {
-      cardId: 'c_102',
+      cardId: 42,
     });
     expect(component.voteSubmitted).toBeTrue();
   });
@@ -1003,7 +1003,7 @@ describe('Dixit', () => {
     component['applyRealtimeGameState']({
       state: {
         phase: 'ranking',
-        roundNumber: 2,
+        roundNumber: 1,
         scores: {
           u_self: 3,
           cpu_1: 5,
