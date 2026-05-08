@@ -253,15 +253,16 @@ describe('Dixit', () => {
     expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
     expect(component.isMinigameCountdownOpen).toBeTrue();
+    expect(component.activeMinigameDurationMs).toBe(12_000);
     expect(fixture.nativeElement.textContent as string).toContain('Vaya, has empatado con cpu_1');
-    expect(fixture.nativeElement.textContent as string).toContain('5');
+    expect(fixture.nativeElement.textContent as string).toContain('3');
 
     await vi.advanceTimersByTimeAsync(1000);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent as string).toContain('4');
+    expect(fixture.nativeElement.textContent as string).toContain('2');
 
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTimeAsync(2000);
     fixture.detectChanges();
 
     expect(component.isMinigameCountdownOpen).toBeFalse();
@@ -854,6 +855,69 @@ describe('Dixit', () => {
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('ACCEPT_MODE_CHANGE', {});
     expect(realtimeSpy.clearModeChangeOffer).toHaveBeenCalled();
     expect(component.activeModeChangeOffer).toBeNull();
+  });
+
+  it('cancels the host auto next-round timeout for the current round when a minigame starts', async () => {
+    vi.useFakeTimers();
+    realtimeSpy.lobbyState.and.returnValue({
+      id: 'lobby-1',
+      code: 'A1B2',
+      hostId: 'u_self',
+      players: [],
+    });
+
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+        roundNumber: 4,
+        scores: {
+          u_self: 3,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: '17',
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+          },
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
+      type: 0,
+      isDuel: false,
+      duration: 15_000,
+      receivedAt: Date.now() + 1,
+    });
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+        roundNumber: 4,
+        scores: {
+          u_self: 3,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: '17',
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+          },
+        },
+      },
+      receivedAt: Date.now() + 2,
+    });
+
+    await vi.advanceTimersByTimeAsync(9000);
+
+    expect(realtimeSpy.sendGameAction).not.toHaveBeenCalledWith('NEXT_ROUND');
   });
 
   it('hides the mode change offer when the scoring window ends because the phase changes', async () => {

@@ -212,6 +212,7 @@ describe('DixitStella', () => {
     await Promise.resolve();
     fixture.detectChanges();
 
+    expect(component.activeMinigameDurationMs).toBe(12_000);
     expect(component.isMinigame1Open).toBeTrue();
     expect(component.isMinigame2Open).toBeFalse();
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');

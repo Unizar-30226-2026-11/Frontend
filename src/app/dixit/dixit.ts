@@ -70,7 +70,10 @@ import {
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
   type FinalResultsStat,
 } from '../shared/final-results-overlay';
-import { MinigameCountdownOverlay } from '../shared/minigame-countdown-overlay';
+import {
+  MINIGAME_COUNTDOWN_MS,
+  MinigameCountdownOverlay,
+} from '../shared/minigame-countdown-overlay';
 
 @Component({
   selector: 'app-dixit',
@@ -157,6 +160,7 @@ export class Dixit implements OnInit, OnDestroy {
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoNextRoundDisabledForRound: number | null = null;
   private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingBoardTokens: TrackBoardToken[] | null = null;
   private nextRoundTimerRoundNumber: number | null = null;
@@ -680,7 +684,8 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   get activeMinigameDurationMs(): number {
-    return this.activeMinigame?.duration ?? 15_000;
+    const durationMs = this.activeMinigame?.duration ?? 15_000;
+    return Math.max(500, durationMs - MINIGAME_COUNTDOWN_MS);
   }
 
   get isMinigameCountdownVisible(): boolean {
@@ -822,6 +827,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (nextRoundNumber !== this.roundNumber) {
       this.resetHandSubmissionState();
+      this.autoNextRoundDisabledForRound = null;
     }
 
     this.phase = resolvedPhaseState.phase;
@@ -2498,6 +2504,11 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.autoNextRoundDisabledForRound === this.roundNumber) {
+      this.clearNextRoundTimer();
+      return;
+    }
+
     if (this.nextRoundTimer !== null && this.nextRoundTimerRoundNumber === this.roundNumber) {
       return;
     }
@@ -2637,6 +2648,9 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    // Si esta ronda desemboca en minijuego, el host no debe auto-avanzarla.
+    this.autoNextRoundDisabledForRound = this.roundNumber;
+    this.clearNextRoundTimer();
     this.isMinigameCountdownOpen = false;
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();

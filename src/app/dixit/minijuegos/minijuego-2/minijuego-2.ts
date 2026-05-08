@@ -107,7 +107,7 @@ const MEMORY_PAIR_LIBRARY: readonly MemoryPairTemplate[] = [
   styleUrl: './minijuego-2.css',
 })
 export class DixitMinijuego2 implements OnInit, OnDestroy {
-  readonly durationMs = input(20_000);
+  readonly durationMs = input(15_000);
   readonly allowRestart = input(true);
   readonly closable = input(true);
   readonly seedKey = input('');
@@ -284,7 +284,7 @@ export class DixitMinijuego2 implements OnInit, OnDestroy {
   private resolveInitialTimeLeft(): number {
     const durationMs = this.durationMs();
     if (!Number.isFinite(durationMs)) {
-      return 20;
+      return 15;
     }
 
     return Math.max(5, Math.ceil(durationMs / 1000));

@@ -107,7 +107,7 @@ interface FallingItem {
   styleUrl: './minijuego-3.css',
 })
 export class DixitMinijuego3 implements OnInit, OnDestroy {
-  readonly durationMs = input(18_000);
+  readonly durationMs = input(15_000);
   readonly allowRestart = input(true);
   readonly closable = input(true);
   readonly close = output<void>();
@@ -123,7 +123,7 @@ export class DixitMinijuego3 implements OnInit, OnDestroy {
   private nextItemId = 0;
   private hasEmittedResult = false;
 
-  timeLeft = 18;
+  timeLeft = 15;
   score = 0;
   collectedItems = 0;
   basketXPercent = 41;
@@ -317,7 +317,7 @@ export class DixitMinijuego3 implements OnInit, OnDestroy {
   private resolveInitialTimeLeft(): number {
     const durationMs = this.durationMs();
     if (!Number.isFinite(durationMs)) {
-      return 18;
+      return 15;
     }
 
     return Math.max(5, Math.ceil(durationMs / 1000));
