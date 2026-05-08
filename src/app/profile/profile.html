@@ -61,10 +61,6 @@
                 <dt>Estado del jugador</dt>
                 <dd>{{ describeStatus(player.state) }}</dd>
               </div>
-              <div>
-                <dt>Estado personal de la API</dt>
-                <dd>{{ player.personalState }}</dd>
-              </div>
             </dl>
           </article>
 
@@ -132,8 +128,7 @@
           <article class="profile-card">
             <h3>Estado del jugador</h3>
             <p class="card-copy">
-              Elige si apareces conectado o desconectado. Si el backend devuelve
-              <strong>UNKNOWN</strong>, podras corregirlo desde aqui.
+              Elige si apareces conectado o desconectado.
             </p>
 
             <form class="settings-form" [formGroup]="statusForm" (ngSubmit)="saveStatus()">

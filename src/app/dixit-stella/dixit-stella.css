@@ -180,60 +180,6 @@ h3 {
   color: #ffd2d2;
 }
 
-.state-drawer-toggle,
-.state-drawer-backdrop,
-.state-drawer {
-  position: fixed;
-}
-
-.state-drawer-toggle {
-  right: 14px;
-  top: 50%;
-  z-index: 32;
-  transform: translateY(-50%);
-  padding: 11px 16px;
-  border: 0;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  background: linear-gradient(135deg, #f5d272, #ffefbc);
-  color: #18212d;
-  box-shadow: 0 12px 24px rgba(9, 12, 20, 0.26);
-  transition: right 180ms ease, transform 140ms ease, opacity 140ms ease;
-}
-
-.state-drawer-toggle.open {
-  right: min(340px, 80vw);
-}
-
-.state-drawer-backdrop {
-  inset: 0;
-  z-index: 29;
-  border: 0;
-  background: rgba(4, 8, 14, 0.36);
-}
-
-.state-drawer {
-  top: 0;
-  right: 0;
-  z-index: 30;
-  width: min(320px, 82vw);
-  height: 100svh;
-  padding: 14px;
-  box-sizing: border-box;
-  transform: translateX(100%);
-  transition: transform 180ms ease;
-}
-
-.state-drawer.open {
-  transform: translateX(0);
-}
-
-.drawer-actions {
-  display: flex;
-  margin-top: 12px;
-}
-
 .stella-layout {
   display: grid;
   grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(260px, 320px);

@@ -36,9 +36,6 @@ export interface DixitRankingRow {
           <h3>Esperando votos...</h3>
           <p>{{ votesReceived }} / {{ votesTotal }} jugadores han votado</p>
           <progress [value]="votesReceived" [max]="votesTotal || 1"></progress>
-          <div class="waiting-actions">
-            <button type="button" (click)="skipWaitingRequested.emit()">Forzar revelado</button>
-          </div>
         </div>
       } @else if (!showRanking) {
         <div class="reveal-block stage-panel">
@@ -58,7 +55,6 @@ export interface DixitRankingRow {
               </article>
             }
           </div>
-          <button type="button" (click)="rankingRequested.emit()">Ver clasificacion</button>
         </div>
       } @else {
         <div class="ranking-block stage-panel">
@@ -256,7 +252,5 @@ export class DixitPointsPhase {
   @Input() showRanking = false;
   @Input() canAdvanceToNextRound = false;
 
-  @Output() readonly skipWaitingRequested = new EventEmitter<void>();
-  @Output() readonly rankingRequested = new EventEmitter<void>();
   @Output() readonly nextRoundRequested = new EventEmitter<void>();
 }

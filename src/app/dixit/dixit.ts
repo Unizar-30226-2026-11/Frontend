@@ -6,7 +6,6 @@ import {
   OnInit,
   effect,
   inject,
-  isDevMode,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -130,7 +129,6 @@ export class Dixit implements OnInit, OnDestroy {
   clueDraft = '';
   chatDraft = '';
   currentClue = '';
-  lastRealtimeAction = '';
   gameEnded = false;
   storySubmitted = false;
   currentPlayerPlayedCardCode = '';
@@ -149,7 +147,6 @@ export class Dixit implements OnInit, OnDestroy {
   pointsRevealedCards: DixitRevealedCard[] = [];
   pointsRanking: DixitRankingRow[] = [];
   activeEffectPopup: BoardEffectPopup | null = null;
-  isSimulationDrawerOpen = false;
   isMinigame1Open = false;
   isMinigame2Open = false;
   isMinigame3Open = false;
@@ -502,23 +499,6 @@ export class Dixit implements OnInit, OnDestroy {
     return 'Tablero actualizado. Prepara la siguiente ronda.';
   }
 
-  get connectionStatusLabel(): string {
-    switch (this.realtime.connectionStatus()) {
-      case 'joining':
-        return 'Solicitando acceso';
-      case 'connecting':
-        return 'Conectando';
-      case 'connected':
-        return 'Conectado';
-      case 'disconnected':
-        return 'Desconectado';
-      case 'error':
-        return 'Error realtime';
-      default:
-        return 'Pendiente';
-    }
-  }
-
   get showConnectionOverlay(): boolean {
     const status = this.realtime.connectionStatus();
     return !this.loading && this.hasHydratedRealtimePresentation && (status === 'disconnected' || status === 'error');
@@ -541,26 +521,22 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   get isCurrentPlayerStoryteller(): boolean {
-    return !!this.currentStorytellerId && this.currentStorytellerId === this.currentUserId;
-  }
-
-  get currentStorytellerId(): string {
-    return this.resolveStorytellerId(this.realtime.gameState()?.state ?? {});
+    const storytellerId = this.resolveStorytellerId(this.realtime.gameState()?.state ?? {});
+    return !!storytellerId && storytellerId === this.currentUserId;
   }
 
   get currentStorytellerName(): string {
-    if (!this.currentStorytellerId) {
+    const storytellerId = this.resolveStorytellerId(this.realtime.gameState()?.state ?? {});
+    if (!storytellerId) {
       return '';
     }
 
-    return (
-      this.playerRoster.find((player) => player.id === this.currentStorytellerId)?.name ??
-      this.currentStorytellerId
-    );
+    return this.playerRoster.find((player) => player.id === storytellerId)?.name ?? storytellerId;
   }
 
   get storytellerStatusText(): string {
-    if (!this.currentStorytellerId) {
+    const storytellerId = this.resolveStorytellerId(this.realtime.gameState()?.state ?? {});
+    if (!storytellerId) {
       return 'Cuenta-cuentos sin resolver en el state realtime.';
     }
 
@@ -568,19 +544,9 @@ export class Dixit implements OnInit, OnDestroy {
       return `Eres el cuenta-cuentos de esta ronda.`;
     }
 
-    return `Cuenta-cuentos actual: ${this.currentStorytellerName}.`;
-  }
-
-  get stateDebugKeysText(): string {
-    const state = this.realtime.gameState()?.state ?? {};
-    const keys = Object.keys(state);
-    return keys.length > 0 ? keys.join(', ') : 'sin claves';
-  }
-
-  get currentRoundDebugKeysText(): string {
-    const currentRoundState = this.resolveCurrentRoundState(this.realtime.gameState()?.state ?? {});
-    const keys = Object.keys(currentRoundState);
-    return keys.length > 0 ? keys.join(', ') : 'sin claves';
+    const storytellerName =
+      this.playerRoster.find((player) => player.id === storytellerId)?.name ?? storytellerId;
+    return `Cuenta-cuentos actual: ${storytellerName}.`;
   }
 
   get isStorySubmitDisabled(): boolean {
@@ -875,7 +841,6 @@ export class Dixit implements OnInit, OnDestroy {
       this.resetHandSubmissionState();
       this.clueDraft = '';
     }
-    this.lastRealtimeAction = update.lastAction ?? this.lastRealtimeAction;
     this.gameEnded = (update.lastAction ?? '').toUpperCase().includes('ENDED');
 
     this.applyRealtimePlayers(state);
@@ -884,38 +849,12 @@ export class Dixit implements OnInit, OnDestroy {
     this.applyRealtimeCards(state);
     this.applyRealtimeVotingState(state);
     this.applyRealtimePointsState(state, currentRoundState, previousPointsByPlayer);
-    this.logStorytellerResolution(state, currentRoundState, update.lastAction);
     this.syncRealtimePhaseTimers();
     this.syncModeChangeOfferVisibility();
     this.requestGameEndIfNeeded();
 
     this.loading = false;
     this.errorMessage = '';
-  }
-
-  private logStorytellerResolution(
-    state: Record<string, unknown>,
-    currentRoundState: Record<string, unknown>,
-    lastAction?: string
-  ): void {
-    const storytellerId = this.resolveStorytellerId(state);
-    const storytellerName =
-      this.playerRoster.find((player) => player.id === storytellerId)?.name ?? '';
-
-    if (isDevMode()) {
-      console.info('[Dixit] Storyteller resolution', {
-        lobbyCode: this.id,
-        lastAction: lastAction ?? null,
-        storytellerId: storytellerId || null,
-        storytellerName: storytellerName || null,
-        currentUserId: this.currentUserId || null,
-        isCurrentPlayerStoryteller: storytellerId === this.currentUserId,
-        stateKeys: Object.keys(state),
-        currentRoundKeys: Object.keys(currentRoundState),
-        currentRound: currentRoundState,
-        currentClue: this.currentClue || null,
-      });
-    }
   }
 
   private resetPhasePresentationState(
@@ -975,10 +914,6 @@ export class Dixit implements OnInit, OnDestroy {
       this.errorMessage =
         error instanceof Error ? error.message : 'No se pudo solicitar el cierre de la partida';
     }
-  }
-
-  get activeRealtimeLobbyCode(): string {
-    return this.realtime.activeLobbyCode() || this.id;
   }
 
   // --- Normalizacion de payloads realtime ---------------------------------
@@ -2258,45 +2193,12 @@ export class Dixit implements OnInit, OnDestroy {
     void this.router.navigate(['/settings']);
   }
 
-  toggleSimulationDrawer(): void {
-    this.isSimulationDrawerOpen = !this.isSimulationDrawerOpen;
-  }
-
-  closeSimulationDrawer(): void {
-    this.isSimulationDrawerOpen = false;
-  }
-
-  emitEndGameFromStateDrawer(): void {
-    try {
-      this.realtime.endGame();
-      this.errorMessage = '';
-    } catch (error) {
-      this.errorMessage =
-        error instanceof Error ? error.message : 'No se pudo enviar el fin de partida';
-    }
-  }
-
   closeMinigame1(): void {
     if (this.activeMinigame) {
       return;
     }
 
     this.isMinigame1Open = false;
-  }
-
-  simulateDuelSquareLanding(): void {
-    if (this.duelTargetPlayers.length === 0) {
-      this.errorMessage = 'No hay rivales disponibles para simular una casilla de duelo.';
-      return;
-    }
-
-    this.closeSimulationDrawer();
-    this.errorMessage = '';
-    this.simulationTriggerMode = 'duel';
-    this.activeDuelChallenge = {
-      challengerId: this.currentUserId || this.localCurrentPlayerId,
-      receivedAt: Date.now(),
-    };
   }
 
   closeMinigame2(): void {
@@ -2335,16 +2237,6 @@ export class Dixit implements OnInit, OnDestroy {
       this.minigameStatusMessage = '';
       return;
     }
-  }
-
-  simulateChoicePhaseOpened(): void {
-    if (!this.selectedHandCardCode) {
-      return;
-    }
-
-    this.phase = 'choice';
-    this.selectedChoiceCardCode = '';
-    this.voteSubmitted = false;
   }
 
   onChoiceCardSelected(card: DeckCard): void {
@@ -2389,56 +2281,6 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.voteSubmitted = true;
-  }
-
-  simulatePointsPhaseOpened(): void {
-    if (this.phase !== 'choice' || !this.voteSubmitted) {
-      return;
-    }
-
-    this.phase = 'points';
-    this.initializePointsPhase();
-  }
-
-  simulateVoteReceived(): void {
-    if (this.phase !== 'points' || this.pointsStage !== 'waiting') {
-      return;
-    }
-
-    this.pointsVotesReceived = Math.min(this.pointsVotesReceived + 1, this.pointsVotesTotal);
-  }
-
-  simulateAllVotesReceived(): void {
-    if (this.phase !== 'points' || this.pointsStage !== 'waiting') {
-      return;
-    }
-
-    this.pointsVotesReceived = this.pointsVotesTotal;
-  }
-
-  simulateResultsReveal(): void {
-    if (
-      this.phase !== 'points' ||
-      this.pointsStage !== 'waiting' ||
-      this.pointsVotesReceived < this.pointsVotesTotal
-    ) {
-      return;
-    }
-
-    const { revealedCards, ranking } = this.buildRevealAndRanking(this.currentRoundPlayers);
-    this.pointsRevealedCards = revealedCards;
-    this.pointsRanking = ranking;
-    this.pointsStage = 'reveal';
-    this.scheduleRevealRanking();
-  }
-
-  simulateRankingShown(): void {
-    if (this.phase !== 'points' || this.pointsStage !== 'reveal') {
-      return;
-    }
-
-    this.clearRevealRankingTimer();
-    this.applyRevealRankingToBoard();
   }
 
   requestNextRound(): void {
@@ -2816,7 +2658,6 @@ export class Dixit implements OnInit, OnDestroy {
           : minigame.isDuel
             ? 'Duelo en curso. Esperando resolucion del servidor...'
             : 'Desempate en curso. Esperando resolucion del servidor...';
-      this.closeSimulationDrawer();
       return;
     }
 
@@ -2830,7 +2671,6 @@ export class Dixit implements OnInit, OnDestroy {
       this.openMinigameView(minigameView);
     }
 
-    this.closeSimulationDrawer();
   }
 
   private openMinigameView(minigameView: 1 | 2 | 3 | null): void {

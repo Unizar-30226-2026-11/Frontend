@@ -26,39 +26,6 @@
           <p>{{ errorMessage }}</p>
         </article>
       } @else {
-        @if (isStateDrawerOpen) {
-          <button
-            type="button"
-            class="state-drawer-backdrop"
-            aria-label="Cerrar panel de estado"
-            (click)="closeStateDrawer()"
-          ></button>
-        }
-
-        <button
-          type="button"
-          class="state-drawer-toggle"
-          [class.open]="isStateDrawerOpen"
-          (click)="toggleStateDrawer()"
-        >
-          {{ isStateDrawerOpen ? 'Cerrar' : 'Estado' }}
-        </button>
-
-        <aside class="state-drawer" [class.open]="isStateDrawerOpen">
-          <article class="side-card">
-            <p class="eyebrow">Estado realtime</p>
-            <h3>Socket</h3>
-            <p>LobbyCode: {{ activeRealtimeLobbyCode }}</p>
-            <p>Conexion: {{ connectionStatusLabel }}</p>
-            <p>Fase: {{ phase }}</p>
-            <div class="drawer-actions">
-              <button type="button" class="primary-action" (click)="emitEndGameFromStateDrawer()">
-                Emitir client:game:end
-              </button>
-            </div>
-          </article>
-        </aside>
-
         <div class="stella-layout">
           <aside class="players-panel">
             <div class="panel-header">

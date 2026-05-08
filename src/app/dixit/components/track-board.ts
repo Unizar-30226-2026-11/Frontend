@@ -139,19 +139,6 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     this.moveSelectedToken(steps);
   }
 
-  simulateRound(): void {
-    if (this.isAnyTokenMoving()) {
-      return;
-    }
-
-    for (let index = 0; index < this.internalTokens.length; index += 1) {
-      const token = this.internalTokens[index];
-      const steps = Math.floor(Math.random() * 6) + 1;
-      const timer = setTimeout(() => this.animateTokenMove(token.id, steps), index * 260);
-      this.moveTimers.push(timer);
-    }
-  }
-
   getTokenAnchor(token: InternalTrackToken): TokenAnchor {
     const cell = this.boardCells[token.position] ?? this.boardCells[0];
     const sameCellTokens = this.internalTokens

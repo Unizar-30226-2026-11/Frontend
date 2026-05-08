@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, isDevMode, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   DixitConnectionStatus,
   DixitGameActionType,
@@ -34,7 +34,6 @@ import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../util
 const REALTIME_SESSION_STORAGE_KEY = 'ator.dixit.realtime.session';
 const REALTIME_GAME_STATE_STORAGE_KEY = 'ator.dixit.realtime.game-state';
 const SOCKET_CONNECT_TIMEOUT_MS = 15_000;
-const REALTIME_LOG_PREFIX = '[DixitRealtime]';
 const DEFAULT_ACTIVE_GAME_NOTICE = 'Tienes una partida activa.';
 const LOBBY_MIN_PLAYERS = 3;
 
@@ -155,7 +154,6 @@ export class DixitRealtime {
       this.handleJoinLobbyError(normalizedLobbyCode, error);
       throw error;
     }
-    this.debug('join lobby response', response);
 
     const nextSession = this.buildSession(normalizedLobbyCode, response);
     this.sessionState.set(nextSession);
@@ -222,14 +220,12 @@ export class DixitRealtime {
   startLobby(useDynamicPool?: boolean): void {
     const payload =
       typeof useDynamicPool === 'boolean' ? { useDynamicPool } : {};
-    this.debug('emit client:lobby:start', payload);
     this.emit('client:lobby:start', payload);
   }
 
   // Fuerza desde cliente la aparición de una estrella en entornos donde el
   // backend expone ese comando. La resolución real sigue siendo del servidor.
   triggerStar(): void {
-    this.debug('emit client:game:trigger_star');
     this.emit('client:game:trigger_star', {
       lobbyCode: this.requireSession().lobbyCode,
     });
@@ -238,7 +234,6 @@ export class DixitRealtime {
   // Intenta reclamar la estrella activa. La recompensa final solo se materializa
   // cuando llega star_claimed con las puntuaciones oficiales.
   claimStar(): void {
-    this.debug('emit client:game:claim_star');
     this.emit('client:game:claim_star', {
       lobbyCode: this.requireSession().lobbyCode,
     });
@@ -248,14 +243,12 @@ export class DixitRealtime {
   // El backend es idempotente y calcula el ranking una unica vez.
   endGame(): void {
     const lobbyCode = this.requireSession().lobbyCode;
-    this.debug('emit client:game:end', { lobbyCode });
     this.emit('client:game:end', { lobbyCode });
   }
 
   // Canal unificado de acciones de juego. Encapsula lobbyCode y payload para que
   // el resto de la UI no tenga que conocer detalles del socket.
   sendGameAction(actionType: DixitGameActionType, payload: Record<string, unknown> = {}): void {
-    this.debug(`emit client:game:action ${actionType}`, payload);
     this.emit('client:game:action', {
       lobbyCode: this.requireSession().lobbyCode,
       actionType,
@@ -267,7 +260,6 @@ export class DixitRealtime {
   // los resultados de los dos jugadores y desbloquear la partida.
   sendMinigameScore(score: number): void {
     const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.floor(score)) : 0;
-    this.debug('emit client:game:action SUBMIT_MINIGAME_SCORE', { score: normalizedScore });
     this.emit('client:game:action', {
       lobbyCode: this.requireSession().lobbyCode,
       actionType: 'SUBMIT_MINIGAME_SCORE',
@@ -285,7 +277,6 @@ export class DixitRealtime {
       return;
     }
 
-    this.debug('emit client:chat:send', { text: normalizedText });
     this.emit('client:chat:send', {
       lobbyCode: this.requireSession().lobbyCode,
       text: normalizedText,
@@ -297,7 +288,6 @@ export class DixitRealtime {
 
   leaveLobby(): void {
     if (this.socket !== null) {
-      this.debug('emit client:lobby:leave');
       this.socket.emit('client:lobby:leave');
     }
 
@@ -441,11 +431,6 @@ export class DixitRealtime {
     });
 
     this.socket = socket;
-    this.debug('opening socket connection', {
-      lobbyCode: session.lobbyCode,
-      socketUrl: session.socketUrl,
-      joinOnConnect: session.joinOnConnect !== false,
-    });
     this.attachSocketListeners(socket, session);
     await this.waitForSocketConnection(socket);
   }
@@ -461,11 +446,6 @@ export class DixitRealtime {
 
       this.connectionStatusState.set('connected');
       this.lastErrorSignal.set('');
-      this.debug('socket connected', {
-        lobbyCode: session.lobbyCode,
-        socketUrl: session.socketUrl,
-      });
-
       if (session.joinOnConnect !== false) {
         socket.emit('client:lobby:join');
       }
@@ -486,7 +466,6 @@ export class DixitRealtime {
       if (this.auth.activeGameId() === session.lobbyCode) {
         this.activeGameNoticeSignal.set('Se ha perdido la conexion con la partida. Reintentando...');
       }
-      this.debug('socket disconnected', { lobbyCode: session.lobbyCode });
     });
 
     socket.on('connect_error', (payload: unknown) => {
@@ -497,7 +476,6 @@ export class DixitRealtime {
       const message = this.resolveSocketErrorMessage(payload);
       this.connectionStatusState.set('error');
       this.lastErrorSignal.set(message);
-      this.debug('socket connect_error', payload);
     });
 
     socket.on('server:error', (payload: unknown) => {
@@ -506,7 +484,6 @@ export class DixitRealtime {
       if (this.connectionStatusState() !== 'connected') {
         this.connectionStatusState.set('error');
       }
-      this.debug('event server:error', payload);
     });
 
     // --- Estado de lobby y recuperacion de sesion ---
@@ -517,7 +494,6 @@ export class DixitRealtime {
       }
 
       this.lobbyStateSignal.set(nextLobbyState);
-      this.debug('event server:lobby:state_updated', nextLobbyState);
     });
 
     socket.on('server:game:state_updated', (payload: unknown) => {
@@ -535,10 +511,6 @@ export class DixitRealtime {
         state,
         lastAction: readString(normalizedPayload, 'lastAction') ?? undefined,
         receivedAt: Date.now(),
-      });
-      this.debug('event server:game:state_updated', {
-        lastAction: readString(normalizedPayload, 'lastAction') ?? undefined,
-        state,
       });
     });
 
@@ -559,7 +531,6 @@ export class DixitRealtime {
       if (message) {
         this.pushToast(message);
       }
-      this.debug('event server:game:special_event', payload);
     });
 
     socket.on('server:game:mode_change_offer', (payload: unknown) => {
@@ -570,7 +541,6 @@ export class DixitRealtime {
 
       this.modeChangeOfferSignal.set(offer);
       this.pushToast(offer.message);
-      this.debug('event server:game:mode_change_offer', offer);
     });
 
     // --- Conflictos 1 vs 1: duelo disponible y minijuego activo ---
@@ -585,7 +555,6 @@ export class DixitRealtime {
           ? `Duelo disponible para ${challengerId}.`
           : 'Duelo disponible. Elige un rival.'
       );
-      this.debug('event server:game:duel_available', payload);
     });
 
     socket.on('server:game:minigame_start', (payload: unknown) => {
@@ -602,12 +571,10 @@ export class DixitRealtime {
           ? 'Duelo iniciado. Resuelve el minijuego.'
           : 'Empate en el tablero. Resuelve el minijuego.'
       );
-      this.debug('event server:game:minigame_start', minigame);
     });
 
     socket.on('server:game:deck_reshuffled', (payload: unknown) => {
       this.pushToast('El mazo central se ha rebarajado.');
-      this.debug('event server:game:deck_reshuffled', payload);
     });
 
     socket.on('server:game:ended', (payload: unknown) => {
@@ -631,7 +598,6 @@ export class DixitRealtime {
       this.chatMessagesSignal.update((currentMessages) =>
         [...currentMessages, normalizedMessage].slice(-25)
       );
-      this.debug('event server:chat:message_received', normalizedMessage);
     });
 
     // --- Inicio y recuperacion de partida ---
@@ -660,7 +626,6 @@ export class DixitRealtime {
       const message = this.resolveServerMessage(payload);
       this.lastErrorSignal.set(message);
       this.pushToast(message);
-      this.debug('event server:force_disconnect', payload);
       this.disconnect(false);
     });
 
@@ -671,7 +636,6 @@ export class DixitRealtime {
           ? 'Es tu turno.'
           : message
       );
-      this.debug('event your_turn', payload);
     });
 
     socket.on('opponent_disconnected', (payload: unknown) => {
@@ -681,7 +645,6 @@ export class DixitRealtime {
           ? 'Oponente desconectado. Esperando...'
           : message
       );
-      this.debug('event opponent_disconnected', payload);
     });
 
     // --- Eventos especiales del tablero: estrella fugaz ---
@@ -694,7 +657,6 @@ export class DixitRealtime {
       this.activeStarSignal.set(star);
       this.starClaimSignal.set(null);
       this.pushToast('Ha aparecido una estrella fugaz.');
-      this.debug(`event ${eventName}`, star);
     };
 
     // Cuando alguien captura la estrella, se invalida el objetivo activo y
@@ -712,7 +674,6 @@ export class DixitRealtime {
           ? `La estrella fugaz la ha capturado ${claim.winnerId}.`
           : 'La estrella fugaz ha sido capturada.'
       );
-      this.debug(`event ${eventName}`, claim);
     };
 
     socket.on('star_spawned', (payload: unknown) => {
@@ -847,7 +808,6 @@ export class DixitRealtime {
       return;
     }
 
-    this.debug('join lobby returned 404, clearing stale active game state', { lobbyCode });
     this.clearRecoveredLobbyState(lobbyCode);
   }
 
@@ -985,7 +945,6 @@ export class DixitRealtime {
       board,
       receivedAt: Date.now(),
     });
-    this.debug('event server:game:private_hand', { lobbyCode, hand, board });
   }
 
   // Las cartas pueden viajar como número o string según el evento de backend.
@@ -1075,10 +1034,6 @@ export class DixitRealtime {
       });
     }
 
-    this.debug(`event ${eventName}`, {
-      gameId: recoveredGameId,
-      hasState: !!state,
-    });
   }
 
   // Algunas recuperaciones llegan como estado de lobby con un gameState embebido.
@@ -1095,7 +1050,6 @@ export class DixitRealtime {
 
     if (lobbyState) {
       this.lobbyStateSignal.set(lobbyState);
-      this.debug('event server:lobby:recovered', lobbyState);
     }
 
     if (recoveredGameState) {
@@ -1104,7 +1058,6 @@ export class DixitRealtime {
         lastAction: 'LOBBY_RECOVERED',
         receivedAt: Date.now(),
       });
-      this.debug('event server:lobby:recovered game state', recoveredGameState);
     }
   }
 
@@ -1148,10 +1101,6 @@ export class DixitRealtime {
       engine,
       receivedAt: Date.now(),
     });
-    this.debug(`event ${eventName}`, {
-      lobbyCode,
-      hasState: !!state,
-    });
   }
 
   // === Cierre de partida y economia ===
@@ -1180,7 +1129,6 @@ export class DixitRealtime {
     this.activeGameNoticeSignal.set('');
     removeLocalStorage(REALTIME_SESSION_STORAGE_KEY);
     this.pushToast(message);
-    this.debug('event game ended', payload);
   }
 
   // Construye un mensaje legible de fin de partida a partir del payload del servidor.
@@ -1213,7 +1161,6 @@ export class DixitRealtime {
 
     this.walletUpdatedSignal.set(wallet);
     this.playerStore.updateBalance(wallet.balance);
-    this.debug('event server:economy:wallet_updated', wallet);
   }
 
   // === Conflictos 1 vs 1 y minijuegos ===
@@ -1739,18 +1686,6 @@ export class DixitRealtime {
   }
 
   // Logging unificado de la capa realtime para depurar secuencia de eventos websocket.
-  private debug(message: string, payload?: unknown): void {
-    if (!isDevMode()) {
-      return;
-    }
-
-    if (payload === undefined) {
-      console.info(`${REALTIME_LOG_PREFIX} ${message}`);
-      return;
-    }
-
-    console.info(`${REALTIME_LOG_PREFIX} ${message}`, payload);
-  }
 }
 
 // Helper de parsing seguro para payloads websocket: solo acepta objetos no nulos.

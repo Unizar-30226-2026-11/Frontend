@@ -69,8 +69,7 @@
 
     .topbar-button,
     .sidebar-action,
-    .secondary-action,
-    .sim-drawer-toggle {
+    .secondary-action {
       border: 0;
       border-radius: 999px;
       padding: 8px 12px;
@@ -147,24 +146,6 @@
       background: rgba(18, 121, 82, 0.14);
       color: #126f4d;
       font-weight: 700;
-    }
-
-    .sim-card {
-      min-width: 0;
-    }
-
-    .sim-card {
-      border-radius: 24px;
-      background: rgba(8, 20, 29, 0.58);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
-    }
-
-    .sim-card {
-      padding: 16px;
-      display: grid;
-      gap: 16px;
     }
 
     .wildcard-card,
@@ -253,74 +234,3 @@
       transform: none;
     }
 
-    .sim-drawer-toggle {
-      position: fixed;
-      right: 14px;
-      top: 50%;
-      z-index: 32;
-      transform: translateY(-50%);
-      background: linear-gradient(135deg, #f5d272, #ffefbc);
-      color: #18212d;
-      box-shadow: 0 12px 24px rgba(9, 12, 20, 0.26);
-    }
-
-    .sim-drawer-toggle.open {
-      right: min(340px, 80vw);
-    }
-
-    .sim-drawer-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 29;
-      border: 0;
-      background: rgba(4, 8, 14, 0.36);
-    }
-
-    .sim-drawer {
-      position: fixed;
-      top: 0;
-      right: 0;
-      z-index: 30;
-      width: min(320px, 82vw);
-      height: 100svh;
-      padding: 14px;
-      box-sizing: border-box;
-      transform: translateX(100%);
-      transition: transform 180ms ease;
-      display: flex;
-      align-items: stretch;
-      pointer-events: none;
-    }
-
-    .sim-drawer.open {
-      transform: translateX(0);
-      pointer-events: auto;
-    }
-
-    .sim-card {
-      width: 100%;
-      align-content: start;
-    }
-
-    .sim-card h3 {
-      font-family: "FuenteDilana", sans-serif;
-      font-size: clamp(1.35rem, 2.1vw, 2rem);
-      line-height: 1.05;
-    }
-
-    .sim-bonus-action {
-      justify-self: start;
-    }
-
-    .chat-preview {
-      display: grid;
-      gap: 8px;
-      max-height: 14rem;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .chat-preview p {
-      margin: 0;
-      line-height: 1.45;
-    }

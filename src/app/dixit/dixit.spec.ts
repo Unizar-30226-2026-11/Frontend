@@ -673,7 +673,25 @@ describe('Dixit', () => {
     await initializeComponent(fixture);
 
     component.onHandCardSelected(component.cards[0]);
-    component.simulateChoicePhaseOpened();
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'choice',
+        currentRound: {
+          storytellerId: 'cpu_1',
+          playedCards: {
+            u_self: 17,
+            cpu_1: 42,
+            cpu_2: 89,
+          },
+          boardCardsDetailed: [
+            { cardId: 17, url_image: '/assets/story-card.webp' },
+            { cardId: 42, url_image: '/assets/opponent-card-1.webp' },
+            { cardId: 89, url_image: '/assets/opponent-card-2.webp' },
+          ],
+        },
+      },
+      receivedAt: Date.now(),
+    });
 
     component.onChoiceCardSelected(component.choiceCards[1]);
     component.submitVoteSelection();
@@ -979,40 +997,34 @@ describe('Dixit', () => {
     expect(component.clueDraft).toBe('');
   });
 
-  it('advances automatically from reveal to ranking after 3 seconds', async () => {
-    vi.useFakeTimers();
-    await initializeComponent(fixture);
-
-    component.onHandCardSelected(component.cards[0]);
-    component.simulateChoicePhaseOpened();
-    component.onChoiceCardSelected(component.choiceCards[1]);
-    component.submitVoteSelection();
-    component.simulatePointsPhaseOpened();
-    component.simulateAllVotesReceived();
-
-    const positionsBeforeReveal = component.boardTokens.map((token) => token.position);
-
-    component.simulateResultsReveal();
-
-    expect(component.pointsStage).toBe('reveal');
-
-    await vi.advanceTimersByTimeAsync(3000);
-
-    expect(component.pointsStage).toBe('ranking');
-    expect(component.boardTokens.map((token) => token.position)).not.toEqual(positionsBeforeReveal);
-  });
-
   it('prepares the next round from the ranking state', async () => {
     await initializeComponent(fixture);
 
-    component.onHandCardSelected(component.cards[0]);
-    component.simulateChoicePhaseOpened();
-    component.onChoiceCardSelected(component.choiceCards[1]);
-    component.submitVoteSelection();
-    component.simulatePointsPhaseOpened();
-    component.simulateAllVotesReceived();
-    component.simulateResultsReveal();
-    component.simulateRankingShown();
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'ranking',
+        roundNumber: 2,
+        scores: {
+          u_self: 3,
+          cpu_1: 5,
+          cpu_2: 2,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: '17',
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+            cpu_2: 89,
+          },
+          votes: [
+            { voterId: 'u_self', targetCardId: 17 },
+            { voterId: 'cpu_2', targetCardId: 17 },
+          ],
+        },
+      },
+      receivedAt: Date.now(),
+    });
 
     component.prepareNextRound();
 
@@ -1023,46 +1035,6 @@ describe('Dixit', () => {
     expect(component.voteSubmitted).toBeFalse();
   });
 
-  it('shows the realtime state panel in the simulation drawer', async () => {
-    await initializeComponent(fixture);
-
-    component.isSimulationDrawerOpen = true;
-    fixture.detectChanges();
-
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('LobbyCode: A1B2');
-    expect(text).toContain('Emitir client:game:end');
-    expect(text).toContain('Simular casilla de duelo backend');
-  });
-
-  it('emits client:game:end from the state drawer button flow', async () => {
-    await initializeComponent(fixture);
-
-    component.emitEndGameFromStateDrawer();
-
-    expect(realtimeSpy.endGame).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens the rival picker for backend duel simulation', async () => {
-    await initializeComponent(fixture);
-
-    component.isSimulationDrawerOpen = true;
-    fixture.detectChanges();
-
-    const button = Array.from(
-      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
-    ).find((candidate) => (candidate.textContent as string).includes('Simular casilla de duelo backend')) as
-      | HTMLButtonElement
-      | undefined;
-
-    expect(button).toBeDefined();
-    button?.click();
-    fixture.detectChanges();
-
-    expect(component.activeDuelChallenge).not.toBeNull();
-    expect(component.simulationTriggerMode).toBe('duel');
-    expect(component.isSimulationDrawerOpen).toBeFalse();
-  });
 });
 
 async function initializeComponent(fixture: ComponentFixture<Dixit>): Promise<void> {
