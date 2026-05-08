@@ -112,7 +112,7 @@ describe('DixitStella', () => {
     });
   });
 
-  it('sends STELLA_REVEAL_MARK when the current scout reveals a selected card', async () => {
+  it('sends STELLA_REVEAL_MARK after the current scout selects and confirms a card', async () => {
     realtimeStub.gameState.and.returnValue(
       createRealtimeState({
         phase: 'STELLA_REVEAL',
@@ -136,6 +136,12 @@ describe('DixitStella', () => {
     fixture.detectChanges();
 
     component.onBoardCardClicked('2');
+
+    expect(realtimeStub.sendGameAction).not.toHaveBeenCalled();
+    expect(component.isPendingRevealCard('2')).toBeTrue();
+    expect(component.canSubmitRevealSelection).toBeTrue();
+
+    component.submitRevealSelection();
 
     expect(realtimeStub.sendGameAction).toHaveBeenCalledWith('STELLA_REVEAL_MARK', {
       cardId: 2,

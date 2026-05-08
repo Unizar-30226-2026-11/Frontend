@@ -71,6 +71,7 @@ import {
   type FinalResultsRankingRow as SharedFinalResultsRankingRow,
   type FinalResultsStat,
 } from '../shared/final-results-overlay';
+import { MinigameCountdownOverlay } from '../shared/minigame-countdown-overlay';
 
 @Component({
   selector: 'app-dixit',
@@ -83,6 +84,7 @@ import {
     DixitMinijuego1,
     DixitMinijuego2,
     FinalResultsOverlay,
+    MinigameCountdownOverlay,
     DixitMinijuego3,
   ],
   templateUrl: './dixit.html',
@@ -153,6 +155,7 @@ export class Dixit implements OnInit, OnDestroy {
   isMinigame3Open = false;
   minigameUiState: MinigameUiState = 'playing';
   minigameStatusMessage = '';
+  isMinigameCountdownOpen = false;
   simulationTriggerMode: SimulationTriggerMode = null;
   private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -714,6 +717,15 @@ export class Dixit implements OnInit, OnDestroy {
     return this.activeMinigame?.duration ?? 15_000;
   }
 
+  get isMinigameCountdownVisible(): boolean {
+    return (
+      this.activeMinigame !== null &&
+      !this.activeMinigame.isDuel &&
+      this.isCurrentPlayerInActiveMinigame &&
+      this.isMinigameCountdownOpen
+    );
+  }
+
   get activeMinigameOpponentName(): string {
     if (!this.activeMinigame) {
       return 'Rival';
@@ -746,6 +758,7 @@ export class Dixit implements OnInit, OnDestroy {
       this.activeMinigame.type,
       this.activeMinigame.duration,
       this.activeMinigame.isDuel ? 'duel' : 'conflict',
+      this.activeMinigame.receivedAt,
     ].join('|');
   }
 
@@ -2307,6 +2320,7 @@ export class Dixit implements OnInit, OnDestroy {
       return;
     }
 
+    this.isMinigameCountdownOpen = false;
     this.minigameResultSent = true;
     this.minigameUiState = 'waiting';
     this.minigameStatusMessage = 'Puntuacion enviada. Esperando al rival...';
@@ -2781,6 +2795,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
+    this.isMinigameCountdownOpen = false;
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
     this.simulationTriggerMode = null;
@@ -2798,19 +2813,34 @@ export class Dixit implements OnInit, OnDestroy {
       this.minigameStatusMessage =
         this.resolveMinigameView(minigame.type) === null
           ? 'Minijuego no disponible en este cliente. Esperando resolucion del servidor...'
-          : 'Duelo en curso. Esperando resolucion del servidor...';
+          : minigame.isDuel
+            ? 'Duelo en curso. Esperando resolucion del servidor...'
+            : 'Desempate en curso. Esperando resolucion del servidor...';
       this.closeSimulationDrawer();
       return;
     }
 
     const minigameView = this.resolveMinigameView(minigame.type);
+    if (!minigame.isDuel && minigameView !== null) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
+      this.isMinigameCountdownOpen = true;
+    } else {
+      this.openMinigameView(minigameView);
+    }
+
+    this.closeSimulationDrawer();
+  }
+
+  private openMinigameView(minigameView: 1 | 2 | 3 | null): void {
     if (minigameView === null) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = false;
       this.isMinigame3Open = false;
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
-      this.scheduleUnavailableMinigameSubmit(minigame.duration);
+      this.scheduleUnavailableMinigameSubmit(this.activeMinigameDurationMs);
     } else if (minigameView === 2) {
       this.isMinigame1Open = false;
       this.isMinigame2Open = true;
@@ -2824,8 +2854,16 @@ export class Dixit implements OnInit, OnDestroy {
       this.isMinigame2Open = false;
       this.isMinigame3Open = false;
     }
+  }
 
-    this.closeSimulationDrawer();
+  onMinigameCountdownFinished(): void {
+    this.isMinigameCountdownOpen = false;
+    const activeMinigame = this.activeMinigame;
+    if (!activeMinigame || this.minigameUiState !== 'playing') {
+      return;
+    }
+
+    this.openMinigameView(this.resolveMinigameView(activeMinigame.type));
   }
 
   private applyRealtimeModeChangeOffer(offer: RealtimeModeChangeOffer): void {
@@ -2868,6 +2906,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     if (specialEvent.effect === 'CONFLICT_RESOLVED') {
+      this.isMinigameCountdownOpen = false;
       if (specialEvent.winnerId === this.currentUserId) {
         this.minigameUiState = 'won';
         this.minigameStatusMessage = 'Victoria';
@@ -2884,6 +2923,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     if (specialEvent.effect === 'CONFLICT_CANCELLED' || specialEvent.effect === 'CONFLICT_DRAW') {
+      this.isMinigameCountdownOpen = false;
       this.minigameUiState = 'cancelled';
       this.minigameStatusMessage =
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
@@ -2931,6 +2971,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.isMinigame1Open = false;
     this.isMinigame2Open = false;
     this.isMinigame3Open = false;
+    this.isMinigameCountdownOpen = false;
     this.clearMinigameUnavailableSubmitTimer();
     this.clearMinigameResolutionTimer();
     this.activeMinigame = null;

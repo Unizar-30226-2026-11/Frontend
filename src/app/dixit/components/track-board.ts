@@ -17,6 +17,7 @@ type TrackCellTone =
   | 'pink'
   | 'blue'
   | 'goal'
+  | 'finish'
   | 'wildcard'
   | 'event-back'
   | 'event-forward';
@@ -367,8 +368,8 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
       index,
       x: 6.5 + (point.col / maxCol) * 87,
       y: 10 + (point.row / maxRow) * 79,
-      tone: this.resolveCellTone(index),
-      badge: this.resolveCellBadge(index),
+      tone: this.resolveCellTone(index, path.length - 1),
+      badge: this.resolveCellBadge(index, path.length - 1),
     }));
   }
 
@@ -393,12 +394,15 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     points.push({ col: 3, row: 3 });
     points.push({ col: 4, row: 3 });
     points.push({ col: 4, row: 2 });
-    points.push({ col: 3, row: 2 });
+    points.push({ col: 5, row: 2 });
 
     return points;
   }
 
-  private resolveCellTone(index: number): TrackCellTone {
+  private resolveCellTone(index: number, finishIndex: number): TrackCellTone {
+    if (index === finishIndex) {
+      return 'finish';
+    }
     if (index === 0) {
       return 'goal';
     }
@@ -423,7 +427,10 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     return 'normal';
   }
 
-  private resolveCellBadge(index: number): string | undefined {
+  private resolveCellBadge(index: number, finishIndex: number): string | undefined {
+    if (index === finishIndex) {
+      return 'FIN';
+    }
     if (this.wildcardCells.includes(index)) {
       return '*';
     }

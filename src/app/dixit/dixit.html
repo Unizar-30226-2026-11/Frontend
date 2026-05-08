@@ -308,6 +308,16 @@
       </div>
     }
 
+    @if (isMinigameCountdownVisible) {
+      <app-minigame-countdown-overlay
+        eyebrow="Desempate"
+        [title]="'¡Vaya! has empatado con ' + activeMinigameOpponentName"
+        copy="Preparate para el minijuego en..."
+        [resetKey]="activeMinigameSeedKey"
+        (finished)="onMinigameCountdownFinished()"
+      />
+    }
+
     @if (isMinigame1Open) {
       <app-dixit-minijuego-1
         [durationMs]="activeMinigameDurationMs"

@@ -230,7 +230,8 @@ describe('Dixit', () => {
     expect(text).toContain('Saldo total actualizado: 285 monedas.');
   });
 
-  it('opens the mapped minigame overlay when a realtime minigame starts', async () => {
+  it('shows a countdown before opening the mapped minigame overlay after a tie', async () => {
+    vi.useFakeTimers();
     await initializeComponent(fixture);
 
     component.activeDuelChallenge = {
@@ -249,8 +250,22 @@ describe('Dixit', () => {
     fixture.detectChanges();
 
     expect(component.activeDuelChallenge).toBeNull();
-    expect(component.isMinigame1Open).toBeTrue();
+    expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
+    expect(component.isMinigameCountdownOpen).toBeTrue();
+    expect(fixture.nativeElement.textContent as string).toContain('Vaya, has empatado con cpu_1');
+    expect(fixture.nativeElement.textContent as string).toContain('5');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent as string).toContain('4');
+
+    await vi.advanceTimersByTimeAsync(4000);
+    fixture.detectChanges();
+
+    expect(component.isMinigameCountdownOpen).toBeFalse();
+    expect(component.isMinigame1Open).toBeTrue();
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });
 
@@ -410,6 +425,12 @@ describe('Dixit', () => {
 
     expect(component.selectedChoiceCardCode).toBe('c_42');
     expect(component.voteSubmitted).toBeTrue();
+
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Carta votada');
+    expect(text).toContain('Esperando a que el resto de jugadores voten.');
+    expect(text).not.toContain('Esperando votos');
   });
 
   it('does not send a vote for the current player own card', async () => {

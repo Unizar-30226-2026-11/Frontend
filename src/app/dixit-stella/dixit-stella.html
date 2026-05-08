@@ -133,6 +133,7 @@
                     class="board-card"
                     [class.selected]="isCardSelected(card.code)"
                     [class.revealable]="isCardRevealable(card.code)"
+                    [class.reveal-pending]="isPendingRevealCard(card.code)"
                     [class.revealed]="revealCount > 0"
                   >
                     <button
@@ -248,27 +249,6 @@
                   }
                 </div>
 
-                <p class="eyebrow">Pista 1-10</p>
-                <h3>Intensidad declarada</h3>
-                <div class="announce-track">
-                  @for (count of announceTrack; track count) {
-                    <div class="announce-cell">
-                      <strong>{{ count }}</strong>
-                      <div class="announce-tokens">
-                        @for (player of getPlayersAtCount(count); track player.id) {
-                          <span
-                            class="announce-token"
-                            [style.background]="player.color"
-                            [attr.title]="player.name"
-                          >
-                            {{ player.name.charAt(0) }}
-                          </span>
-                        }
-                      </div>
-                    </div>
-                  }
-                </div>
-                <p class="announce-copy">{{ selectionMessage }}</p>
               </section>
             } @else if (phase === 'STELLA_REVEAL') {
               <section class="side-card">
@@ -297,6 +277,29 @@
                       <p>{{ entry.cardCode }} · {{ entry.outcomeLabel }}</p>
                     </article>
                   }
+                </div>
+
+                <div class="declared-intensity">
+                  <p class="eyebrow">Pista 1-10</p>
+                  <h3>Intensidad declarada</h3>
+                  <div class="announce-track">
+                    @for (count of announceTrack; track count) {
+                      <div class="announce-cell">
+                        <strong>{{ count }}</strong>
+                        <div class="announce-tokens">
+                          @for (player of getPlayersAtCount(count); track player.id) {
+                            <span
+                              class="announce-token"
+                              [style.background]="player.color"
+                              [attr.title]="player.name"
+                            >
+                              {{ player.name.charAt(0) }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
                 </div>
               </section>
             } @else if (phase === 'SCORING') {
@@ -340,9 +343,10 @@
               <button
                 type="button"
                 class="primary-action"
-                disabled
+                [disabled]="!canSubmitRevealSelection"
+                (click)="submitRevealSelection()"
               >
-                {{ isCurrentUserExplorer ? 'Elige una carta del tablero' : 'Esperando al scout' }}
+                {{ isCurrentUserExplorer ? 'Seleccionar carta' : 'Esperando al scout' }}
               </button>
             } @else if (phase === 'SCORING') {
               <button type="button" class="primary-action" (click)="advanceAfterScoring()">
@@ -402,6 +406,16 @@
           </div>
         </article>
       </div>
+    }
+
+    @if (isMinigameCountdownVisible) {
+      <app-minigame-countdown-overlay
+        [eyebrow]="activeMinigameCountdownEyebrow"
+        [title]="activeMinigameCountdownTitle"
+        copy="Preparate para el minijuego en..."
+        [resetKey]="activeMinigameSeedKey"
+        (finished)="onMinigameCountdownFinished()"
+      />
     }
 
     @if (isMinigame1Open) {

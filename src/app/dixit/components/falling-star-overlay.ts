@@ -70,8 +70,8 @@ interface RenderedStarState {
 
       .star-button {
         position: absolute;
-        width: 56px;
-        height: 56px;
+        width: 96px;
+        height: 96px;
         border: 0;
         padding: 0;
         background: transparent;
@@ -106,7 +106,7 @@ interface RenderedStarState {
         place-items: center;
         width: 100%;
         height: 100%;
-        font-size: 2rem;
+        font-size: 3.6rem;
         color: #fff5b7;
         text-shadow:
           0 0 10px rgba(255, 240, 166, 0.88),
@@ -116,10 +116,10 @@ interface RenderedStarState {
 
       .star-tail {
         position: absolute;
-        left: -68px;
+        left: -118px;
         top: 50%;
-        width: 78px;
-        height: 12px;
+        width: 132px;
+        height: 18px;
         border-radius: 999px;
         transform: translateY(-50%) rotate(-10deg);
         background: linear-gradient(
@@ -168,17 +168,17 @@ interface RenderedStarState {
 
       @media (max-width: 700px) {
         .star-button {
-          width: 48px;
-          height: 48px;
+          width: 78px;
+          height: 78px;
         }
 
         .star-core {
-          font-size: 1.7rem;
+          font-size: 2.9rem;
         }
 
         .star-tail {
-          left: -54px;
-          width: 62px;
+          left: -92px;
+          width: 104px;
         }
       }
     `,
