@@ -19,21 +19,7 @@ describe('DixitStella', () => {
     session: jasmine.Spy<() => { user: { id: string } } | null>;
     username: jasmine.Spy<() => string>;
   };
-  let realtimeStub: {
-    ensureLobbyConnection: jasmine.Spy<(lobbyCode: string) => Promise<void>>;
-    activeLobbyCode: jasmine.Spy<() => string>;
-    gameState: jasmine.Spy<() => { state: Record<string, unknown>; receivedAt: number } | null>;
-    lobbyState: jasmine.Spy<() => null>;
-    lastError: jasmine.Spy<() => string>;
-    connectionStatus: jasmine.Spy<() => string>;
-    sendGameAction: jasmine.Spy<(actionType: string, payload?: Record<string, unknown>) => void>;
-    sendMinigameScore: jasmine.Spy<(score: number) => void>;
-    minigameStart: jasmine.Spy<() => { player1: string; player2: string; type: number; duration: number; isDuel: boolean; receivedAt: number } | null>;
-    specialEvent: jasmine.Spy<() => { effect: string; message: string; winnerId?: string; loserId?: string; receivedAt: number } | null>;
-    clearMinigameStart: jasmine.Spy<() => void>;
-    clearSpecialEvent: jasmine.Spy<() => void>;
-    endGame: jasmine.Spy<() => void>;
-  };
+  let realtimeStub: jasmine.SpyObj<DixitRealtime>;
 
   beforeEach(async () => {
     stellaCardPullSpy = jasmine.createSpyObj<StellaCardPull>('StellaCardPull', ['getCards']);
@@ -43,21 +29,35 @@ describe('DixitStella', () => {
       session: jasmine.createSpy().and.returnValue({ user: { id: 'u_111' } }),
       username: jasmine.createSpy().and.returnValue('Alpha'),
     };
-    realtimeStub = {
-      ensureLobbyConnection: jasmine.createSpy().and.resolveTo(),
-      activeLobbyCode: jasmine.createSpy().and.returnValue('STELLA1'),
-      gameState: jasmine.createSpy().and.returnValue(createRealtimeState()),
-      lobbyState: jasmine.createSpy().and.returnValue(null),
-      lastError: jasmine.createSpy().and.returnValue(''),
-      connectionStatus: jasmine.createSpy().and.returnValue('connected'),
-      sendGameAction: jasmine.createSpy(),
-      sendMinigameScore: jasmine.createSpy(),
-      minigameStart: jasmine.createSpy().and.returnValue(null),
-      specialEvent: jasmine.createSpy().and.returnValue(null),
-      clearMinigameStart: jasmine.createSpy(),
-      clearSpecialEvent: jasmine.createSpy(),
-      endGame: jasmine.createSpy(),
-    };
+    realtimeStub = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
+      'ensureLobbyConnection',
+      'activeLobbyCode',
+      'gameState',
+      'lobbyState',
+      'lastError',
+      'connectionStatus',
+      'sendGameAction',
+      'sendMinigameScore',
+      'minigameStart',
+      'specialEvent',
+      'activeStar',
+      'starClaim',
+      'clearStarClaim',
+      'claimStar',
+      'clearMinigameStart',
+      'clearSpecialEvent',
+      'endGame',
+    ]);
+    realtimeStub.ensureLobbyConnection.and.resolveTo();
+    realtimeStub.activeLobbyCode.and.returnValue('STELLA1');
+    realtimeStub.gameState.and.returnValue(createRealtimeState());
+    realtimeStub.lobbyState.and.returnValue(null);
+    realtimeStub.lastError.and.returnValue('');
+    realtimeStub.connectionStatus.and.returnValue('connected');
+    realtimeStub.minigameStart.and.returnValue(null);
+    realtimeStub.specialEvent.and.returnValue(null);
+    realtimeStub.activeStar.and.returnValue(null);
+    realtimeStub.starClaim.and.returnValue(null);
 
     stellaCardPullSpy.getCards.and.resolveTo(createCardsFixture(30));
     gamesPullSpy.getGameDetails.and.resolveTo(createLobbyFixture());
