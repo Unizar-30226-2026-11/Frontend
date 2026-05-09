@@ -27,6 +27,7 @@
 .final-panel,
 .reveal-banner,
 .word-panel,
+.track-board-dialog,
 .modal-card {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(9, 19, 30, 0.74);
@@ -561,6 +562,31 @@ h3 {
   box-sizing: border-box;
 }
 
+.track-board-dialog {
+  width: min(1120px, calc(100vw - 2 * clamp(12px, 3vw, 28px)));
+  max-height: calc(100svh - 2 * clamp(12px, 3vw, 28px));
+  border-radius: 24px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.track-board-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.track-board-dialog app-dixit-track-board {
+  --track-board-target-height: 58cqw;
+  --track-board-max-height: 68svh;
+  display: block;
+  min-width: 0;
+}
+
 .minigame-status-card {
   width: min(460px, calc(100vw - 2 * clamp(12px, 3vw, 28px)));
 }
@@ -652,6 +678,15 @@ h3 {
   .modal-card {
     gap: 12px;
     padding: 14px;
+  }
+
+  .track-board-dialog {
+    padding: 14px;
+  }
+
+  .track-board-dialog-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .modal-card img {

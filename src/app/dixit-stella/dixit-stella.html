@@ -12,6 +12,7 @@
         </div>
 
         <div class="topbar-actions">
+          <button type="button" class="topbar-button" (click)="openTrackBoard()">Tablero</button>
           <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
           <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
         </div>
@@ -328,6 +329,43 @@
         </footer>
       }
     </section>
+
+    @if (isTrackBoardOpen) {
+      <div class="modal-backdrop" (click)="closeTrackBoard()">
+        <article
+          class="track-board-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stella-track-board-title"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="track-board-dialog-header">
+            <div>
+              <p class="eyebrow">Tablero Stella</p>
+              <h2 id="stella-track-board-title">Posiciones</h2>
+            </div>
+            <button
+              type="button"
+              class="topbar-button small"
+              aria-label="Cerrar tablero"
+              (click)="closeTrackBoard()"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <app-dixit-track-board
+            title=""
+            [subtitle]="stellaBoardSubtitle"
+            [tokens]="stellaBoardTokens"
+            [boardImageUrl]="trackBoardImageUrl"
+            [showControls]="false"
+            [interactive]="false"
+            [specialCells]="specialBoardCells"
+          />
+        </article>
+      </div>
+    }
 
     @if (inspectedCard; as card) {
       <div class="modal-backdrop" (click)="closeInspection()">

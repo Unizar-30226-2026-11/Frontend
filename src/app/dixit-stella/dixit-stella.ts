@@ -13,6 +13,11 @@ import { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
+import {
+  DixitTrackBoard,
+  type TrackBoardToken,
+} from '../dixit/components/track-board';
+import { SPECIAL_BOARD_CELLS } from '../dixit/dixit.constants';
 import { DixitMinijuego1 } from '../dixit/minijuegos/minijuego-1';
 import { DixitMinijuego2 } from '../dixit/minijuegos/minijuego-2/minijuego-2';
 import { DixitMinijuego3 } from '../dixit/minijuegos/minijuego-3/minijuego-3';
@@ -52,6 +57,7 @@ const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
   selector: 'app-dixit-stella',
   standalone: true,
   imports: [
+    DixitTrackBoard,
     FinalResultsOverlay,
     MinigameCountdownOverlay,
     DixitMinijuego1,
@@ -86,6 +92,8 @@ export class DixitStella implements OnInit, OnDestroy {
 
   readonly boardRowIndexes = Array.from({ length: BOARD_ROWS }, (_, index) => index);
   readonly announceTrack = Array.from({ length: MAX_SELECTIONS }, (_, index) => index + 1);
+  readonly specialBoardCells = SPECIAL_BOARD_CELLS;
+  readonly trackBoardImageUrl = DEFAULT_CARD_IMAGE;
 
   id = '';
   roomTitle = 'Sala Stella';
@@ -114,6 +122,7 @@ export class DixitStella implements OnInit, OnDestroy {
   minigameUiState: 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled' = 'playing';
   minigameStatusMessage = '';
   isMinigameCountdownOpen = false;
+  isTrackBoardOpen = false;
   private lastAppliedMinigameReceivedAt = 0;
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -335,6 +344,19 @@ export class DixitStella implements OnInit, OnDestroy {
     ];
   }
 
+  get stellaBoardTokens(): TrackBoardToken[] {
+    return this.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      position: player.score,
+    }));
+  }
+
+  get stellaBoardSubtitle(): string {
+    return `Ronda ${this.roundNumber} - ${this.currentPhaseMeta.title}`;
+  }
+
   get stellaFinalRankingRows(): SharedFinalResultsRankingRow[] {
     return this.getPlayersSortedByScore().map((player, index) => ({
       id: player.id,
@@ -508,6 +530,14 @@ export class DixitStella implements OnInit, OnDestroy {
 
   returnToGames(): void {
     void this.router.navigate(['/games']);
+  }
+
+  openTrackBoard(): void {
+    this.isTrackBoardOpen = true;
+  }
+
+  closeTrackBoard(): void {
+    this.isTrackBoardOpen = false;
   }
 
   openInspection(card: DeckCard): void {
