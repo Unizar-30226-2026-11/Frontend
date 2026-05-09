@@ -202,6 +202,20 @@ describe('LobbyMenu', () => {
     expect(component.shouldShowJoinOverlay).toBeTrue();
   });
 
+  it('renders the dynamic pool selector only for the host', async () => {
+    const hostText = fixture.nativeElement.textContent as string;
+    expect(hostText).toContain('Pool dinamico');
+
+    authStub.session.and.returnValue({ user: { id: 'u_222' } });
+
+    const guestFixture = TestBed.createComponent(LobbyMenu);
+    guestFixture.detectChanges();
+    await guestFixture.whenStable();
+
+    const guestText = guestFixture.nativeElement.textContent as string;
+    expect(guestText).not.toContain('Pool dinamico');
+  });
+
   it('does not restore realtime when the authenticated user is not in the lobby', async () => {
     authStub.session.and.returnValue({ user: { id: 'u_999' } });
     gamesPullSpy.getGameDetails.calls.reset();
