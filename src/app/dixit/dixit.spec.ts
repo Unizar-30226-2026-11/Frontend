@@ -512,8 +512,11 @@ describe('Dixit', () => {
     expect(component.selectedHandCardCode).toBe('c_102');
 
     fixture.detectChanges();
+    const selectedCard = fixture.nativeElement.querySelector('.hand-card.selected') as HTMLElement | null;
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Seleccionada: c_102');
+
+    expect(selectedCard).not.toBeNull();
+    expect(text).toContain('Quitar');
   });
 
   it('reads the storyteller from currentRound and submits the clue separately', async () => {
