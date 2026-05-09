@@ -5,7 +5,9 @@ import {
   ElementRef,
   EventEmitter,
   Input,
+  OnChanges,
   Output,
+  SimpleChanges,
   ViewChild,
 } from '@angular/core';
 import { DeckCard } from '../../services/card-pull';
@@ -969,7 +971,7 @@ import {
     }
   `,
 })
-export class DixitHandPhase implements AfterViewChecked {
+export class DixitHandPhase implements AfterViewChecked, OnChanges {
   @Input() currentClue = '';
   @Input() cards: DeckCard[] = [];
   @Input() selectedCardCode = '';
@@ -1004,6 +1006,30 @@ export class DixitHandPhase implements AfterViewChecked {
   isDropZoneActive = false;
   isActionPanelOpen = false;
   private lastScrolledChatKey = '';
+
+  ngOnChanges(changes: SimpleChanges): void {
+    const clueChange = changes['currentClue'];
+    const storytellerChange = changes['isCurrentPlayerStoryteller'];
+
+    const clueJustOpened =
+      clueChange &&
+      typeof clueChange.currentValue === 'string' &&
+      clueChange.currentValue.trim().length > 0 &&
+      (
+        clueChange.firstChange ||
+        (typeof clueChange.previousValue === 'string' &&
+          clueChange.previousValue.trim().length === 0)
+      );
+
+    const storytellerNeedsCluePanel =
+      this.isCurrentPlayerStoryteller &&
+      !this.currentClue.trim() &&
+      (!!storytellerChange || !!clueChange);
+
+    if (clueJustOpened || storytellerNeedsCluePanel) {
+      this.isActionPanelOpen = true;
+    }
+  }
 
   get selectedCard(): DeckCard | undefined {
     return this.cards.find((card) => card.code === this.selectedCardCode);
