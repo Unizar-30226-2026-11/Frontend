@@ -142,6 +142,8 @@ export class Dixit implements OnInit, OnDestroy {
   finalResultsError = '';
   finalWalletBalance: number | null = null;
   showFinalRanking = false;
+  finalWinnerId = '';
+  finalWinnerName = '';
 
   pointsVotesReceived = 0;
   pointsVotesTotal = 0;
@@ -617,11 +619,19 @@ export class Dixit implements OnInit, OnDestroy {
 
   get finalOverlayTitle(): string {
     const result = this.currentPlayerFinalResult;
+    const isBackendWinner =
+      (!!this.finalWinnerId && this.finalWinnerId === this.currentUserId) ||
+      (!!this.finalWinnerName && this.finalWinnerName === (this.auth.username() || this.currentUserId));
+
     if (!result) {
+      if (isBackendWinner) {
+        return 'Has ganado la partida';
+      }
+
       return 'Resultados finales';
     }
 
-    if (result.place === 1) {
+    if (isBackendWinner) {
       return 'Has ganado la partida';
     }
 
@@ -896,6 +906,8 @@ export class Dixit implements OnInit, OnDestroy {
     this.finalResultsError = '';
     this.finalWalletBalance = null;
     this.showFinalRanking = false;
+    this.finalWinnerId = '';
+    this.finalWinnerName = '';
     this.lastAppliedGameEndedReceivedAt = 0;
     this.lastAppliedWalletUpdatedAt = 0;
     this.realtime.clearGameEndedResult();
@@ -2617,6 +2629,8 @@ export class Dixit implements OnInit, OnDestroy {
       isCurrentPlayer: entry.playerId === this.currentUserId,
     }));
     this.finalResultsError = gameEndedResult.error ?? '';
+    this.finalWinnerId = gameEndedResult.winnerId ?? '';
+    this.finalWinnerName = gameEndedResult.winnerName ?? '';
     this.showFinalRanking = false;
   }
 

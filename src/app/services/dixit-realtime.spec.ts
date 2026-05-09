@@ -653,6 +653,8 @@ describe('DixitRealtime', () => {
     await connectionPromise;
 
     socket.trigger('server:game:ended', {
+      winnerId: 'u_1',
+      winnerUsername: 'Ada',
       ranking: [
         { playerId: 'u_1', points: 17, place: 1, coinsEarned: 50 },
         { playerId: 'u_2', points: 12, place: 2, coinsEarned: 35 },
@@ -661,6 +663,8 @@ describe('DixitRealtime', () => {
 
     expect(service.gameEndedResult()).toEqual(
       jasmine.objectContaining({
+        winnerId: 'u_1',
+        winnerName: 'Ada',
         ranking: [
           jasmine.objectContaining({ playerId: 'u_1', place: 1, coinsEarned: 50 }),
           jasmine.objectContaining({ playerId: 'u_2', place: 2, coinsEarned: 35 }),

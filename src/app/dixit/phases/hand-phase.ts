@@ -376,6 +376,7 @@ import {
     .story-card {
       width: 100%;
       height: 100%;
+      max-height: 100%;
       border-radius: 26px;
       box-sizing: border-box;
       display: grid;
@@ -418,6 +419,7 @@ import {
     }
 
     .waiting-overlay {
+      max-height: 100%;
       background:
         radial-gradient(circle at top left, rgba(216, 255, 231, 0.16), transparent 34%),
         linear-gradient(155deg, rgba(31, 58, 50, 0.92), rgba(23, 35, 44, 0.94));
