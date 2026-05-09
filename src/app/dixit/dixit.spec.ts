@@ -211,6 +211,8 @@ describe('Dixit', () => {
     await initializeComponent(fixture);
 
     component['applyRealtimeGameEnded']({
+      winnerId: 'cpu_1',
+      winnerName: 'cpu_1',
       ranking: [
         { playerId: 'cpu_1', points: 16, place: 1, coinsEarned: 50 },
         { playerId: 'u_self', points: 14, place: 2, coinsEarned: 35 },
@@ -228,6 +230,22 @@ describe('Dixit', () => {
     expect(component.finalOverlayTitle).toContain('2');
     expect(text).toContain('+35');
     expect(text).toContain('Saldo total actualizado: 285 monedas.');
+  });
+
+  it('uses the backend winner instead of inferring victory only from the local place', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameEnded']({
+      winnerId: 'cpu_1',
+      winnerName: 'Ada CPU',
+      ranking: [
+        { playerId: 'u_self', points: 18, place: 1, coinsEarned: 25 },
+        { playerId: 'cpu_1', points: 18, place: 1, coinsEarned: 50 },
+      ],
+      receivedAt: Date.now(),
+    });
+
+    expect(component.finalOverlayTitle).toBe('Has terminado 1er');
   });
 
   it('shows a countdown before opening the mapped minigame overlay after a tie', async () => {

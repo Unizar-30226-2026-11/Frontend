@@ -1169,6 +1169,7 @@ export class DixitRealtime {
 
   private normalizeGameEnded(payload: unknown): RealtimeGameEnded {
     const data = asRecord(payload);
+    const wrappedData = asRecord(data?.['data']) ?? data;
     const rankingEntries = Array.isArray(data?.['ranking']) ? data['ranking'] : [];
     const ranking = rankingEntries
       .map((entry) => this.normalizeGameEndedRankingEntry(entry))
@@ -1178,6 +1179,16 @@ export class DixitRealtime {
     return {
       ranking,
       error: readString(data, 'error') ?? undefined,
+      winnerId:
+        readString(data, 'winnerId') ??
+        readString(wrappedData, 'winnerId') ??
+        undefined,
+      winnerName:
+        readString(data, 'winnerUsername') ??
+        readString(data, 'winner') ??
+        readString(wrappedData, 'winnerUsername') ??
+        readString(wrappedData, 'winner') ??
+        undefined,
       receivedAt: Date.now(),
     };
   }

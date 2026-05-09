@@ -68,6 +68,8 @@ export interface RealtimeGameEndedRankingEntry {
 export interface RealtimeGameEnded {
   ranking: RealtimeGameEndedRankingEntry[];
   error?: string;
+  winnerId?: string;
+  winnerName?: string;
   receivedAt: number;
 }
 
