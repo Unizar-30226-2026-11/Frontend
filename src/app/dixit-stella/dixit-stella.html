@@ -367,6 +367,14 @@
       </div>
     }
 
+    <app-falling-star-overlay
+      [star]="activeStar"
+      [claimEnabled]="canClaimActiveStar"
+      [winnerLabel]="starWinnerLabel"
+      [winnerSequence]="starClaimSequence"
+      (claimRequested)="claimVisibleStar()"
+    />
+
     @if (inspectedCard; as card) {
       <div class="modal-backdrop" (click)="closeInspection()">
         <article
