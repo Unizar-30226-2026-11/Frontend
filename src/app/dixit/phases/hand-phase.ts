@@ -364,6 +364,8 @@ import {
       inset: 0;
       z-index: 3;
       width: 100%;
+      height: 100%;
+      min-height: 0;
       margin: 0;
       pointer-events: auto;
       transform: none;
@@ -376,6 +378,7 @@ import {
     .story-card {
       width: 100%;
       height: 100%;
+      min-height: 0;
       max-height: 100%;
       border-radius: 26px;
       box-sizing: border-box;
@@ -387,6 +390,8 @@ import {
       grid-template-columns: minmax(0, 1fr) minmax(330px, 0.72fr);
       align-items: center;
       justify-content: center;
+      min-height: 0;
+      overflow: auto;
       column-gap: clamp(36px, 5.8vw, 88px);
       padding: clamp(30px, 4.2vw, 58px);
       padding-top: clamp(70px, 6.4vw, 92px);
@@ -419,6 +424,7 @@ import {
     }
 
     .waiting-overlay {
+      min-height: 0;
       max-height: 100%;
       background:
         radial-gradient(circle at top left, rgba(216, 255, 231, 0.16), transparent 34%),
