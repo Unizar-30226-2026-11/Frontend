@@ -266,6 +266,11 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
     this.toggleReadyState();
   }
 
+  async leaveCurrentLobby(): Promise<void> {
+    this.realtime.leaveLobby();
+    await this.router.navigateByUrl('/games');
+  }
+
   async joinCurrentLobby(): Promise<void> {
     if (!this.currentLobbyCode || this.joinLobbyLoading || this.hasJoinedLobby) {
       return;

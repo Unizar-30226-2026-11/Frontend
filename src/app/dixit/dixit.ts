@@ -37,10 +37,8 @@ import { DixitPointsPhase } from './phases/points-phase';
 import {
   DEFAULT_CARD_IMAGE,
   DEFAULT_PLAYER_COLORS,
-  EVENT_BACK_CELL_POSITIONS,
-  EVENT_FORWARD_CELL_POSITIONS,
   PHASE_STEPS,
-  type BoardEffectPopup,
+  SPECIAL_BOARD_CELLS,
   type DixitPhase,
   type FinalRankingRow,
   type MinigameUiState,
@@ -57,7 +55,6 @@ import {
   buildBoardTokensFromScores,
   buildRevealAndRanking,
   getRoundPlayers,
-  resolveCurrentPlayerSpecialCells,
   rotateCards,
 } from './dixit.logic';
 import type {
@@ -93,8 +90,7 @@ import {
   styleUrl: './dixit.css',
 })
 export class Dixit implements OnInit, OnDestroy {
-  readonly eventBackCellPositions: number[] = [...EVENT_BACK_CELL_POSITIONS];
-  readonly eventForwardCellPositions: number[] = [...EVENT_FORWARD_CELL_POSITIONS];
+  readonly specialBoardCells = [...SPECIAL_BOARD_CELLS];
 
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -138,6 +134,8 @@ export class Dixit implements OnInit, OnDestroy {
   activeDuelChallenge: RealtimeDuelChallenge | null = null;
   activeMinigame: RealtimeMinigameStart | null = null;
   activeModeChangeOffer: RealtimeModeChangeOffer | null = null;
+  activeSpecialEventPopup: RealtimeSpecialEvent | null = null;
+  specialEventPopupCopy = '';
   activeStar: RealtimeStarSpawn | null = null;
   starWinnerLabel = '';
   finalRanking: FinalRankingRow[] = [];
@@ -149,7 +147,6 @@ export class Dixit implements OnInit, OnDestroy {
   pointsVotesTotal = 0;
   pointsRevealedCards: DixitRevealedCard[] = [];
   pointsRanking: DixitRankingRow[] = [];
-  activeEffectPopup: BoardEffectPopup | null = null;
   isMinigame1Open = false;
   isMinigame2Open = false;
   isMinigame3Open = false;
@@ -157,12 +154,10 @@ export class Dixit implements OnInit, OnDestroy {
   minigameStatusMessage = '';
   isMinigameCountdownOpen = false;
   simulationTriggerMode: SimulationTriggerMode = null;
-  private readonly effectPopupQueue: BoardEffectPopup[] = [];
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
   private autoNextRoundDisabledForRound: number | null = null;
   private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingBoardTokens: TrackBoardToken[] | null = null;
   private nextRoundTimerRoundNumber: number | null = null;
   private lastAppliedGameStateReceivedAt = 0;
   private lastAppliedStarClaimReceivedAt = 0;
@@ -174,7 +169,9 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
+  private specialEventPopupTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAppliedModeChangeOfferAt = 0;
+  private lastAppliedSpecialEventPopupAt = 0;
   private hasHydratedRealtimePresentation = false;
   modeChangeOfferSecondsLeft = 0;
   starClaimSequence = 0;
@@ -453,6 +450,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
     this.clearModeChangeOfferTimer();
+    this.clearSpecialEventPopupTimer();
   }
 
   get currentPhaseMeta(): PhaseStep {
@@ -881,7 +879,6 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
     this.currentRoundPlayers = [];
-    this.pendingBoardTokens = null;
     this.selectedChoiceCardCode = '';
     this.voteSubmitted = false;
     this.currentPlayerPlayedCardCode = '';
@@ -2321,22 +2318,12 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
     this.currentRoundPlayers = [];
-    this.pendingBoardTokens = null;
     this.currentClue = '';
     this.clueDraft = '';
     this.storySubmitted = false;
     this.currentPlayerPlayedCardCode = '';
     this.cards = rotateCards(this.cards);
     this.choiceCards = [...this.cards];
-  }
-
-  closeEffectPopup(): void {
-    this.activeEffectPopup = this.effectPopupQueue.shift() ?? null;
-
-    if (this.activeEffectPopup === null && this.pendingBoardTokens !== null) {
-      this.boardTokens = this.pendingBoardTokens;
-      this.pendingBoardTokens = null;
-    }
   }
 
   closeDuelModal(): void {
@@ -2400,7 +2387,6 @@ export class Dixit implements OnInit, OnDestroy {
     this.pointsStage = 'waiting';
     this.pointsRevealedCards = [];
     this.pointsRanking = [];
-    this.pendingBoardTokens = null;
     this.currentRoundPlayers = this.getRoundPlayers();
     this.pointsVotesTotal = this.currentRoundPlayers.length;
     this.pointsVotesReceived = this.voteSubmitted && this.pointsVotesTotal > 0 ? 1 : 0;
@@ -2483,17 +2469,9 @@ export class Dixit implements OnInit, OnDestroy {
       this.pointsByPlayer.set(row.playerId, row.totalPoints);
     }
 
-    this.applyCurrentPlayerSpecialCells(resolvedRanking);
     this.pointsRanking = resolvedRanking;
-    const nextBoardTokens = this.buildBoardTokensFromScores();
     this.pointsStage = 'ranking';
-
-    if (this.activeEffectPopup !== null || this.effectPopupQueue.length > 0) {
-      this.pendingBoardTokens = nextBoardTokens;
-    } else {
-      this.boardTokens = nextBoardTokens;
-      this.pendingBoardTokens = null;
-    }
+    this.boardTokens = this.buildBoardTokensFromScores();
 
     this.revealRankingTimer = null;
   }
@@ -2755,6 +2733,11 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
+    if (!this.isConflictResolutionEvent(specialEvent.effect)) {
+      this.showSpecialEventPopup(specialEvent);
+      return;
+    }
+
     if (!this.activeMinigame) {
       return;
     }
@@ -2783,6 +2766,67 @@ export class Dixit implements OnInit, OnDestroy {
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
       this.scheduleMinigameClose(2000);
     }
+  }
+
+  closeSpecialEventPopup(): void {
+    this.activeSpecialEventPopup = null;
+    this.specialEventPopupCopy = '';
+    this.clearSpecialEventPopupTimer();
+  }
+
+  private showSpecialEventPopup(specialEvent: RealtimeSpecialEvent): void {
+    const copy = this.resolveSpecialEventPopupCopy(specialEvent);
+    if (!copy) {
+      return;
+    }
+
+    if (specialEvent.receivedAt <= this.lastAppliedSpecialEventPopupAt) {
+      return;
+    }
+
+    this.lastAppliedSpecialEventPopupAt = specialEvent.receivedAt;
+    this.activeSpecialEventPopup = specialEvent;
+    this.specialEventPopupCopy = copy;
+    this.clearSpecialEventPopupTimer();
+    this.specialEventPopupTimer = setTimeout(() => {
+      this.activeSpecialEventPopup = null;
+      this.specialEventPopupCopy = '';
+      this.specialEventPopupTimer = null;
+      this.cdr.detectChanges();
+    }, 4500);
+  }
+
+  private resolveSpecialEventPopupCopy(specialEvent: RealtimeSpecialEvent): string {
+    if (specialEvent.effect === 'SHUFFLE') {
+      return 'Se cambia tu mano de cartas.';
+    }
+
+    if (specialEvent.effect === 'ODD' || specialEvent.effect === 'EVEN') {
+      if (typeof specialEvent.points === 'number' && specialEvent.points < 0) {
+        return 'Retrocedes una casilla.';
+      }
+
+      return 'Avanzas una casilla.';
+    }
+
+    return '';
+  }
+
+  private isConflictResolutionEvent(effect: string): boolean {
+    return (
+      effect === 'CONFLICT_RESOLVED' ||
+      effect === 'CONFLICT_CANCELLED' ||
+      effect === 'CONFLICT_DRAW'
+    );
+  }
+
+  private clearSpecialEventPopupTimer(): void {
+    if (this.specialEventPopupTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.specialEventPopupTimer);
+    this.specialEventPopupTimer = null;
   }
 
   private scheduleMinigameClose(delayMs: number): void {
@@ -2870,40 +2914,4 @@ export class Dixit implements OnInit, OnDestroy {
     return buildBoardTokensFromScores(this.playerRoster, this.pointsByPlayer);
   }
 
-  // --- Resolucion visual de tablero ---------------------------------------
-  private applyCurrentPlayerSpecialCells(ranking: DixitRankingRow[]): void {
-    const currentPlayerPreviousPoints =
-      this.boardTokens.find((token) => token.id === this.localCurrentPlayerId)?.position ?? 0;
-    const currentPlayerRow = ranking.find((row) => row.playerId === this.localCurrentPlayerId);
-
-    if (!currentPlayerRow) {
-      return;
-    }
-
-    const resolvedPoints = resolveCurrentPlayerSpecialCells({
-      previousPoints: currentPlayerPreviousPoints,
-      nextPoints: currentPlayerRow.totalPoints,
-      eventBackCellPositions: this.eventBackCellPositions,
-      eventForwardCellPositions: this.eventForwardCellPositions,
-      roundNumber: this.roundNumber,
-      onPopup: (popup) => this.enqueueEffectPopup(popup),
-    });
-
-    if (resolvedPoints === currentPlayerRow.totalPoints) {
-      return;
-    }
-
-    this.pointsByPlayer.set(this.localCurrentPlayerId, resolvedPoints);
-    currentPlayerRow.pointsEarned = resolvedPoints - currentPlayerRow.pointsBefore;
-    currentPlayerRow.totalPoints = resolvedPoints;
-    ranking.sort((left, right) => right.totalPoints - left.totalPoints);
-  }
-  private enqueueEffectPopup(popup: BoardEffectPopup): void {
-    if (this.activeEffectPopup === null) {
-      this.activeEffectPopup = popup;
-      return;
-    }
-
-    this.effectPopupQueue.push(popup);
-  }
 }

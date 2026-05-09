@@ -1,4 +1,5 @@
 import type { RealtimeGameEndedRankingEntry } from '../interfaces/dixit-realtime';
+import type { TrackBoardSpecialCell } from './components/track-board';
 
 export type DixitPhase = 'hand' | 'choice' | 'points' | 'finished';
 export type PointsStage = 'waiting' | 'reveal' | 'ranking';
@@ -19,13 +20,6 @@ export interface RosterPlayer {
 
 export interface RoundPlayer extends RosterPlayer {
   pointsBefore: number;
-}
-
-export interface BoardEffectPopup {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
 }
 
 export interface ResolvedPhaseState {
@@ -76,5 +70,85 @@ export const DEFAULT_PLAYER_COLORS = [
   '#ffd166',
 ] as const;
 
-export const EVENT_BACK_CELL_POSITIONS = [6, 14, 22, 30, 38] as const;
-export const EVENT_FORWARD_CELL_POSITIONS = [10, 18, 26, 34, 40] as const;
+// Refleja Backend/src/shared/constants/board-config.ts.
+// Los indices son puntuaciones reales del backend: 0 es la salida y 42 el final.
+export const SPECIAL_BOARD_CELLS: readonly TrackBoardSpecialCell[] = [
+  {
+    index: 5,
+    kind: 'odd',
+    badge: '+/-',
+    label: 'Impares: alterna bonus y penalizacion segun orden de llegada.',
+  },
+  {
+    index: 7,
+    kind: 'even',
+    badge: '-/+',
+    label: 'Pares: alterna penalizacion y bonus segun orden de llegada.',
+  },
+  {
+    index: 9,
+    kind: 'odd',
+    badge: '+/-',
+    label: 'Impares: alterna bonus y penalizacion segun orden de llegada.',
+  },
+  {
+    index: 10,
+    kind: 'bonus',
+    badge: '⇄',
+    label: 'Bonus: puede ofrecer un cambio de modo de juego.',
+  },
+  {
+    index: 11,
+    kind: 'even',
+    badge: '-/+',
+    label: 'Pares: alterna penalizacion y bonus segun orden de llegada.',
+  },
+  {
+    index: 18,
+    kind: 'shuffle',
+    badge: '↻',
+    label: 'Shuffle: cambia toda tu mano; en Stella intercambia puntos.',
+  },
+  {
+    index: 21,
+    kind: 'bonus',
+    badge: '⇄',
+    label: 'Bonus: puede ofrecer un cambio de modo de juego.',
+  },
+  {
+    index: 25,
+    kind: 'duel',
+    badge: '⚔',
+    label: 'Duelo: permite retar a otro jugador apostando puntos.',
+  },
+  {
+    index: 27,
+    kind: 'equilibrium',
+    badge: '=',
+    label: 'Equilibrio: todos avanzan puntos segun su posicion en la clasificacion.',
+  },
+  {
+    index: 31,
+    kind: 'bonus',
+    badge: '⇄',
+    label: 'Bonus: puede ofrecer un cambio de modo de juego.',
+  },
+  {
+    index: 34,
+    kind: 'shuffle',
+    badge: '↻',
+    label: 'Shuffle: cambia toda tu mano; en Stella intercambia puntos.',
+  },
+  {
+    index: 37,
+    kind: 'bonus',
+    badge: '⇄',
+    label: 'Bonus: puede ofrecer un cambio de modo de juego.',
+  },
+  {
+    index: 40,
+    kind: 'duel',
+    badge: '⚔',
+    label: 'Duelo: permite retar a otro jugador apostando puntos.',
+  },
+] as const;

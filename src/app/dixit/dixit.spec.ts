@@ -270,6 +270,63 @@ describe('Dixit', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });
 
+  it('shows a clear popup for movement and shuffle board events only', () => {
+    component['applyRealtimeSpecialEvent']({
+      effect: 'ODD',
+      message: '',
+      points: 1,
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    let text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('¡Vaya, has caido en una casilla de evento!');
+    expect(text).toContain('Avanzas una casilla.');
+    expect(text).not.toContain('ODD');
+    expect(text).not.toContain('Efecto:');
+
+    component.closeSpecialEventPopup();
+    fixture.detectChanges();
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'EVEN',
+      message: '',
+      points: -1,
+      receivedAt: Date.now() + 1,
+    });
+    fixture.detectChanges();
+
+    text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Retrocedes una casilla.');
+    expect(text).not.toContain('EVEN');
+
+    component.closeSpecialEventPopup();
+    fixture.detectChanges();
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'SHUFFLE',
+      message: '',
+      receivedAt: Date.now() + 2,
+    });
+    fixture.detectChanges();
+
+    text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Se cambia tu mano de cartas.');
+    expect(text).not.toContain('SHUFFLE');
+
+    component.closeSpecialEventPopup();
+    fixture.detectChanges();
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'EXTRA_POINTS',
+      message: 'Ganas 2 puntos.',
+      receivedAt: Date.now() + 3,
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('¡Vaya, has caido en una casilla de evento!');
+  });
+
   it('closes the minigame overlay when the active conflict is cancelled', async () => {
     await initializeComponent(fixture);
 
@@ -576,7 +633,8 @@ describe('Dixit', () => {
     });
     expect(modifierBadge).not.toBeNull();
     expect(modifierBadge?.getAttribute('src')).toContain('assets/modificador_hand_limit_plus.png');
-    expect(modifierBadge?.getAttribute('title')).toContain('+1 (1 carta)');
+    expect(modifierBadge?.getAttribute('title')).toContain('Bonus de mano');
+    expect(modifierBadge?.getAttribute('title')).toContain('1 carta mas de lo normal');
     expect(modifierBadge?.getAttribute('title')).toContain('2 turnos restantes');
   });
 

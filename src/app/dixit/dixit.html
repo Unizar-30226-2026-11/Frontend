@@ -53,6 +53,7 @@
               [ranking]="pointsRanking"
               [showRanking]="pointsStage === 'ranking'"
               [canAdvanceToNextRound]="isCurrentPlayerHost"
+              [specialCells]="specialBoardCells"
               (nextRoundRequested)="requestNextRound()"
             />
           } @else if (phase === 'hand') {
@@ -72,8 +73,7 @@
               [boardTokens]="boardTokens"
               [boardImageUrl]="boardImageUrl"
               [handLimitModifier]="handLimitModifier"
-              [eventBackCells]="eventBackCellPositions"
-              [eventForwardCells]="eventForwardCellPositions"
+              [specialCells]="specialBoardCells"
               [chat]="handChatComposer"
               (cardSelected)="onHandCardSelected($event)"
               (clearSelectionRequested)="clearHandSelection()"
@@ -100,31 +100,6 @@
       [winnerSequence]="starClaimSequence"
       (claimRequested)="claimVisibleStar()"
     />
-
-    @if (activeEffectPopup; as popup) {
-      <div class="wildcard-popup-backdrop" (click)="closeEffectPopup()">
-        <article
-          class="wildcard-popup"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="effect-popup-title"
-          (click)="$event.stopPropagation()"
-        >
-          <p class="overlay-label">Casilla especial</p>
-          <h2 id="effect-popup-title">{{ popup.title }}</h2>
-          <div class="wildcard-popup-card">
-            <span class="wildcard-icon large" aria-hidden="true">{{ popup.icon }}</span>
-            <div class="wildcard-copy">
-              <strong>{{ popup.title }}</strong>
-              <p>{{ popup.description }}</p>
-            </div>
-          </div>
-          <button type="button" class="sidebar-action" (click)="closeEffectPopup()">
-            Continuar
-          </button>
-        </article>
-      </div>
-    }
 
     @if (activeModeChangeOffer; as offer) {
       <div class="wildcard-popup-backdrop" (click)="closeModeChangeOffer()">
@@ -206,6 +181,26 @@
 
           <button type="button" class="sidebar-action" (click)="closeDuelModal()">
             Cerrar
+          </button>
+        </article>
+      </div>
+    }
+
+    @if (activeSpecialEventPopup; as eventPopup) {
+      <div class="wildcard-popup-backdrop" (click)="closeSpecialEventPopup()">
+        <article
+          class="wildcard-popup special-event-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="special-event-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Evento</p>
+          <h2 id="special-event-popup-title">¡Vaya, has caido en una casilla de evento!</h2>
+          <p class="duel-copy">{{ specialEventPopupCopy }}</p>
+
+          <button type="button" class="sidebar-action" (click)="closeSpecialEventPopup()">
+            Entendido
           </button>
         </article>
       </div>

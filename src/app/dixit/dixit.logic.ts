@@ -1,7 +1,6 @@
 import type { DeckCard } from '../services/card-pull';
 import type { TrackBoardToken } from './components/track-board';
 import type {
-  BoardEffectPopup,
   RosterPlayer,
   RoundPlayer,
 } from './dixit.constants';
@@ -111,69 +110,6 @@ export function buildBoardTokensFromScores(
     color: player.color,
     position: pointsByPlayer.get(player.id) ?? 0,
   }));
-}
-
-interface ResolveSpecialCellsParams {
-  previousPoints: number;
-  nextPoints: number;
-  eventBackCellPositions: readonly number[];
-  eventForwardCellPositions: readonly number[];
-  roundNumber: number;
-  onPopup: (popup: BoardEffectPopup) => void;
-}
-
-export function resolveCurrentPlayerSpecialCells(
-  params: ResolveSpecialCellsParams
-): number {
-  const {
-    previousPoints,
-    nextPoints,
-    eventBackCellPositions,
-    eventForwardCellPositions,
-    roundNumber,
-    onPopup,
-  } = params;
-
-  if (nextPoints === previousPoints) {
-    return nextPoints;
-  }
-
-  let resolvedPoints = nextPoints;
-  const visitedPositions = new Set<number>();
-  let safety = 0;
-
-  // El bucle se corta si repetimos casilla para evitar cadenas infinitas
-  // entre eventos de avanzar y retroceder.
-  while (safety < 8 && !visitedPositions.has(resolvedPoints)) {
-    visitedPositions.add(resolvedPoints);
-    safety += 1;
-
-    if (eventBackCellPositions.includes(resolvedPoints)) {
-      resolvedPoints = Math.max(0, resolvedPoints - 1);
-      onPopup({
-        id: `event-back-${roundNumber}-${safety}`,
-        title: 'Casilla de evento',
-        description: 'Has caido en una casilla de evento y retrocedes 1 casilla.',
-        icon: '-1',
-      });
-      continue;
-    }
-
-    if (eventForwardCellPositions.includes(resolvedPoints)) {
-      resolvedPoints += 1;
-      onPopup({
-        id: `event-forward-${roundNumber}-${safety}`,
-        title: 'Casilla de evento',
-        description: 'Has caido en una casilla de evento y avanzas 1 casilla extra.',
-        icon: '+1',
-      });
-      continue;
-    }
-
-    break;
-  }
-
-  return resolvedPoints;
 }
 
 function resolveVoteCardCode(
