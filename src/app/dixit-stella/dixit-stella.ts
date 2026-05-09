@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import {
   RealtimeGameStateUpdate,
   RealtimeLobbyState,
+  RealtimeChatMessage,
   RealtimeMinigameStart,
   RealtimeSpecialEvent,
   RealtimeStarClaim,
@@ -130,6 +131,8 @@ export class DixitStella implements OnInit, OnDestroy {
   minigameStatusMessage = '';
   isMinigameCountdownOpen = false;
   isTrackBoardOpen = false;
+  isChatPanelOpen = false;
+  chatDraft = '';
   private lastAppliedMinigameReceivedAt = 0;
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -403,6 +406,14 @@ export class DixitStella implements OnInit, OnDestroy {
     return `Ronda ${this.roundNumber} - ${this.currentPhaseMeta.title}`;
   }
 
+  get stellaChatMessages(): RealtimeChatMessage[] {
+    return this.realtime.chatMessages().slice(-30);
+  }
+
+  get canSendChatMessage(): boolean {
+    return this.realtime.connectionStatus() === 'connected' && this.chatDraft.trim().length > 0;
+  }
+
   get stellaFinalRankingRows(): SharedFinalResultsRankingRow[] {
     return this.getPlayersSortedByScore().map((player, index) => ({
       id: player.id,
@@ -588,6 +599,46 @@ export class DixitStella implements OnInit, OnDestroy {
 
   closeTrackBoard(): void {
     this.isTrackBoardOpen = false;
+  }
+
+  toggleChatPanel(): void {
+    this.isChatPanelOpen = !this.isChatPanelOpen;
+  }
+
+  closeChatPanel(): void {
+    this.isChatPanelOpen = false;
+  }
+
+  updateChatDraft(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    this.chatDraft = target.value.slice(0, 255);
+  }
+
+  onChatComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    this.submitChatMessage();
+  }
+
+  submitChatMessage(): void {
+    if (!this.canSendChatMessage) {
+      return;
+    }
+
+    try {
+      this.realtime.sendChat(this.chatDraft);
+      this.chatDraft = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el mensaje';
+    }
   }
 
   openInspection(card: DeckCard): void {
