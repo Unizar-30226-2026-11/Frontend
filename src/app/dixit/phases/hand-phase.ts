@@ -391,7 +391,7 @@ import {
       align-items: center;
       justify-content: center;
       min-height: 0;
-      overflow: auto;
+      overflow: hidden;
       column-gap: clamp(36px, 5.8vw, 88px);
       padding: clamp(30px, 4.2vw, 58px);
       padding-top: clamp(70px, 6.4vw, 92px);

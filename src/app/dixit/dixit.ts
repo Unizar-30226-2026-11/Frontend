@@ -160,6 +160,7 @@ export class Dixit implements OnInit, OnDestroy {
   private revealRankingTimerDelayMs: number | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
   private autoNextRoundDisabledForRound: number | null = null;
+  private backendControlledPointsPhaseRound: number | null = null;
   private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
   private nextRoundTimerRoundNumber: number | null = null;
   private lastAppliedGameStateReceivedAt = 0;
@@ -837,6 +838,7 @@ export class Dixit implements OnInit, OnDestroy {
     if (nextRoundNumber !== this.roundNumber) {
       this.resetHandSubmissionState();
       this.autoNextRoundDisabledForRound = null;
+      this.backendControlledPointsPhaseRound = null;
     }
 
     this.phase = resolvedPhaseState.phase;
@@ -2423,7 +2425,7 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private scheduleRevealRanking(): void {
-    const delayMs = this.activeMinigame ? 10_000 : 3_000;
+    const delayMs = 3_000;
     if (
       this.revealRankingTimer !== null &&
       this.revealRankingTimerDelayMs === delayMs
@@ -2451,6 +2453,12 @@ export class Dixit implements OnInit, OnDestroy {
 
   private syncRealtimePhaseTimers(): void {
     if (this.phase !== 'points') {
+      this.clearRevealRankingTimer();
+      this.clearNextRoundTimer();
+      return;
+    }
+
+    if (this.backendControlledPointsPhaseRound === this.roundNumber) {
       this.clearRevealRankingTimer();
       this.clearNextRoundTimer();
       return;
@@ -2651,6 +2659,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.lastAppliedMinigameReceivedAt = minigame.receivedAt;
     // Si esta ronda desemboca en minijuego, el host no debe auto-avanzarla.
     this.autoNextRoundDisabledForRound = this.roundNumber;
+    this.backendControlledPointsPhaseRound = this.roundNumber;
     this.clearNextRoundTimer();
     this.isMinigameCountdownOpen = false;
     this.clearMinigameResolutionTimer();

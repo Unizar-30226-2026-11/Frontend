@@ -1020,7 +1020,7 @@ describe('Dixit', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Minijuego en curso');
   });
 
-  it('waits 10 seconds before switching from reveal to ranking when a minigame is active', async () => {
+  it('keeps reveal visible during a minigame and waits for the backend to change phase', async () => {
     vi.useFakeTimers();
     await initializeComponent(fixture);
 
@@ -1060,11 +1060,8 @@ describe('Dixit', () => {
 
     expect(component.pointsStage).toBe('reveal');
 
-    await vi.advanceTimersByTimeAsync(9_000);
+    await vi.advanceTimersByTimeAsync(10_000);
     expect(component.pointsStage).toBe('reveal');
-
-    await vi.advanceTimersByTimeAsync(1_000);
-    expect(component.pointsStage).toBe('ranking');
   });
 
   it('hides the mode change offer when the scoring window ends because the phase changes', async () => {
