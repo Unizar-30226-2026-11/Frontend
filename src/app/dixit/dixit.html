@@ -207,11 +207,10 @@
     }
 
     @if (activeMinigame && !isCurrentPlayerInActiveMinigame) {
-      <div class="wildcard-popup-backdrop">
+      <div class="wildcard-popup-backdrop passive-minigame-overlay" aria-live="polite">
         <article
-          class="wildcard-popup"
-          role="dialog"
-          aria-modal="true"
+          class="wildcard-popup passive-minigame-popup"
+          role="status"
           aria-labelledby="minigame-watch-title"
         >
           <p class="overlay-label">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>

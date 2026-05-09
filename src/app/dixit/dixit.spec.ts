@@ -981,6 +981,74 @@ describe('Dixit', () => {
     expect(realtimeSpy.sendGameAction).not.toHaveBeenCalledWith('NEXT_ROUND');
   });
 
+  it('keeps the spectator minigame overlay visible without using a blocking modal backdrop', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'cpu_1',
+      player2: 'cpu_2',
+      type: 0,
+      isDuel: false,
+      duration: 15_000,
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    const overlay = fixture.nativeElement.querySelector('.passive-minigame-overlay') as HTMLElement | null;
+    const popup = fixture.nativeElement.querySelector('.passive-minigame-popup') as HTMLElement | null;
+
+    expect(overlay).not.toBeNull();
+    expect(popup?.getAttribute('role')).toBe('status');
+    expect(fixture.nativeElement.textContent as string).toContain('Minijuego en curso');
+  });
+
+  it('waits 10 seconds before switching from reveal to ranking when a minigame is active', async () => {
+    vi.useFakeTimers();
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+        scores: {
+          u_self: 3,
+          cpu_1: 5,
+          cpu_2: 2,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: '17',
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+            cpu_2: 89,
+          },
+          votes: [
+            { voterId: 'u_self', targetCardId: 17 },
+            { voterId: 'cpu_2', targetCardId: 17 },
+          ],
+        },
+      },
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_2',
+      type: 0,
+      isDuel: false,
+      duration: 15_000,
+      receivedAt: Date.now() + 1,
+    });
+
+    expect(component.pointsStage).toBe('reveal');
+
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(component.pointsStage).toBe('reveal');
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(component.pointsStage).toBe('ranking');
+  });
+
   it('hides the mode change offer when the scoring window ends because the phase changes', async () => {
     await initializeComponent(fixture);
 

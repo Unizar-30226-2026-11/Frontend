@@ -155,6 +155,7 @@ export class Dixit implements OnInit, OnDestroy {
   isMinigameCountdownOpen = false;
   simulationTriggerMode: SimulationTriggerMode = null;
   private revealRankingTimer: ReturnType<typeof setTimeout> | null = null;
+  private revealRankingTimerDelayMs: number | null = null;
   private nextRoundTimer: ReturnType<typeof setTimeout> | null = null;
   private autoNextRoundDisabledForRound: number | null = null;
   private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2410,14 +2411,20 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private scheduleRevealRanking(): void {
-    if (this.revealRankingTimer !== null) {
+    const delayMs = this.activeMinigame ? 10_000 : 3_000;
+    if (
+      this.revealRankingTimer !== null &&
+      this.revealRankingTimerDelayMs === delayMs
+    ) {
       return;
     }
 
+    this.clearRevealRankingTimer();
     this.revealRankingTimer = setTimeout(() => {
       this.applyRevealRankingToBoard();
       this.cdr.detectChanges();
-    }, 3000);
+    }, delayMs);
+    this.revealRankingTimerDelayMs = delayMs;
   }
 
   private clearRevealRankingTimer(): void {
@@ -2427,6 +2434,7 @@ export class Dixit implements OnInit, OnDestroy {
 
     clearTimeout(this.revealRankingTimer);
     this.revealRankingTimer = null;
+    this.revealRankingTimerDelayMs = null;
   }
 
   private syncRealtimePhaseTimers(): void {
@@ -2474,6 +2482,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.boardTokens = this.buildBoardTokensFromScores();
 
     this.revealRankingTimer = null;
+    this.revealRankingTimerDelayMs = null;
   }
 
   private scheduleNextRound(): void {
@@ -2639,6 +2648,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.minigameStatusMessage = '';
     this.closeDuelModal();
     this.realtime.clearMinigameStart();
+    this.syncRealtimePhaseTimers();
 
     if (!this.isCurrentPlayerInActiveMinigame) {
       this.isMinigame1Open = false;
