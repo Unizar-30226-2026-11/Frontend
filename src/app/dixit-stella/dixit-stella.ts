@@ -5,6 +5,8 @@ import {
   RealtimeLobbyState,
   RealtimeMinigameStart,
   RealtimeSpecialEvent,
+  RealtimeStarClaim,
+  RealtimeStarSpawn,
 } from '../interfaces/dixit-realtime';
 import { Game } from '../interfaces/game';
 import { WordCard } from '../interfaces/word-card';
@@ -13,6 +15,12 @@ import { DeckCard } from '../services/card-pull';
 import { DixitRealtime } from '../services/dixit-realtime';
 import { GamesPull } from '../services/games-pull';
 import { StellaCardPull } from '../services/stella-card-pull';
+import {
+  DixitTrackBoard,
+  type TrackBoardToken,
+} from '../dixit/components/track-board';
+import { FallingStarOverlay } from '../dixit/components/falling-star-overlay';
+import { SPECIAL_BOARD_CELLS } from '../dixit/dixit.constants';
 import { DixitMinijuego1 } from '../dixit/minijuegos/minijuego-1';
 import { DixitMinijuego2 } from '../dixit/minijuegos/minijuego-2/minijuego-2';
 import { DixitMinijuego3 } from '../dixit/minijuegos/minijuego-3/minijuego-3';
@@ -52,6 +60,8 @@ const DEFAULT_CARD_IMAGE = '/assets/Tablero.png';
   selector: 'app-dixit-stella',
   standalone: true,
   imports: [
+    DixitTrackBoard,
+    FallingStarOverlay,
     FinalResultsOverlay,
     MinigameCountdownOverlay,
     DixitMinijuego1,
@@ -86,6 +96,8 @@ export class DixitStella implements OnInit, OnDestroy {
 
   readonly boardRowIndexes = Array.from({ length: BOARD_ROWS }, (_, index) => index);
   readonly announceTrack = Array.from({ length: MAX_SELECTIONS }, (_, index) => index + 1);
+  readonly specialBoardCells = SPECIAL_BOARD_CELLS;
+  readonly trackBoardImageUrl = DEFAULT_CARD_IMAGE;
 
   id = '';
   roomTitle = 'Sala Stella';
@@ -102,6 +114,9 @@ export class DixitStella implements OnInit, OnDestroy {
   revealLog: RevealLogEntry[] = [];
   scoringSummary: ScoringSummaryRow[] = [];
   finalWinners: StellaPlayerState[] = [];
+  activeStar: RealtimeStarSpawn | null = null;
+  starWinnerLabel = '';
+  starClaimSequence = 0;
   selectionMessage = 'Esperando estado realtime de Stella.';
   pendingRevealCardCode = '';
   lastResolutionTitle = 'Esperando revelaciones';
@@ -114,10 +129,13 @@ export class DixitStella implements OnInit, OnDestroy {
   minigameUiState: 'playing' | 'waiting' | 'won' | 'lost' | 'cancelled' = 'playing';
   minigameStatusMessage = '';
   isMinigameCountdownOpen = false;
+  isTrackBoardOpen = false;
   private lastAppliedMinigameReceivedAt = 0;
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastAppliedStarClaimReceivedAt = 0;
+  private starWinnerTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     effect(
@@ -168,6 +186,37 @@ export class DixitStella implements OnInit, OnDestroy {
         }
 
         this.applyRealtimeMinigameStart(minigame);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const activeStar = this.realtime.activeStar();
+        if (activeLobbyCode !== this.id) {
+          this.activeStar = null;
+          this.cdr.detectChanges();
+          return;
+        }
+
+        this.activeStar = activeStar;
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const activeLobbyCode = this.realtime.activeLobbyCode();
+        const starClaim = this.realtime.starClaim();
+        if (!starClaim || activeLobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeStarClaim(starClaim);
+        this.realtime.clearStarClaim();
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -233,6 +282,11 @@ export class DixitStella implements OnInit, OnDestroy {
       this.applyRealtimeMinigameStart(currentMinigame);
     }
 
+    const currentActiveStar = this.realtime.activeStar();
+    if (currentActiveStar && this.realtime.activeLobbyCode() === this.id) {
+      this.activeStar = currentActiveStar;
+    }
+
     const currentSpecialEvent = this.realtime.specialEvent();
     if (currentSpecialEvent && this.realtime.activeLobbyCode() === this.id) {
       this.applyRealtimeSpecialEvent(currentSpecialEvent);
@@ -244,6 +298,7 @@ export class DixitStella implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
+    this.clearStarWinnerTimer();
   }
 
   get currentPhaseMeta(): PhaseMeta {
@@ -335,6 +390,19 @@ export class DixitStella implements OnInit, OnDestroy {
     ];
   }
 
+  get stellaBoardTokens(): TrackBoardToken[] {
+    return this.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      position: player.score,
+    }));
+  }
+
+  get stellaBoardSubtitle(): string {
+    return `Ronda ${this.roundNumber} - ${this.currentPhaseMeta.title}`;
+  }
+
   get stellaFinalRankingRows(): SharedFinalResultsRankingRow[] {
     return this.getPlayersSortedByScore().map((player, index) => ({
       id: player.id,
@@ -375,6 +443,10 @@ export class DixitStella implements OnInit, OnDestroy {
       this.isCardRevealable(this.pendingRevealCardCode) &&
       this.realtime.connectionStatus() === 'connected'
     );
+  }
+
+  get canClaimActiveStar(): boolean {
+    return !!this.activeStar && this.realtime.connectionStatus() === 'connected';
   }
 
   get activeExplorer(): StellaPlayerState | undefined {
@@ -510,6 +582,14 @@ export class DixitStella implements OnInit, OnDestroy {
     void this.router.navigate(['/games']);
   }
 
+  openTrackBoard(): void {
+    this.isTrackBoardOpen = true;
+  }
+
+  closeTrackBoard(): void {
+    this.isTrackBoardOpen = false;
+  }
+
   openInspection(card: DeckCard): void {
     this.inspectedCard = card;
   }
@@ -559,6 +639,20 @@ export class DixitStella implements OnInit, OnDestroy {
       this.minigameResultSent = false;
       this.minigameUiState = 'playing';
       this.minigameStatusMessage = '';
+    }
+  }
+
+  claimVisibleStar(): void {
+    if (!this.activeStar || this.realtime.connectionStatus() !== 'connected') {
+      return;
+    }
+
+    try {
+      this.realtime.claimStar();
+      this.errorMessage = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo capturar la estrella fugaz';
     }
   }
 
@@ -934,6 +1028,42 @@ export class DixitStella implements OnInit, OnDestroy {
     }
   }
 
+  private applyRealtimeStarClaim(claim: RealtimeStarClaim): void {
+    if (claim.receivedAt <= this.lastAppliedStarClaimReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedStarClaimReceivedAt = claim.receivedAt;
+    this.activeStar = null;
+    this.applyStarClaimScores(claim.newScores);
+    this.starWinnerLabel =
+      this.playerNames.get(claim.winnerId) ?? claim.winnerId ?? 'Estrella capturada';
+    this.starClaimSequence += 1;
+    this.clearStarWinnerTimer();
+    this.starWinnerTimer = setTimeout(() => {
+      this.starWinnerLabel = '';
+      this.starWinnerTimer = null;
+      this.cdr.detectChanges();
+    }, 1800);
+  }
+
+  private applyStarClaimScores(newScores: Record<string, number>): void {
+    const scoreEntries = Object.entries(newScores);
+    if (scoreEntries.length === 0) {
+      return;
+    }
+
+    this.players = this.players.map((player) => ({
+      ...player,
+      score: typeof newScores[player.id] === 'number' ? newScores[player.id] : player.score,
+    }));
+
+    if (this.phase === 'FINISHED') {
+      const topScore = this.players.reduce((maxScore, player) => Math.max(maxScore, player.score), 0);
+      this.finalWinners = this.players.filter((player) => player.score === topScore);
+    }
+  }
+
   onMinigameCountdownFinished(): void {
     this.isMinigameCountdownOpen = false;
     const activeMinigame = this.activeMinigame;
@@ -1129,6 +1259,15 @@ export class DixitStella implements OnInit, OnDestroy {
 
     clearTimeout(this.minigameUnavailableSubmitTimer);
     this.minigameUnavailableSubmitTimer = null;
+  }
+
+  private clearStarWinnerTimer(): void {
+    if (this.starWinnerTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.starWinnerTimer);
+    this.starWinnerTimer = null;
   }
 
   private closeActiveMinigame(): void {
