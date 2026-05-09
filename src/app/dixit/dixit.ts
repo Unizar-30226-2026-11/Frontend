@@ -134,6 +134,8 @@ export class Dixit implements OnInit, OnDestroy {
   activeDuelChallenge: RealtimeDuelChallenge | null = null;
   activeMinigame: RealtimeMinigameStart | null = null;
   activeModeChangeOffer: RealtimeModeChangeOffer | null = null;
+  activeSpecialEventPopup: RealtimeSpecialEvent | null = null;
+  specialEventPopupCopy = '';
   activeStar: RealtimeStarSpawn | null = null;
   starWinnerLabel = '';
   finalRanking: FinalRankingRow[] = [];
@@ -167,7 +169,9 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
+  private specialEventPopupTimer: ReturnType<typeof setTimeout> | null = null;
   private lastAppliedModeChangeOfferAt = 0;
+  private lastAppliedSpecialEventPopupAt = 0;
   private hasHydratedRealtimePresentation = false;
   modeChangeOfferSecondsLeft = 0;
   starClaimSequence = 0;
@@ -446,6 +450,7 @@ export class Dixit implements OnInit, OnDestroy {
     this.clearMinigameResolutionTimer();
     this.clearMinigameUnavailableSubmitTimer();
     this.clearModeChangeOfferTimer();
+    this.clearSpecialEventPopupTimer();
   }
 
   get currentPhaseMeta(): PhaseStep {
@@ -2728,6 +2733,11 @@ export class Dixit implements OnInit, OnDestroy {
   }
 
   private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
+    if (!this.isConflictResolutionEvent(specialEvent.effect)) {
+      this.showSpecialEventPopup(specialEvent);
+      return;
+    }
+
     if (!this.activeMinigame) {
       return;
     }
@@ -2756,6 +2766,67 @@ export class Dixit implements OnInit, OnDestroy {
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
       this.scheduleMinigameClose(2000);
     }
+  }
+
+  closeSpecialEventPopup(): void {
+    this.activeSpecialEventPopup = null;
+    this.specialEventPopupCopy = '';
+    this.clearSpecialEventPopupTimer();
+  }
+
+  private showSpecialEventPopup(specialEvent: RealtimeSpecialEvent): void {
+    const copy = this.resolveSpecialEventPopupCopy(specialEvent);
+    if (!copy) {
+      return;
+    }
+
+    if (specialEvent.receivedAt <= this.lastAppliedSpecialEventPopupAt) {
+      return;
+    }
+
+    this.lastAppliedSpecialEventPopupAt = specialEvent.receivedAt;
+    this.activeSpecialEventPopup = specialEvent;
+    this.specialEventPopupCopy = copy;
+    this.clearSpecialEventPopupTimer();
+    this.specialEventPopupTimer = setTimeout(() => {
+      this.activeSpecialEventPopup = null;
+      this.specialEventPopupCopy = '';
+      this.specialEventPopupTimer = null;
+      this.cdr.detectChanges();
+    }, 4500);
+  }
+
+  private resolveSpecialEventPopupCopy(specialEvent: RealtimeSpecialEvent): string {
+    if (specialEvent.effect === 'SHUFFLE') {
+      return 'Se cambia tu mano de cartas.';
+    }
+
+    if (specialEvent.effect === 'ODD' || specialEvent.effect === 'EVEN') {
+      if (typeof specialEvent.points === 'number' && specialEvent.points < 0) {
+        return 'Retrocedes una casilla.';
+      }
+
+      return 'Avanzas una casilla.';
+    }
+
+    return '';
+  }
+
+  private isConflictResolutionEvent(effect: string): boolean {
+    return (
+      effect === 'CONFLICT_RESOLVED' ||
+      effect === 'CONFLICT_CANCELLED' ||
+      effect === 'CONFLICT_DRAW'
+    );
+  }
+
+  private clearSpecialEventPopupTimer(): void {
+    if (this.specialEventPopupTimer === null) {
+      return;
+    }
+
+    clearTimeout(this.specialEventPopupTimer);
+    this.specialEventPopupTimer = null;
   }
 
   private scheduleMinigameClose(delayMs: number): void {

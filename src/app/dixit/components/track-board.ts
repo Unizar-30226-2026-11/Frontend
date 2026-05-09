@@ -390,9 +390,10 @@ export class DixitTrackBoard implements OnChanges, OnDestroy {
     for (let col = 0; col <= 14; col += 1) {
       points.push({ col, row: 5 });
     }
-    for (let row = 4; row >= 0; row -= 1) {
+    for (let row = 4; row >= 1; row -= 1) {
       points.push({ col: 14, row });
     }
+    points.push({ col: 13, row: 1 });
     for (let col = 13; col >= 0; col -= 1) {
       points.push({ col, row: 0 });
     }

@@ -186,6 +186,26 @@
       </div>
     }
 
+    @if (activeSpecialEventPopup; as eventPopup) {
+      <div class="wildcard-popup-backdrop" (click)="closeSpecialEventPopup()">
+        <article
+          class="wildcard-popup special-event-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="special-event-popup-title"
+          (click)="$event.stopPropagation()"
+        >
+          <p class="overlay-label">Evento</p>
+          <h2 id="special-event-popup-title">¡Vaya, has caido en una casilla de evento!</h2>
+          <p class="duel-copy">{{ specialEventPopupCopy }}</p>
+
+          <button type="button" class="sidebar-action" (click)="closeSpecialEventPopup()">
+            Entendido
+          </button>
+        </article>
+      </div>
+    }
+
     @if (activeMinigame && !isCurrentPlayerInActiveMinigame) {
       <div class="wildcard-popup-backdrop">
         <article

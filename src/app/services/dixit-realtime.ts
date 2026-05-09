@@ -1459,6 +1459,9 @@ export class DixitRealtime {
     return {
       effect,
       message: readString(wrappedData, 'message') ?? '',
+      playerId: readString(wrappedData, 'pId') ?? readString(wrappedData, 'playerId') ?? undefined,
+      points: readNumber(wrappedData, 'points') ?? undefined,
+      squareId: readNumber(wrappedData, 'squareId') ?? undefined,
       winnerId: readString(wrappedData, 'winnerId') ?? undefined,
       loserId: readString(wrappedData, 'loserId') ?? undefined,
       isDuel: readBoolean(wrappedData, 'isDuel') ?? undefined,

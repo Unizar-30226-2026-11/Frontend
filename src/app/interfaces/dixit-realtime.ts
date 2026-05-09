@@ -145,6 +145,9 @@ export interface RealtimeMinigameStart {
 export interface RealtimeSpecialEvent {
   effect: string;
   message: string;
+  playerId?: string;
+  points?: number;
+  squareId?: number;
   winnerId?: string;
   loserId?: string;
   isDuel?: boolean;

@@ -55,6 +55,7 @@ describe('LobbyMenu', () => {
     realtimeSpy = jasmine.createSpyObj<DixitRealtime>('DixitRealtime', [
       'ensureLobbyConnection',
       'joinLobby',
+      'leaveLobby',
       'startLobby',
       'lobbyState',
       'activeLobbyCode',
@@ -229,6 +230,13 @@ describe('LobbyMenu', () => {
     await component.joinCurrentLobby();
 
     expect(realtimeSpy.joinLobby).toHaveBeenCalledOnceWith('A1B2');
+  });
+
+  it('leaves the lobby and returns to the lobby list', async () => {
+    await component.leaveCurrentLobby();
+
+    expect(realtimeSpy.leaveLobby).toHaveBeenCalledTimes(1);
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/games');
   });
 
   it('shows join errors only in the overlay when the explicit join action fails', async () => {

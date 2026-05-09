@@ -149,35 +149,35 @@
     }
 
     .track-cell.basic-cell {
-      --cell-base: #f3f4ec;
-      --cell-base-2: #cbd5cc;
-      --cell-border: rgba(53, 67, 74, 0.68);
-      --cell-inset: rgba(255, 255, 248, 0.82);
-      color: #202a31;
+      --cell-base: #ffffff;
+      --cell-base-2: #b8dda9;
+      --cell-border: rgba(43, 121, 64, 0.72);
+      --cell-inset: rgba(255, 255, 255, 0.88);
+      color: #183b23;
       border-radius: 10px;
       background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0 18%, rgba(255, 255, 255, 0) 19%),
-        radial-gradient(circle at 72% 78%, rgba(58, 78, 86, 0.15), rgba(58, 78, 86, 0) 45%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0 34%, rgba(255, 255, 255, 0) 35%),
+        radial-gradient(circle at 72% 78%, rgba(49, 143, 72, 0.16), rgba(49, 143, 72, 0) 45%),
         repeating-linear-gradient(
           135deg,
-          rgba(39, 55, 63, 0.055) 0 2px,
+          rgba(42, 126, 63, 0.07) 0 2px,
           rgba(255, 255, 255, 0) 2px 8px
         ),
         linear-gradient(145deg, var(--cell-base), var(--cell-base-2));
       box-shadow:
         0 9px 15px rgba(0, 0, 0, 0.24),
         inset 0 1px 0 var(--cell-inset),
-        inset 0 -4px 9px rgba(28, 40, 46, 0.18),
-        inset 4px 0 8px rgba(255, 255, 255, 0.18);
+        inset 0 -4px 9px rgba(34, 104, 51, 0.14),
+        inset 4px 0 8px rgba(255, 255, 255, 0.28);
     }
 
     .track-cell.basic-cell::before {
       inset: 4px;
       border-radius: 7px;
-      border-color: rgba(38, 50, 57, 0.2);
+      border-color: rgba(38, 119, 58, 0.22);
       background:
-        linear-gradient(145deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 48%),
-        linear-gradient(315deg, rgba(31, 46, 53, 0.09), rgba(255, 255, 255, 0) 42%);
+        linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.1) 52%),
+        linear-gradient(315deg, rgba(34, 111, 52, 0.12), rgba(255, 255, 255, 0) 42%);
     }
 
     .track-cell.basic-cell::after {
@@ -186,8 +186,8 @@
       inset: 7px;
       z-index: 1;
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      box-shadow: inset 0 0 8px rgba(27, 40, 47, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.44);
+      box-shadow: inset 0 0 8px rgba(34, 111, 52, 0.14);
       pointer-events: none;
     }
 
@@ -195,10 +195,10 @@
       min-width: clamp(13px, 1.35cqw, 21px);
       padding: 1px 3px;
       border-radius: 999px;
-      background: rgba(255, 255, 250, 0.58);
+      background: rgba(255, 255, 255, 0.66);
       box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.52),
-        inset 0 0 0 1px rgba(39, 55, 63, 0.12);
+        0 1px 0 rgba(255, 255, 255, 0.58),
+        inset 0 0 0 1px rgba(42, 126, 63, 0.16);
       text-align: center;
     }
 

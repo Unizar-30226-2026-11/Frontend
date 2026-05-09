@@ -269,8 +269,9 @@ h3 {
 }
 
 .board-grid {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: min(24dvh, 210px);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -322,15 +323,16 @@ h3 {
 
 .board-activate-btn {
   width: 100%;
+  flex: 0 0 auto;
   margin-top: auto;
   border: 1px solid rgba(214, 195, 145, 0.22);
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(214, 195, 145, 0.96), rgba(155, 134, 88, 0.96));
   color: #171b24;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   line-height: 1.1;
   font-weight: 700;
-  padding: 14px 18px;
+  padding: 18px 20px;
   cursor: pointer;
   box-shadow: 0 12px 22px rgba(9, 13, 21, 0.22);
 }
