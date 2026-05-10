@@ -265,6 +265,31 @@ describe('DixitStella', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });
 
+  it('closes the local minigame view after sending the result in stella', async () => {
+    realtimeStub.minigameStart.and.returnValue({
+      player1: 'u_111',
+      player2: 'u_222',
+      type: 0,
+      duration: 15_000,
+      isDuel: false,
+      receivedAt: 2,
+    });
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    component.onMinigameFinished({ score: 99 });
+
+    expect(realtimeStub.sendMinigameScore).toHaveBeenCalledOnceWith(99);
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(component.isMinigame2Open).toBeFalse();
+    expect(component.isMinigame3Open).toBeFalse();
+    expect(component.minigameUiState).toBe('waiting');
+  });
+
   it('maps realtime minigame type 2 to the third shared minigame in stella', async () => {
     realtimeStub.minigameStart.and.returnValue({
       player1: 'u_111',

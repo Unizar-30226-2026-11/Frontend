@@ -801,6 +801,9 @@ describe('Dixit', () => {
     component.onMinigameFinished({ score: 250 });
 
     expect(realtimeSpy.sendMinigameScore).toHaveBeenCalledOnceWith(250);
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(component.isMinigame2Open).toBeFalse();
+    expect(component.isMinigame3Open).toBeFalse();
     expect(component.minigameUiState).toBe('waiting');
     expect(component.minigameStatusMessage).toBe('Puntuacion enviada. Esperando al rival...');
   });
@@ -842,7 +845,44 @@ describe('Dixit', () => {
     expect(fixture.nativeElement.querySelector('.minigame-result-card')).toBeNull();
   });
 
-  it('uses scoring phase data to reveal cards and ranking instead of waiting for votes', async () => {
+  it('shows the backend minigame result popup briefly before returning to the table', async () => {
+    vi.useFakeTimers();
+    await initializeComponent(fixture);
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
+      type: 0,
+      isDuel: true,
+      duration: 15_000,
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'CONFLICT_RESOLVED',
+      message: 'cpu_1 ha ganado el desempate.',
+      winnerId: 'cpu_1',
+      loserId: 'u_self',
+      isDuel: true,
+      receivedAt: Date.now() + 1,
+    });
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.minigame-result-card') as HTMLElement | null;
+    expect(popup).not.toBeNull();
+    expect(popup?.classList.contains('result-lost')).toBeTrue();
+    expect(fixture.nativeElement.textContent as string).toContain('Derrota');
+    expect(fixture.nativeElement.textContent as string).toContain('Ganador: cpu_1.');
+
+    await vi.advanceTimersByTimeAsync(3000);
+    fixture.detectChanges();
+
+    expect(component.activeMinigame).toBeNull();
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.minigame-result-card')).toBeNull();
+  });
+
+  it('uses scoring phase data to go straight to ranking instead of waiting for votes', async () => {
     await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
@@ -871,7 +911,7 @@ describe('Dixit', () => {
     });
 
     expect(component.phase).toBe('points');
-    expect(component.pointsStage).toBe('reveal');
+    expect(component.pointsStage).toBe('ranking');
     expect(component.pointsRevealedCards.length).toBe(3);
     expect(
       component.pointsRevealedCards.find((entry) => entry.card.code === '17')?.isStorytellerCard
@@ -881,7 +921,7 @@ describe('Dixit', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Carta del cuenta-cuentos');
   });
 
-  it('highlights the storyteller card during revealed scoring', async () => {
+  it('does not show the revealed cards UI during scoring', async () => {
     await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
@@ -910,15 +950,14 @@ describe('Dixit', () => {
     });
     fixture.detectChanges();
 
-    const storytellerCard = component.pointsRevealedCards.find((entry) => entry.card.code === '17');
     const compiled = fixture.nativeElement as HTMLElement;
 
-    expect(storytellerCard?.isStorytellerCard).toBeTrue();
-    expect(compiled.textContent).toContain('Carta del cuenta-cuentos');
-    expect(compiled.querySelector('.storyteller-card')).not.toBeNull();
+    expect(component.pointsStage).toBe('ranking');
+    expect(compiled.textContent).not.toContain('Carta del cuenta-cuentos');
+    expect(compiled.querySelector('.storyteller-card')).toBeNull();
   });
 
-  it('uses currentRound.boardCardsDetailed image urls during revealed scoring', async () => {
+  it('still computes revealed card data during scoring even though the UI shows ranking only', async () => {
     await initializeComponent(fixture);
 
     component['applyRealtimeGameState']({
@@ -1103,7 +1142,7 @@ describe('Dixit', () => {
     expect(fixture.nativeElement.textContent as string).toContain('Minijuego en curso');
   });
 
-  it('keeps reveal visible during a minigame and waits for the backend to change phase', async () => {
+  it('keeps ranking visible during a minigame and waits for the backend to change phase', async () => {
     vi.useFakeTimers();
     await initializeComponent(fixture);
 
@@ -1141,10 +1180,10 @@ describe('Dixit', () => {
       receivedAt: Date.now() + 1,
     });
 
-    expect(component.pointsStage).toBe('reveal');
+    expect(component.pointsStage).toBe('ranking');
 
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(component.pointsStage).toBe('reveal');
+    expect(component.pointsStage).toBe('ranking');
   });
 
   it('hides the mode change offer when the scoring window ends because the phase changes', async () => {
