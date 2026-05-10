@@ -28,6 +28,7 @@
 .reveal-banner,
 .word-panel,
 .track-board-dialog,
+.chat-drawer,
 .modal-card {
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(9, 19, 30, 0.74);
@@ -39,7 +40,7 @@
   border-radius: 22px;
   padding: 14px 16px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
 }
@@ -170,6 +171,11 @@ h3 {
 
 .topbar-button.small {
   padding-inline: 13px;
+}
+
+.round-board-button {
+  padding: 8px 12px;
+  font-size: 0.86rem;
 }
 
 .status-card {
@@ -587,6 +593,84 @@ h3 {
   min-width: 0;
 }
 
+.chat-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 10, 16, 0.38);
+  z-index: 19;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chat-drawer {
+  width: min(390px, 100vw);
+  height: 100svh;
+  padding: 18px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  box-sizing: border-box;
+  color: #f4efe4;
+}
+
+.chat-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-list {
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.chat-message {
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chat-message strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #fff4d8;
+}
+
+.chat-message p,
+.chat-empty {
+  margin: 0;
+  color: rgba(244, 239, 228, 0.84);
+  line-height: 1.4;
+}
+
+.chat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-composer input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff8dd;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.chat-composer input::placeholder {
+  color: rgba(244, 239, 228, 0.56);
+}
+
 .minigame-status-card {
   width: min(460px, calc(100vw - 2 * clamp(12px, 3vw, 28px)));
 }
@@ -687,6 +771,14 @@ h3 {
   .track-board-dialog-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .chat-drawer {
+    width: 100vw;
+  }
+
+  .chat-composer {
+    grid-template-columns: 1fr;
   }
 
   .modal-card img {

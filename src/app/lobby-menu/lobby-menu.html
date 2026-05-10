@@ -96,6 +96,21 @@
       <p class="action-feedback error">{{ deckSelectionError }}</p>
     }
 
+    @if (isHost) {
+      <label class="select-label">
+        Pool dinamico
+        <select
+          class="choice-select"
+          [value]="useDynamicPool ? 'true' : 'false'"
+          [disabled]="primaryActionLoading || roomLoading || !hasJoinedLobby"
+          (change)="onDynamicPoolChanged($event)"
+        >
+          <option value="true">Activado</option>
+          <option value="false">Desactivado</option>
+        </select>
+      </label>
+    }
+
     @if (primaryActionMessage) {
       <p class="action-feedback success">{{ primaryActionMessage }}</p>
     }

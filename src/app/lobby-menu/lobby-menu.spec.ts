@@ -168,8 +168,8 @@ describe('LobbyMenu', () => {
     expect(component.playersInRoom).toBe(2);
     expect(component.roomCapacity).toBe(4);
     expect(component.roomSlots).toEqual([
-      { slotId: 1, name: 'u_111', state: 'anfitrion' },
-      { slotId: 2, name: 'u_222', state: 'jugador' },
+      { slotId: 1, name: 'probando (u_111)', state: 'anfitrion' },
+      { slotId: 2, name: 'TesterFullUnlock (u_222)', state: 'jugador' },
       { slotId: 3, name: 'slot libre', state: 'abierto' },
       { slotId: 4, name: 'slot libre', state: 'abierto' },
     ]);
@@ -200,6 +200,20 @@ describe('LobbyMenu', () => {
     expect(component.isHost).toBeTrue();
     expect(component.primaryActionButtonText).toBe('Empezar partida');
     expect(component.shouldShowJoinOverlay).toBeTrue();
+  });
+
+  it('renders the dynamic pool selector only for the host', async () => {
+    const hostText = fixture.nativeElement.textContent as string;
+    expect(hostText).toContain('Pool dinamico');
+
+    authStub.session.and.returnValue({ user: { id: 'u_222' } });
+
+    const guestFixture = TestBed.createComponent(LobbyMenu);
+    guestFixture.detectChanges();
+    await guestFixture.whenStable();
+
+    const guestText = guestFixture.nativeElement.textContent as string;
+    expect(guestText).not.toContain('Pool dinamico');
   });
 
   it('does not restore realtime when the authenticated user is not in the lobby', async () => {
@@ -392,6 +406,10 @@ function createLobbyFixture(): Game {
     image: '/assets/Tablero.png',
     hostId: 'u_111',
     players: ['u_111', 'u_222'],
+    playerNames: {
+      u_111: 'probando',
+      u_222: 'TesterFullUnlock',
+    },
     playerCount: 2,
     maxPlayers: 4,
     engine: 'Classic',

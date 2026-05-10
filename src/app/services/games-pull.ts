@@ -119,6 +119,7 @@ export class GamesPull {
     const engine = this.normalizeLobbyEngine(lobby.engine);
     const statusLabel = lobby.status === 'waiting' ? 'Esperando jugadores' : lobby.status;
     const visibilityLabel = isPrivate ? 'Privada' : 'Publica';
+    const playerNames = this.normalizePlayerNames(lobby.playerNames);
 
     return {
       id: lobby.lobbyCode,
@@ -127,6 +128,7 @@ export class GamesPull {
       image: this.lobbyImage,
       hostId: lobby.hostId,
       players: lobby.players,
+      playerNames,
       playerCount,
       maxPlayers: lobby.maxPlayers,
       engine,
@@ -181,5 +183,19 @@ export class GamesPull {
     }
 
     return normalizedRoute;
+  }
+
+  private normalizePlayerNames(
+    playerNames: Record<string, string> | null | undefined
+  ): Record<string, string> | undefined {
+    if (!playerNames) {
+      return undefined;
+    }
+
+    const normalizedEntries = Object.entries(playerNames)
+      .map(([playerId, username]) => [playerId.trim(), username.trim()] as const)
+      .filter(([playerId, username]) => playerId.length > 0 && username.length > 0);
+
+    return normalizedEntries.length > 0 ? Object.fromEntries(normalizedEntries) : undefined;
   }
 }

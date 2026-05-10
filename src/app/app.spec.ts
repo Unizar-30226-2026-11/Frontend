@@ -21,6 +21,12 @@ class TestStore {}
 
 @Component({
   standalone: true,
+  template: '<p>menu</p>',
+})
+class TestMenu {}
+
+@Component({
+  standalone: true,
   template: '<p>games</p>',
 })
 class TestGames {}
@@ -80,6 +86,7 @@ describe('App', () => {
       providers: [
         provideRouter([
           { path: '', component: TestHome },
+          { path: 'menu', component: TestMenu },
           { path: 'store', component: TestStore },
           { path: 'games', component: TestGames },
           { path: 'game/:id', component: TestGameShell },
@@ -192,5 +199,63 @@ describe('App', () => {
 
     expect(authStub.setActiveGameId).toHaveBeenCalledOnceWith(null);
     expect(router.url).toBe('/games');
+  });
+
+  it('keeps the user on /games after recovering an active game and shows the resume banner', async () => {
+    authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9', activeGameEngine: 'Stella' });
+    authStub.activeGameId.and.returnValue('ROOM-9');
+    authStub.activeGameRoute.and.returnValue('/game/ROOM-9');
+    realtimeStub.activeGameNotice.and.returnValue('Tienes una partida activa. Vuelve cuando quieras.');
+
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/games');
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(router.url).toBe('/games');
+    expect(realtimeStub.restoreActiveGameConnection).toHaveBeenCalledOnceWith('ROOM-9');
+    expect(compiled.textContent).toContain('Partida activa detectada');
+    expect(compiled.textContent).toContain('Vuelve cuando quieras.');
+    expect(compiled.textContent).toContain('Volver a la partida');
+  });
+
+  it('keeps the user on /menu after recovering an active game and shows the resume banner', async () => {
+    authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9', activeGameEngine: 'Stella' });
+    authStub.activeGameId.and.returnValue('ROOM-9');
+    authStub.activeGameRoute.and.returnValue('/game/ROOM-9');
+    realtimeStub.activeGameNotice.and.returnValue('La partida sigue abierta para este usuario.');
+
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/menu');
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(router.url).toBe('/menu');
+    expect(compiled.textContent).toContain('Partida activa detectada');
+    expect(compiled.textContent).toContain('La partida sigue abierta para este usuario.');
+    expect(compiled.textContent).toContain('Volver a la partida');
+  });
+
+  it('redirects the user away from / when recovering an active game', async () => {
+    authStub.ensureInitialized.and.resolveTo({ activeGameId: 'ROOM-9', activeGameEngine: 'Stella' });
+    authStub.activeGameId.and.returnValue('ROOM-9');
+    authStub.activeGameRoute.and.returnValue('/game/ROOM-9');
+
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/');
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(router.url).toBe('/game/ROOM-9');
+    expect(compiled.textContent).not.toContain('Partida activa detectada');
   });
 });

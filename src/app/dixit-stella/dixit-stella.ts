@@ -2,8 +2,11 @@ import { ChangeDetectorRef, Component, Injector, OnDestroy, OnInit, effect, inje
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   RealtimeGameStateUpdate,
+  RealtimeGameEnded,
   RealtimeLobbyState,
+  RealtimeChatMessage,
   RealtimeMinigameStart,
+  RealtimePrivateHand,
   RealtimeSpecialEvent,
   RealtimeStarClaim,
   RealtimeStarSpawn,
@@ -88,6 +91,8 @@ export class DixitStella implements OnInit, OnDestroy {
   private readonly dynamicCardUrls = new Map<string, string>();
   private ownedCards: DeckCard[] = [];
   private lastAppliedGameStateReceivedAt = 0;
+  private lastAppliedGameEndedReceivedAt = 0;
+  private lastAppliedPrivateHandReceivedAt = 0;
   private lastBoardSignature = '';
   private revealLogSequence = 0;
   private firstScoutId = '';
@@ -97,7 +102,7 @@ export class DixitStella implements OnInit, OnDestroy {
   readonly boardRowIndexes = Array.from({ length: BOARD_ROWS }, (_, index) => index);
   readonly announceTrack = Array.from({ length: MAX_SELECTIONS }, (_, index) => index + 1);
   readonly specialBoardCells = SPECIAL_BOARD_CELLS;
-  readonly trackBoardImageUrl = DEFAULT_CARD_IMAGE;
+  trackBoardImageUrl = DEFAULT_CARD_IMAGE;
 
   id = '';
   roomTitle = 'Sala Stella';
@@ -130,6 +135,8 @@ export class DixitStella implements OnInit, OnDestroy {
   minigameStatusMessage = '';
   isMinigameCountdownOpen = false;
   isTrackBoardOpen = false;
+  isChatPanelOpen = false;
+  chatDraft = '';
   private lastAppliedMinigameReceivedAt = 0;
   private minigameResultSent = false;
   private minigameResolutionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -159,6 +166,32 @@ export class DixitStella implements OnInit, OnDestroy {
         }
 
         this.applyRealtimeGameState(gameState);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const privateHand = this.realtime.privateHand();
+        if (!privateHand || privateHand.lobbyCode !== this.id) {
+          return;
+        }
+
+        this.applyRealtimePrivateHand(privateHand);
+        this.cdr.detectChanges();
+      },
+      { injector: this.injector }
+    );
+
+    effect(
+      () => {
+        const gameEnded = this.realtime.gameEndedResult();
+        if (!gameEnded || this.realtime.activeLobbyCode() !== this.id) {
+          return;
+        }
+
+        this.applyRealtimeGameEnded(gameEnded);
         this.cdr.detectChanges();
       },
       { injector: this.injector }
@@ -277,6 +310,16 @@ export class DixitStella implements OnInit, OnDestroy {
       this.applyRealtimeGameState(initialGameState);
     }
 
+    const currentPrivateHand = this.realtime.privateHand();
+    if (currentPrivateHand?.lobbyCode === this.id) {
+      this.applyRealtimePrivateHand(currentPrivateHand);
+    }
+
+    const currentGameEnded = this.realtime.gameEndedResult();
+    if (currentGameEnded && this.realtime.activeLobbyCode() === this.id) {
+      this.applyRealtimeGameEnded(currentGameEnded);
+    }
+
     const currentMinigame = this.realtime.minigameStart();
     if (currentMinigame && this.realtime.activeLobbyCode() === this.id) {
       this.applyRealtimeMinigameStart(currentMinigame);
@@ -310,7 +353,7 @@ export class DixitStella implements OnInit, OnDestroy {
     return (
       currentPlayerState ?? {
         id: this.currentPlayerId,
-        name: this.auth.username() || 'Tu',
+        name: this.resolvePlayerLabel(this.currentPlayerId) || 'Tu',
         color: PLAYER_COLORS[0],
         score: 0,
         selection: this.getCurrentSelectionCodes(),
@@ -401,6 +444,14 @@ export class DixitStella implements OnInit, OnDestroy {
 
   get stellaBoardSubtitle(): string {
     return `Ronda ${this.roundNumber} - ${this.currentPhaseMeta.title}`;
+  }
+
+  get stellaChatMessages(): RealtimeChatMessage[] {
+    return this.realtime.chatMessages().slice(-30);
+  }
+
+  get canSendChatMessage(): boolean {
+    return this.realtime.connectionStatus() === 'connected' && this.chatDraft.trim().length > 0;
   }
 
   get stellaFinalRankingRows(): SharedFinalResultsRankingRow[] {
@@ -536,15 +587,15 @@ export class DixitStella implements OnInit, OnDestroy {
         ? this.activeMinigame.player2
         : this.activeMinigame.player1;
 
-    return this.playerNames.get(opponentId) ?? opponentId ?? 'Rival';
+    return this.resolvePlayerLabel(opponentId) || 'Rival';
   }
 
   get activeMinigamePlayerOneName(): string {
-    return this.playerNames.get(this.activeMinigame?.player1 ?? '') ?? this.activeMinigame?.player1 ?? 'Jugador 1';
+    return this.resolvePlayerLabel(this.activeMinigame?.player1 ?? '') || 'Jugador 1';
   }
 
   get activeMinigamePlayerTwoName(): string {
-    return this.playerNames.get(this.activeMinigame?.player2 ?? '') ?? this.activeMinigame?.player2 ?? 'Jugador 2';
+    return this.resolvePlayerLabel(this.activeMinigame?.player2 ?? '') || 'Jugador 2';
   }
 
   get activeMinigameSeedKey(): string {
@@ -579,6 +630,7 @@ export class DixitStella implements OnInit, OnDestroy {
   }
 
   returnToGames(): void {
+    this.realtime.disconnect(false);
     void this.router.navigate(['/games']);
   }
 
@@ -588,6 +640,46 @@ export class DixitStella implements OnInit, OnDestroy {
 
   closeTrackBoard(): void {
     this.isTrackBoardOpen = false;
+  }
+
+  toggleChatPanel(): void {
+    this.isChatPanelOpen = !this.isChatPanelOpen;
+  }
+
+  closeChatPanel(): void {
+    this.isChatPanelOpen = false;
+  }
+
+  updateChatDraft(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    this.chatDraft = target.value.slice(0, 255);
+  }
+
+  onChatComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    this.submitChatMessage();
+  }
+
+  submitChatMessage(): void {
+    if (!this.canSendChatMessage) {
+      return;
+    }
+
+    try {
+      this.realtime.sendChat(this.chatDraft);
+      this.chatDraft = '';
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error ? error.message : 'No se pudo enviar el mensaje';
+    }
   }
 
   openInspection(card: DeckCard): void {
@@ -800,6 +892,15 @@ export class DixitStella implements OnInit, OnDestroy {
 
   private applyLobbyDetails(lobby: Game): void {
     this.roomTitle = lobby.title?.trim() || this.roomTitle;
+    this.trackBoardImageUrl = lobby.image?.trim() || this.trackBoardImageUrl;
+
+    Object.entries(lobby.playerNames ?? {}).forEach(([playerId, username]) => {
+      const normalizedPlayerId = playerId.trim();
+      const normalizedUsername = username.trim();
+      if (normalizedPlayerId && normalizedUsername) {
+        this.playerNames.set(normalizedPlayerId, normalizedUsername);
+      }
+    });
 
     lobby.players.forEach((playerId) => {
       const fallbackName =
@@ -837,7 +938,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
   private applyRealtimeLobbyState(lobbyState: RealtimeLobbyState): void {
     lobbyState.players.forEach((player) => {
-      this.playerNames.set(player.id, player.username);
+      this.playerNames.set(player.id, player.username.trim() || player.id);
     });
 
     if (!this.roomTitle.trim()) {
@@ -861,6 +962,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
     const phase = this.normalizePhase(this.readString(state, 'phase'));
     const currentRound = this.asRecord(state['currentRound']) ?? {};
+    this.syncPlayerNamesFromState(state);
     this.syncDynamicCardUrls(state, currentRound);
     const boardCardEntries = this.readArray(currentRound, 'boardCards');
     const detailedBoardCardEntries = this.readArray(currentRound, 'boardCardsDetailed');
@@ -920,9 +1022,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
       return {
         id: playerId,
-        name:
-          this.playerNames.get(playerId) ??
-          (playerId === this.currentPlayerId ? this.auth.username() || playerId : playerId),
+        name: this.resolvePlayerLabel(playerId) || playerId,
         color: PLAYER_COLORS[index % PLAYER_COLORS.length],
         score: scores[playerId] ?? 0,
         selection,
@@ -962,6 +1062,74 @@ export class DixitStella implements OnInit, OnDestroy {
     this.finalWinners = winners.length
       ? this.players.filter((player) => winners.includes(player.id))
       : [];
+    this.syncStatusCopy();
+  }
+
+  private applyRealtimePrivateHand(privateHand: RealtimePrivateHand): void {
+    if (privateHand.receivedAt <= this.lastAppliedPrivateHandReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedPrivateHandReceivedAt = privateHand.receivedAt;
+    const nextBoardImageUrl = privateHand.board?.url_image?.trim() ?? '';
+    if (nextBoardImageUrl) {
+      this.trackBoardImageUrl = nextBoardImageUrl;
+    }
+  }
+
+  private applyRealtimeGameEnded(gameEndedResult: RealtimeGameEnded): void {
+    if (gameEndedResult.receivedAt <= this.lastAppliedGameEndedReceivedAt) {
+      return;
+    }
+
+    this.lastAppliedGameEndedReceivedAt = gameEndedResult.receivedAt;
+    this.loading = false;
+    this.errorMessage = '';
+    if (gameEndedResult.winnerId && gameEndedResult.winnerName) {
+      this.playerNames.set(gameEndedResult.winnerId, gameEndedResult.winnerName);
+    }
+
+    const playersById = new Map(this.players.map((player) => [player.id, player]));
+    const orderedPlayerIds = [
+      ...gameEndedResult.ranking.map((entry) => entry.playerId),
+      ...this.players
+        .map((player) => player.id)
+        .filter((playerId) => !gameEndedResult.ranking.some((entry) => entry.playerId === playerId)),
+    ];
+
+    if (orderedPlayerIds.length > 0) {
+      this.players = orderedPlayerIds.map((playerId, index) => {
+        const existingPlayer = playersById.get(playerId);
+        const rankingEntry = gameEndedResult.ranking.find((entry) => entry.playerId === playerId);
+
+        return {
+          id: playerId,
+          name: existingPlayer?.name ?? this.resolvePlayerLabel(playerId) ?? playerId,
+          color: existingPlayer?.color ?? PLAYER_COLORS[index % PLAYER_COLORS.length],
+          score: rankingEntry?.points ?? existingPlayer?.score ?? 0,
+          selection: existingPlayer?.selection ?? [],
+          selectionCount: existingPlayer?.selectionCount ?? 0,
+          submitted: existingPlayer?.submitted ?? false,
+          lanternState: existingPlayer?.lanternState ?? 'LIGHT',
+          hasFallen: existingPlayer?.hasFallen ?? false,
+          revealedSelectionCodes: existingPlayer?.revealedSelectionCodes ?? [],
+          roundPoints: existingPlayer?.roundPoints ?? 0,
+          successfulAssociations: existingPlayer?.successfulAssociations ?? 0,
+          isCurrentUser: playerId === this.currentPlayerId,
+        };
+      });
+    }
+
+    this.phase = 'FINISHED';
+    this.finalWinners =
+      gameEndedResult.ranking.length > 0
+        ? this.players.filter(
+            (player) =>
+              gameEndedResult.ranking.find((entry) => entry.playerId === player.id)?.place === 1
+          )
+        : gameEndedResult.winnerId
+          ? this.players.filter((player) => player.id === gameEndedResult.winnerId)
+          : this.finalWinners;
     this.syncStatusCopy();
   }
 
@@ -1036,8 +1204,7 @@ export class DixitStella implements OnInit, OnDestroy {
     this.lastAppliedStarClaimReceivedAt = claim.receivedAt;
     this.activeStar = null;
     this.applyStarClaimScores(claim.newScores);
-    this.starWinnerLabel =
-      this.playerNames.get(claim.winnerId) ?? claim.winnerId ?? 'Estrella capturada';
+    this.starWinnerLabel = this.resolvePlayerLabel(claim.winnerId) || 'Estrella capturada';
     this.starClaimSequence += 1;
     this.clearStarWinnerTimer();
     this.starWinnerTimer = setTimeout(() => {
@@ -1124,7 +1291,7 @@ export class DixitStella implements OnInit, OnDestroy {
       const explorerId = previousSnapshot.currentScoutId || nextSnapshot.currentScoutId;
       const matchingPlayerNames = Object.entries(nextSnapshot.playerMarks)
         .filter(([playerId, marks]) => playerId !== explorerId && marks.includes(cardId))
-        .map(([playerId]) => this.playerNames.get(playerId) ?? playerId);
+        .map(([playerId]) => this.resolvePlayerLabel(playerId) || playerId);
       const outcome: RevealOutcome =
         matchingPlayerNames.length === 0
           ? 'fall'
@@ -1134,7 +1301,7 @@ export class DixitStella implements OnInit, OnDestroy {
 
       return {
         id: ++this.revealLogSequence,
-        explorerName: this.playerNames.get(explorerId) ?? explorerId ?? 'Scout',
+        explorerName: this.resolvePlayerLabel(explorerId) || 'Scout',
         cardCode: String(cardId),
         cardLabel: this.resolveBoardCard(cardId)?.value ?? String(cardId),
         matchingPlayerNames,
@@ -1198,7 +1365,7 @@ export class DixitStella implements OnInit, OnDestroy {
         break;
       case 'SCORING':
         this.selectionMessage = this.darkPlayerId
-          ? `Oscuridad: ${this.playerNames.get(this.darkPlayerId) ?? this.darkPlayerId}.`
+          ? `Oscuridad: ${this.resolvePlayerLabel(this.darkPlayerId) || this.darkPlayerId}.`
           : 'Ningun jugador ha quedado en Oscuridad.';
         this.lastResolutionTitle = 'Puntuacion cerrada';
         break;
@@ -1344,6 +1511,12 @@ export class DixitStella implements OnInit, OnDestroy {
     };
   }
 
+  private syncPlayerNamesFromState(state: Record<string, unknown>): void {
+    Object.entries(this.readStringRecord(state, 'playerNames')).forEach(([playerId, username]) => {
+      this.playerNames.set(playerId, username);
+    });
+  }
+
   private resolvePlayerIds(
     state: Record<string, unknown>,
     scores: Record<string, number>,
@@ -1441,6 +1614,53 @@ export class DixitStella implements OnInit, OnDestroy {
 
       return accumulator;
     }, {});
+  }
+
+  private readStringRecord(source: Record<string, unknown>, key: string): Record<string, string> {
+    const value = this.asRecord(source[key]);
+    if (!value) {
+      return {};
+    }
+
+    return Object.entries(value).reduce<Record<string, string>>((accumulator, [entryKey, entryValue]) => {
+      const normalizedKey = entryKey.trim();
+      const normalizedValue = typeof entryValue === 'string' ? entryValue.trim() : '';
+      if (normalizedKey && normalizedValue) {
+        accumulator[normalizedKey] = normalizedValue;
+      }
+      return accumulator;
+    }, {});
+  }
+
+  private resolvePlayerLabel(playerId: string): string {
+    const normalizedPlayerId = playerId.trim();
+    if (!normalizedPlayerId) {
+      return '';
+    }
+
+    return this.formatPlayerLabel(
+      normalizedPlayerId,
+      this.playerNames.get(normalizedPlayerId) ??
+        (normalizedPlayerId === this.currentPlayerId ? this.auth.username() || normalizedPlayerId : null)
+    );
+  }
+
+  private formatPlayerLabel(playerId: string, username: string | null | undefined): string {
+    const normalizedPlayerId = playerId.trim();
+    const normalizedUsername = username?.trim() ?? '';
+    if (!normalizedPlayerId) {
+      return normalizedUsername;
+    }
+
+    if (normalizedUsername.endsWith(`(${normalizedPlayerId})`)) {
+      return normalizedUsername;
+    }
+
+    if (!normalizedUsername || normalizedUsername === normalizedPlayerId) {
+      return normalizedPlayerId;
+    }
+
+    return `${normalizedUsername} (${normalizedPlayerId})`;
   }
 
   private syncDynamicCardUrls(

@@ -19,14 +19,14 @@ function buildActiveGameUrlTree(router: Router, auth: Auth) {
   return activeGameRoute ? router.parseUrl(activeGameRoute) : true;
 }
 
-export const redirectLoggedInHomeGuard: CanActivateFn = async () => {
+export const redirectLoggedInHomeGuard: CanActivateFn = async (_route, state) => {
   const auth = inject(Auth);
   const router = inject(Router);
   await auth.ensureInitialized();
   const activeGameId = auth.activeGameId();
 
   if (activeGameId) {
-    return buildActiveGameUrlTree(router, auth);
+    return router.createUrlTree(['/games']);
   }
 
   if (!auth.isLoggedIn()) {
@@ -36,13 +36,18 @@ export const redirectLoggedInHomeGuard: CanActivateFn = async () => {
   return router.createUrlTree(['/menu']);
 };
 
-export const activeGameLobbyGuard: CanActivateFn = async () => {
+export const activeGameLobbyGuard: CanActivateFn = async (_route, state) => {
   const auth = inject(Auth);
   const router = inject(Router);
+  const allowedUrl = state.url.split('?')[0].split('#')[0] ?? '';
   await auth.ensureInitialized();
   const activeGameId = auth.activeGameId();
 
   if (!activeGameId) {
+    return true;
+  }
+
+  if (allowedUrl === '/menu' || allowedUrl === '/games') {
     return true;
   }
 
@@ -130,6 +135,7 @@ export const routes: Routes = [
         path: 'register',
         title: 'Register',
         component: Register,
+        canActivate: [redirectLoggedInHomeGuard],
     },
     {
         path: 'login',

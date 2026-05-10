@@ -1,18 +1,17 @@
     <section class="stella-table">
       <nav class="stella-topbar" aria-label="Barra de partida Stella">
-        <button type="button" class="topbar-button small" (click)="goHome()">Home</button>
-
         <div class="topbar-center">
           <p class="eyebrow">{{ roomTitle }}</p>
           <div class="round-meta">
             <span class="phase-chip">{{ currentPhaseMeta.title }}</span>
             <span class="round-chip">Ronda {{ roundNumber }}</span>
+            <button type="button" class="topbar-button round-board-button" (click)="openTrackBoard()">Tablero</button>
           </div>
           <p class="phase-copy">{{ currentPhaseMeta.description }}</p>
         </div>
 
         <div class="topbar-actions">
-          <button type="button" class="topbar-button" (click)="openTrackBoard()">Tablero</button>
+          <button type="button" class="topbar-button" (click)="toggleChatPanel()">Chat</button>
           <button type="button" class="topbar-button" (click)="goToProfile()">Perfil</button>
           <button type="button" class="topbar-button" (click)="goToSettings()">Ajustes</button>
         </div>
@@ -374,6 +373,62 @@
       [winnerSequence]="starClaimSequence"
       (claimRequested)="claimVisibleStar()"
     />
+
+    @if (isChatPanelOpen) {
+      <div class="chat-drawer-backdrop" (click)="closeChatPanel()">
+        <aside
+          class="chat-drawer"
+          aria-label="Chat de sala Stella"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="chat-drawer-header">
+            <div>
+              <h2>Chat</h2>
+            </div>
+            <button
+              type="button"
+              class="topbar-button small"
+              aria-label="Cerrar chat"
+              (click)="closeChatPanel()"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <div class="chat-list">
+            @if (stellaChatMessages.length === 0) {
+              <p class="chat-empty">Todavia no hay mensajes.</p>
+            } @else {
+              @for (message of stellaChatMessages; track message.timestamp + message.username) {
+                <article class="chat-message">
+                  <strong>{{ message.username }}</strong>
+                  <p>{{ message.text }}</p>
+                </article>
+              }
+            }
+          </div>
+
+          <div class="chat-composer">
+            <input
+              type="text"
+              maxlength="255"
+              [value]="chatDraft"
+              (input)="updateChatDraft($event)"
+              (keydown)="onChatComposerKeydown($event)"
+              placeholder="Escribe al lobby"
+            />
+            <button
+              type="button"
+              class="primary-action"
+              [disabled]="!canSendChatMessage"
+              (click)="submitChatMessage()"
+            >
+              Enviar
+            </button>
+          </div>
+        </aside>
+      </div>
+    }
 
     @if (inspectedCard; as card) {
       <div class="modal-backdrop" (click)="closeInspection()">
