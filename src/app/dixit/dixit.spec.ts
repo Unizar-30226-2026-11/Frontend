@@ -918,7 +918,8 @@ describe('Dixit', () => {
     ).toBeTrue();
     expect(component.pointsRanking[0].playerId).toBe('cpu_1');
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent as string).toContain('Carta del cuenta-cuentos');
+    expect(fixture.nativeElement.textContent as string).toContain('Clasificacion');
+    expect(fixture.nativeElement.textContent as string).not.toContain('Carta del cuenta-cuentos');
   });
 
   it('does not show the revealed cards UI during scoring', async () => {
