@@ -524,6 +524,10 @@ export class DixitRealtime {
 
     socket.on('server:game:special_event', (payload: unknown) => {
       const specialEvent = this.normalizeSpecialEvent(payload);
+      if (specialEvent && !this.shouldExposeSpecialEventToCurrentUser(specialEvent)) {
+        return;
+      }
+
       if (specialEvent) {
         this.specialEventSignal.set(specialEvent);
       }
@@ -1510,6 +1514,25 @@ export class DixitRealtime {
       isDuel: readBoolean(wrappedData, 'isDuel') ?? undefined,
       receivedAt: Date.now(),
     };
+  }
+
+  private shouldExposeSpecialEventToCurrentUser(specialEvent: RealtimeSpecialEvent): boolean {
+    const targetPlayerId = specialEvent.playerId?.trim();
+    if (targetPlayerId) {
+      return targetPlayerId === this.auth.session()?.user.id;
+    }
+
+    return !this.isPersonalSpecialEventEffect(specialEvent.effect);
+  }
+
+  private isPersonalSpecialEventEffect(effect: string): boolean {
+    return (
+      effect === 'ODD' ||
+      effect === 'EVEN' ||
+      effect === 'SHUFFLE' ||
+      effect === 'CARD_BONUS' ||
+      effect === 'EXTRA_POINTS'
+    );
   }
 
   private normalizeModeChangeOffer(payload: unknown): RealtimeModeChangeOffer | null {

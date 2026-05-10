@@ -253,7 +253,7 @@
       isCurrentPlayerInActiveMinigame &&
       (minigameUiState === 'won' || minigameUiState === 'lost')
     ) {
-      <div class="wildcard-popup-backdrop" style="z-index: 44">
+      <div class="wildcard-popup-backdrop minigame-result-backdrop">
         <article
           class="wildcard-popup minigame-result-card"
           [class.result-won]="minigameUiState === 'won'"
