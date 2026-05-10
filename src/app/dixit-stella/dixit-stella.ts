@@ -563,18 +563,11 @@ export class DixitStella implements OnInit, OnDestroy {
   get isMinigameCountdownVisible(): boolean {
     return (
       this.activeMinigame !== null &&
+      !this.activeMinigame.isDuel &&
       this.isCurrentPlayerInActiveMinigame &&
       this.minigameUiState === 'playing' &&
       this.isMinigameCountdownOpen
     );
-  }
-
-  get activeMinigameCountdownEyebrow(): string {
-    return this.activeMinigame?.isDuel ? 'Duelo' : 'Desempate';
-  }
-
-  get activeMinigameCountdownTitle(): string {
-    return `¡Vaya! has empatado con ${this.activeMinigameOpponentName}`;
   }
 
   get activeMinigameOpponentName(): string {
@@ -719,6 +712,7 @@ export class DixitStella implements OnInit, OnDestroy {
       return;
     }
 
+    this.closeActiveMinigameViews();
     this.minigameResultSent = true;
     this.minigameUiState = 'waiting';
     this.minigameStatusMessage = 'Puntuacion enviada. Esperando al rival...';
@@ -731,6 +725,7 @@ export class DixitStella implements OnInit, OnDestroy {
       this.minigameResultSent = false;
       this.minigameUiState = 'playing';
       this.minigameStatusMessage = '';
+      this.openMinigameView(this.resolveMinigameView(this.activeMinigame.type));
     }
   }
 
@@ -1170,30 +1165,38 @@ export class DixitStella implements OnInit, OnDestroy {
       return;
     }
 
-    this.openMinigameView(minigameView);
+    if (!minigame.isDuel) {
+      this.isMinigame1Open = false;
+      this.isMinigame2Open = false;
+      this.isMinigame3Open = false;
+      this.isMinigameCountdownOpen = true;
+    } else {
+      this.openMinigameView(minigameView);
+    }
   }
 
   private openMinigameView(minigameView: 1 | 2 | 3 | null): void {
     if (minigameView === null) {
-      this.isMinigame1Open = false;
-      this.isMinigame2Open = false;
-      this.isMinigame3Open = false;
+      this.closeActiveMinigameViews();
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
       this.scheduleUnavailableMinigameSubmit(this.activeMinigameDurationMs);
     } else if (minigameView === 2) {
-      this.isMinigame1Open = false;
+      this.closeActiveMinigameViews();
       this.isMinigame2Open = true;
-      this.isMinigame3Open = false;
     } else if (minigameView === 3) {
-      this.isMinigame1Open = false;
-      this.isMinigame2Open = false;
+      this.closeActiveMinigameViews();
       this.isMinigame3Open = true;
     } else {
+      this.closeActiveMinigameViews();
       this.isMinigame1Open = true;
-      this.isMinigame2Open = false;
-      this.isMinigame3Open = false;
     }
+  }
+
+  private closeActiveMinigameViews(): void {
+    this.isMinigame1Open = false;
+    this.isMinigame2Open = false;
+    this.isMinigame3Open = false;
   }
 
   private applyRealtimeStarClaim(claim: RealtimeStarClaim): void {
@@ -1248,15 +1251,13 @@ export class DixitStella implements OnInit, OnDestroy {
 
     if (specialEvent.effect === 'CONFLICT_RESOLVED') {
       this.isMinigameCountdownOpen = false;
+      this.minigameStatusMessage = this.buildMinigameWinnerMessage(specialEvent);
       if (specialEvent.winnerId === this.currentPlayerId) {
         this.minigameUiState = 'won';
-        this.minigameStatusMessage = 'Victoria';
       } else if (specialEvent.loserId === this.currentPlayerId) {
         this.minigameUiState = 'lost';
-        this.minigameStatusMessage = 'Derrota';
       } else {
         this.minigameUiState = 'waiting';
-        this.minigameStatusMessage = specialEvent.message || 'Conflicto resuelto.';
       }
 
       this.scheduleMinigameClose(3000);
@@ -1270,6 +1271,15 @@ export class DixitStella implements OnInit, OnDestroy {
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
       this.scheduleMinigameClose(2000);
     }
+  }
+
+  private buildMinigameWinnerMessage(specialEvent: RealtimeSpecialEvent): string {
+    const winnerId = specialEvent.winnerId?.trim();
+    if (!winnerId) {
+      return specialEvent.message || 'Conflicto resuelto.';
+    }
+
+    return `Ganador: ${this.resolvePlayerName(winnerId)}.`;
   }
 
   private appendRevealLog(
@@ -1548,6 +1558,14 @@ export class DixitStella implements OnInit, OnDestroy {
       default:
         return 'STELLA_WORD_REVEAL';
     }
+  }
+
+  private resolvePlayerName(playerId: string): string {
+    if (!playerId) {
+      return 'Jugador';
+    }
+
+    return this.playerNames.get(playerId) ?? playerId;
   }
 
   private get currentPlayerId(): string {

@@ -51,17 +51,18 @@ export interface DixitRankingRow {
               <article
                 class="reveal-card"
                 [class.storyteller-card]="result.isStorytellerCard"
-                [style.--reveal-index]="cardIndex">
+                [style.--reveal-index]="cardIndex"
+              >
                 <div class="reveal-card-media">
                   <img
                     draggable="false"
                     [src]="result.card.image"
                     [alt]="result.card.value + ' de ' + result.card.suit"
                   />
+                  @if (result.isStorytellerCard) {
+                    <span class="storyteller-badge">Carta del cuenta-cuentos</span>
+                  }
                 </div>
-                @if (result.isStorytellerCard) {
-                  <p class="storyteller-badge">Carta del cuenta-cuentos</p>
-                }
                 <p class="owner">{{ result.ownerName }}</p>
                 <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
               </article>
@@ -159,7 +160,7 @@ export interface DixitRankingRow {
     .reveal-card {
       --reveal-index: 0;
       background: rgba(0, 0, 0, 0.18);
-      border: 2px solid transparent;
+      border: 1px solid transparent;
       border-radius: 10px;
       padding: 8px;
       text-align: center;
@@ -170,15 +171,15 @@ export interface DixitRankingRow {
     }
 
     .reveal-card.storyteller-card {
-      border-color: rgba(214, 68, 68, 0.95);
-      box-shadow:
-        0 0 0 1px rgba(255, 214, 214, 0.2),
-        0 12px 28px rgba(128, 19, 19, 0.25);
       background:
-        linear-gradient(180deg, rgba(133, 21, 21, 0.28), rgba(0, 0, 0, 0.18));
+        linear-gradient(rgba(255, 226, 139, 0.16), rgba(255, 226, 139, 0.08)),
+        rgba(0, 0, 0, 0.22);
+      border-color: rgba(255, 220, 117, 0.9);
+      box-shadow: 0 0 0 2px rgba(255, 220, 117, 0.22), 0 16px 34px rgba(0, 0, 0, 0.2);
     }
 
     .reveal-card-media {
+      position: relative;
       aspect-ratio: 3 / 4;
       width: 100%;
       overflow: hidden;
@@ -199,12 +200,18 @@ export interface DixitRankingRow {
     }
 
     .storyteller-badge {
-      margin: 2px 0 8px;
-      color: #ffd6d6;
-      font-size: 0.8rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 8px;
+      border-radius: 999px;
+      padding: 6px 8px;
+      background: rgba(12, 18, 26, 0.86);
+      color: #ffe28b;
+      font-size: 0.74rem;
+      font-weight: 800;
+      line-height: 1.1;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
     }
 
     .owner {
