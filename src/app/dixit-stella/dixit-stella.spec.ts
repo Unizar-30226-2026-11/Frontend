@@ -253,8 +253,15 @@ describe('DixitStella', () => {
     fixture.detectChanges();
 
     expect(component.activeMinigameDurationMs).toBe(12_000);
-    expect(component.isMinigame1Open).toBeTrue();
+    expect(component.isMinigameCountdownOpen).toBeTrue();
+    expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
+    expect(fixture.nativeElement.textContent as string).toContain('Prepárate para el minijuego en...');
+
+    component.onMinigameCountdownFinished();
+    fixture.detectChanges();
+
+    expect(component.isMinigame1Open).toBeTrue();
     expect(fixture.nativeElement.textContent as string).toContain('Golpea al topo');
   });
 
@@ -299,10 +306,46 @@ describe('DixitStella', () => {
     await Promise.resolve();
     fixture.detectChanges();
 
+    expect(component.isMinigameCountdownOpen).toBeTrue();
     expect(component.isMinigame1Open).toBeFalse();
     expect(component.isMinigame2Open).toBeFalse();
+    expect(component.isMinigame3Open).toBeFalse();
+
+    component.onMinigameCountdownFinished();
+    fixture.detectChanges();
+
     expect(component.isMinigame3Open).toBeTrue();
     expect(fixture.nativeElement.textContent as string).toContain('Recoge las manzanas');
+  });
+
+  it('shows the winner name when a stella minigame is resolved', () => {
+    component.activeMinigame = {
+      player1: 'u_111',
+      player2: 'u_222',
+      type: 0,
+      duration: 15_000,
+      isDuel: false,
+      receivedAt: 2,
+    };
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'CONFLICT_RESOLVED',
+      message: 'u_222 gana el desempate.',
+      winnerId: 'u_222',
+      loserId: 'u_111',
+      isDuel: false,
+      receivedAt: 3,
+    });
+    fixture.detectChanges();
+
+    expect(component.minigameUiState).toBe('lost');
+    expect(component.minigameStatusMessage).toBe('Ganador: u_222.');
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Derrota');
+    expect(text).toContain('Ganador: u_222.');
+    expect(
+      fixture.nativeElement.querySelector('.modal-backdrop')?.getAttribute('style')
+    ).toContain('z-index: 44');
   });
 
   it('reuses the shared final overlay when the stella match is finished', async () => {
