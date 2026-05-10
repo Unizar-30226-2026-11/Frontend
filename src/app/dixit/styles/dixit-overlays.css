@@ -9,6 +9,10 @@
   backdrop-filter: blur(8px);
 }
 
+.minigame-result-backdrop {
+  z-index: 60;
+}
+
 .wildcard-popup {
   width: min(92vw, 30rem);
   display: grid;

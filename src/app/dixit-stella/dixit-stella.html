@@ -479,7 +479,7 @@
     }
 
     @if (activeMinigame && isCurrentPlayerInActiveMinigame && minigameUiState !== 'playing') {
-      <div class="modal-backdrop" style="z-index: 44">
+      <div class="modal-backdrop minigame-result-backdrop">
         <article
           class="modal-card minigame-status-card minigame-result-card"
           [class.result-won]="minigameUiState === 'won'"

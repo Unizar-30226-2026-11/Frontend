@@ -296,6 +296,7 @@ describe('Dixit', () => {
     component['applyRealtimeSpecialEvent']({
       effect: 'ODD',
       message: '',
+      playerId: 'u_self',
       points: 1,
       receivedAt: Date.now(),
     });
@@ -313,6 +314,7 @@ describe('Dixit', () => {
     component['applyRealtimeSpecialEvent']({
       effect: 'EVEN',
       message: '',
+      playerId: 'u_self',
       points: -1,
       receivedAt: Date.now() + 1,
     });
@@ -328,6 +330,7 @@ describe('Dixit', () => {
     component['applyRealtimeSpecialEvent']({
       effect: 'SHUFFLE',
       message: '',
+      playerId: 'u_self',
       receivedAt: Date.now() + 2,
     });
     fixture.detectChanges();
@@ -342,11 +345,27 @@ describe('Dixit', () => {
     component['applyRealtimeSpecialEvent']({
       effect: 'EXTRA_POINTS',
       message: 'Ganas 2 puntos.',
+      playerId: 'u_self',
       receivedAt: Date.now() + 3,
     });
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).not.toContain('¡Vaya, has caido en una casilla de evento!');
+  });
+
+  it('does not show board event popups for other players', () => {
+    component['applyRealtimeSpecialEvent']({
+      effect: 'ODD',
+      message: '',
+      playerId: 'cpu_1',
+      points: 1,
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('¡Vaya, has caido en una casilla de evento!');
+    expect(component.activeSpecialEventPopup).toBeNull();
+    expect(component.specialEventPopupCopy).toBe('');
   });
 
   it('closes the minigame overlay when the active conflict is cancelled', async () => {
@@ -1057,6 +1076,35 @@ describe('Dixit', () => {
     expect(realtimeSpy.sendGameAction).toHaveBeenCalledWith('ACCEPT_MODE_CHANGE', {});
     expect(realtimeSpy.clearModeChangeOffer).toHaveBeenCalled();
     expect(component.activeModeChangeOffer).toBeNull();
+  });
+
+  it('queues the mode change offer while a minigame is active and shows it afterwards', async () => {
+    await initializeComponent(fixture);
+
+    component.activeMinigame = {
+      player1: 'u_self',
+      player2: 'u_2',
+      type: 0,
+      duration: 15_000,
+      isDuel: false,
+      receivedAt: 100,
+    };
+
+    component['applyRealtimeModeChangeOffer']({
+      message: 'Puedes cambiar a Stella.',
+      targetMode: 'STELLA',
+      receivedAt: 200,
+    });
+    fixture.detectChanges();
+
+    expect(component.activeModeChangeOffer).toBeNull();
+    expect(fixture.nativeElement.textContent as string).not.toContain('Quieres pasar a Stella?');
+
+    component['closeActiveMinigame']();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent as string).toContain('Quieres pasar a Stella?');
+    expect(component.modeChangeOfferSecondsLeft).toBe(10);
   });
 
   it('cancels the host auto next-round timeout for the current round when a minigame starts', async () => {

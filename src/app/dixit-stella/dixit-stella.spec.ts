@@ -343,9 +343,7 @@ describe('DixitStella', () => {
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Derrota');
     expect(text).toContain('Ganador: u_222.');
-    expect(
-      fixture.nativeElement.querySelector('.modal-backdrop')?.getAttribute('style')
-    ).toContain('z-index: 44');
+    expect(fixture.nativeElement.querySelector('.minigame-result-backdrop')).not.toBeNull();
   });
 
   it('reuses the shared final overlay when the stella match is finished', async () => {

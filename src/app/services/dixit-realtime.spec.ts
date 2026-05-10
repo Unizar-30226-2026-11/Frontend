@@ -12,6 +12,7 @@ describe('DixitRealtime', () => {
   let playerStoreSpy: jasmine.SpyObj<PlayerStore>;
   let authStub: {
     token: jasmine.Spy<() => string | null>;
+    session: jasmine.Spy<() => { user: { id: string } } | null>;
     activeGameId: jasmine.Spy<() => string | null>;
     activeGameEngine: jasmine.Spy<() => 'Classic' | 'Stella' | null>;
     setActiveGameId: jasmine.Spy<
@@ -27,6 +28,7 @@ describe('DixitRealtime', () => {
     playerStoreSpy = jasmine.createSpyObj<PlayerStore>('PlayerStore', ['updateBalance']);
     authStub = {
       token: jasmine.createSpy().and.returnValue('auth-token'),
+      session: jasmine.createSpy().and.returnValue({ user: { id: 'u_self' } }),
       activeGameId: jasmine.createSpy().and.returnValue(null),
       activeGameEngine: jasmine.createSpy().and.returnValue(null),
       setActiveGameId: jasmine.createSpy(),
@@ -706,6 +708,57 @@ describe('DixitRealtime', () => {
       })
     );
     expect(service.toast()?.message).toBe('Puedes cambiar a Stella.');
+  });
+
+  it('ignores targeted special events for other players', async () => {
+    const socket = new FakeSocketIoClient();
+    const socketFactory = jasmine
+      .createSpy('socketFactory')
+      .and.callFake((_url: string, _options?: Record<string, unknown>) => socket);
+    window.io = socketFactory as typeof window.io;
+
+    apiClientSpy.request.and.resolveTo({
+      ticket: 'fresh-ticket',
+      socketUrl: 'http://fresh-socket.test',
+    });
+
+    TestBed.configureTestingModule({
+      providers: [
+        DixitRealtime,
+        { provide: ApiClient, useValue: apiClientSpy },
+        { provide: Auth, useValue: authStub },
+        { provide: PlayerStore, useValue: playerStoreSpy },
+      ],
+    });
+
+    const service = TestBed.inject(DixitRealtime);
+    const connectionPromise = service.ensureLobbyConnection('A1B2');
+    await flushMicrotasks();
+    socket.trigger('connect');
+    await connectionPromise;
+
+    socket.trigger('server:game:special_event', {
+      effect: 'ODD',
+      pId: 'cpu_1',
+      points: 1,
+    });
+
+    expect(service.specialEvent()).toBeNull();
+    expect(service.toast()).toBeNull();
+
+    socket.trigger('server:game:special_event', {
+      effect: 'ODD',
+      pId: 'u_self',
+      points: 1,
+    });
+
+    expect(service.specialEvent()).toEqual(
+      jasmine.objectContaining({
+        effect: 'ODD',
+        playerId: 'u_self',
+      })
+    );
+    expect(service.toast()?.message).toContain('u_self');
   });
 
   it('keeps the final ranking available after server:game:ended and clears the active game id', async () => {

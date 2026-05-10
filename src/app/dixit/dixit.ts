@@ -174,6 +174,7 @@ export class Dixit implements OnInit, OnDestroy {
   private minigameUnavailableSubmitTimer: ReturnType<typeof setTimeout> | null = null;
   private modeChangeOfferTimer: ReturnType<typeof setTimeout> | null = null;
   private specialEventPopupTimer: ReturnType<typeof setTimeout> | null = null;
+  private queuedModeChangeOffer: RealtimeModeChangeOffer | null = null;
   private lastAppliedModeChangeOfferAt = 0;
   private lastAppliedSpecialEventPopupAt = 0;
   private hasHydratedRealtimePresentation = false;
@@ -2605,6 +2606,7 @@ export class Dixit implements OnInit, OnDestroy {
 
   private dismissModeChangeOffer(): void {
     this.activeModeChangeOffer = null;
+    this.queuedModeChangeOffer = null;
     this.modeChangeOfferSecondsLeft = 0;
     this.clearModeChangeOfferTimer();
     this.realtime.clearModeChangeOffer();
@@ -2787,6 +2789,16 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.lastAppliedModeChangeOfferAt = offer.receivedAt;
+    if (this.activeMinigame) {
+      this.queuedModeChangeOffer = offer;
+      this.realtime.clearModeChangeOffer();
+      return;
+    }
+
+    this.showModeChangeOffer(offer);
+  }
+
+  private showModeChangeOffer(offer: RealtimeModeChangeOffer): void {
     this.activeModeChangeOffer = offer;
     this.modeChangeOfferSecondsLeft = 10;
     this.clearModeChangeOfferTimer();
@@ -2817,6 +2829,10 @@ export class Dixit implements OnInit, OnDestroy {
 
   private applyRealtimeSpecialEvent(specialEvent: RealtimeSpecialEvent): void {
     if (!this.isConflictResolutionEvent(specialEvent.effect)) {
+      if (!this.isSpecialEventPopupTargetedAtCurrentPlayer(specialEvent)) {
+        return;
+      }
+
       this.showSpecialEventPopup(specialEvent);
       return;
     }
@@ -2902,6 +2918,11 @@ export class Dixit implements OnInit, OnDestroy {
     return '';
   }
 
+  private isSpecialEventPopupTargetedAtCurrentPlayer(specialEvent: RealtimeSpecialEvent): boolean {
+    const targetPlayerId = specialEvent.playerId?.trim();
+    return !!targetPlayerId && targetPlayerId === this.currentUserId;
+  }
+
   private isConflictResolutionEvent(effect: string): boolean {
     return (
       effect === 'CONFLICT_RESOLVED' ||
@@ -2967,6 +2988,12 @@ export class Dixit implements OnInit, OnDestroy {
     this.minigameResultSent = false;
     this.minigameUiState = 'playing';
     this.minigameStatusMessage = '';
+
+    const queuedModeChangeOffer = this.queuedModeChangeOffer;
+    this.queuedModeChangeOffer = null;
+    if (queuedModeChangeOffer) {
+      this.showModeChangeOffer(queuedModeChangeOffer);
+    }
   }
 
   private resolvePlayerName(playerId: string): string {

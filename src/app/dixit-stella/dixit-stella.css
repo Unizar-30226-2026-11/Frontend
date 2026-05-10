@@ -559,6 +559,10 @@ h3 {
   box-sizing: border-box;
 }
 
+.modal-backdrop.minigame-result-backdrop {
+  z-index: 60;
+}
+
 .modal-card {
   width: min(420px, calc(100vw - 2 * clamp(12px, 3vw, 28px)));
   max-height: calc(100svh - 2 * clamp(12px, 3vw, 28px));
