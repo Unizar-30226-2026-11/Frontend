@@ -2823,15 +2823,13 @@ export class Dixit implements OnInit, OnDestroy {
 
     if (specialEvent.effect === 'CONFLICT_RESOLVED') {
       this.isMinigameCountdownOpen = false;
+      this.minigameStatusMessage = this.buildMinigameWinnerMessage(specialEvent);
       if (specialEvent.winnerId === this.currentUserId) {
         this.minigameUiState = 'won';
-        this.minigameStatusMessage = 'Victoria';
       } else if (specialEvent.loserId === this.currentUserId) {
         this.minigameUiState = 'lost';
-        this.minigameStatusMessage = 'Derrota';
       } else {
         this.minigameUiState = 'waiting';
-        this.minigameStatusMessage = specialEvent.message || 'Conflicto resuelto.';
       }
 
       this.scheduleMinigameClose(3000);
@@ -2845,6 +2843,15 @@ export class Dixit implements OnInit, OnDestroy {
         specialEvent.message || 'El minijuego ha terminado sin ganador.';
       this.scheduleMinigameClose(2000);
     }
+  }
+
+  private buildMinigameWinnerMessage(specialEvent: RealtimeSpecialEvent): string {
+    const winnerId = specialEvent.winnerId?.trim();
+    if (!winnerId) {
+      return specialEvent.message || 'Conflicto resuelto.';
+    }
+
+    return `Ganador: ${this.resolvePlayerName(winnerId)}.`;
   }
 
   closeSpecialEventPopup(): void {

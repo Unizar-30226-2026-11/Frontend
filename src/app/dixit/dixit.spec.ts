@@ -805,6 +805,43 @@ describe('Dixit', () => {
     expect(component.minigameStatusMessage).toBe('Puntuacion enviada. Esperando al rival...');
   });
 
+  it('shows the backend minigame result popup briefly before returning to the table', async () => {
+    vi.useFakeTimers();
+    await initializeComponent(fixture);
+
+    component['applyRealtimeMinigameStart']({
+      player1: 'u_self',
+      player2: 'cpu_1',
+      type: 0,
+      isDuel: true,
+      duration: 15_000,
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeSpecialEvent']({
+      effect: 'CONFLICT_RESOLVED',
+      message: 'cpu_1 ha ganado el desempate.',
+      winnerId: 'cpu_1',
+      loserId: 'u_self',
+      isDuel: true,
+      receivedAt: Date.now() + 1,
+    });
+    fixture.detectChanges();
+
+    const popup = fixture.nativeElement.querySelector('.minigame-result-card') as HTMLElement | null;
+    expect(popup).not.toBeNull();
+    expect(popup?.classList.contains('result-lost')).toBeTrue();
+    expect(fixture.nativeElement.textContent as string).toContain('Derrota');
+    expect(fixture.nativeElement.textContent as string).toContain('Ganador: cpu_1.');
+
+    await vi.advanceTimersByTimeAsync(3000);
+    fixture.detectChanges();
+
+    expect(component.activeMinigame).toBeNull();
+    expect(component.isMinigame1Open).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.minigame-result-card')).toBeNull();
+  });
+
   it('uses scoring phase data to reveal cards and ranking instead of waiting for votes', async () => {
     await initializeComponent(fixture);
 
