@@ -25,7 +25,7 @@ describe('app routes', () => {
     });
 
     const result = await TestBed.runInInjectionContext(() =>
-      redirectLoggedInHomeGuard({} as never, {} as never)
+      redirectLoggedInHomeGuard({} as never, { url: '/' } as never)
     );
 
     expect(result).toBeTrue();
@@ -49,13 +49,37 @@ describe('app routes', () => {
 
     const router = TestBed.inject(Router);
     const result = await TestBed.runInInjectionContext(() =>
-      redirectLoggedInHomeGuard({} as never, {} as never)
+      redirectLoggedInHomeGuard({} as never, { url: '/' } as never)
     );
 
     expect(router.serializeUrl(result as UrlTree)).toBe('/menu');
   });
 
-  it('redirects to the recovered game when one is active', async () => {
+  it('redirects the register route to /menu when the user is logged in', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: Auth,
+          useValue: {
+            ensureInitialized: () => Promise.resolve(null),
+            activeGameId: () => null,
+            activeGameRoute: () => null,
+            isLoggedIn: () => true,
+          },
+        },
+      ],
+    });
+
+    const router = TestBed.inject(Router);
+    const result = await TestBed.runInInjectionContext(() =>
+      redirectLoggedInHomeGuard({} as never, { url: '/register' } as never)
+    );
+
+    expect(router.serializeUrl(result as UrlTree)).toBe('/menu');
+  });
+
+  it('redirects the root route to /games when a recovered game is active', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
@@ -71,12 +95,36 @@ describe('app routes', () => {
       ],
     });
 
-    const router = TestBed.inject(Router);
     const result = await TestBed.runInInjectionContext(() =>
-      redirectLoggedInHomeGuard({} as never, {} as never)
+      redirectLoggedInHomeGuard({} as never, { url: '/' } as never)
     );
 
-    expect(router.serializeUrl(result as UrlTree)).toBe('/game/ROOM-9');
+    const router = TestBed.inject(Router);
+    expect(router.serializeUrl(result as UrlTree)).toBe('/games');
+  });
+
+  it('redirects the register route to /games when a recovered game is active', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: Auth,
+          useValue: {
+            ensureInitialized: () => Promise.resolve(null),
+            activeGameId: () => 'ROOM-9',
+            activeGameRoute: () => '/game/ROOM-9',
+            isLoggedIn: () => true,
+          },
+        },
+      ],
+    });
+
+    const result = await TestBed.runInInjectionContext(() =>
+      redirectLoggedInHomeGuard({} as never, { url: '/register' } as never)
+    );
+
+    const router = TestBed.inject(Router);
+    expect(router.serializeUrl(result as UrlTree)).toBe('/games');
   });
 
   it('blocks lobby routes while a game is active', async () => {
@@ -96,10 +144,54 @@ describe('app routes', () => {
 
     const router = TestBed.inject(Router);
     const result = await TestBed.runInInjectionContext(() =>
-      activeGameLobbyGuard({} as never, {} as never)
+      activeGameLobbyGuard({} as never, { url: '/games/A1B2' } as never)
     );
 
     expect(router.serializeUrl(result as UrlTree)).toBe('/game/ROOM-9');
+  });
+
+  it('allows the games list while a game is active so the player can resume from there', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: Auth,
+          useValue: {
+            ensureInitialized: () => Promise.resolve(null),
+            activeGameId: () => 'ROOM-9',
+            activeGameRoute: () => '/game/ROOM-9',
+          },
+        },
+      ],
+    });
+
+    const result = await TestBed.runInInjectionContext(() =>
+      activeGameLobbyGuard({} as never, { url: '/games' } as never)
+    );
+
+    expect(result).toBeTrue();
+  });
+
+  it('allows the main menu while a game is active so the banner can be shown there', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: Auth,
+          useValue: {
+            ensureInitialized: () => Promise.resolve(null),
+            activeGameId: () => 'ROOM-9',
+            activeGameRoute: () => '/game/ROOM-9',
+          },
+        },
+      ],
+    });
+
+    const result = await TestBed.runInInjectionContext(() =>
+      activeGameLobbyGuard({} as never, { url: '/menu' } as never)
+    );
+
+    expect(result).toBeTrue();
   });
 
   it('redirects protected routes to /login when the user is logged out', async () => {

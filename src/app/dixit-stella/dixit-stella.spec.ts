@@ -33,9 +33,11 @@ describe('DixitStella', () => {
       'ensureLobbyConnection',
       'activeLobbyCode',
       'gameState',
+      'gameEndedResult',
       'lobbyState',
       'lastError',
       'connectionStatus',
+      'privateHand',
       'sendGameAction',
       'sendMinigameScore',
       'minigameStart',
@@ -47,13 +49,16 @@ describe('DixitStella', () => {
       'clearMinigameStart',
       'clearSpecialEvent',
       'endGame',
+      'disconnect',
     ]);
     realtimeStub.ensureLobbyConnection.and.resolveTo();
     realtimeStub.activeLobbyCode.and.returnValue('STELLA1');
     realtimeStub.gameState.and.returnValue(createRealtimeState());
+    realtimeStub.gameEndedResult.and.returnValue(null);
     realtimeStub.lobbyState.and.returnValue(null);
     realtimeStub.lastError.and.returnValue('');
     realtimeStub.connectionStatus.and.returnValue('connected');
+    realtimeStub.privateHand.and.returnValue(null);
     realtimeStub.minigameStart.and.returnValue(null);
     realtimeStub.specialEvent.and.returnValue(null);
     realtimeStub.activeStar.and.returnValue(null);
@@ -196,6 +201,41 @@ describe('DixitStella', () => {
     );
   });
 
+  it('uses the board image from private_hand in the Stella track board', () => {
+    component['applyRealtimePrivateHand']({
+      lobbyCode: 'STELLA1',
+      board: {
+        id: 'b_6',
+        name: 'Aurora',
+        url_image: 'https://cdn.example.com/boards/stella-aurora.png',
+      },
+      hand: [{ id: 'c_31' }],
+      receivedAt: 2,
+    });
+
+    expect(component.trackBoardImageUrl).toBe('https://cdn.example.com/boards/stella-aurora.png');
+  });
+
+  it('renders playerNames from realtime state as username plus id', async () => {
+    realtimeStub.gameState.and.returnValue(
+      createRealtimeState({
+        playerNames: {
+          u_111: 'probando',
+          u_222: 'TesterFullUnlock',
+        },
+      })
+    );
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.players[0]?.name).toBe('probando (u_111)');
+    expect(component.players[1]?.name).toBe('TesterFullUnlock (u_222)');
+  });
+
   it('reuses the classic minigame components when a realtime minigame starts in stella', async () => {
     realtimeStub.minigameStart.and.returnValue({
       player1: 'u_111',
@@ -266,6 +306,36 @@ describe('DixitStella', () => {
     expect(text).toContain('Alpha');
     expect(text).toContain('Volver a salas');
   });
+
+  it('uses gameEndedResult to finalize Stella even if the last game_state was not FINISHED', async () => {
+    realtimeStub.gameState.and.returnValue(createRealtimeState());
+    realtimeStub.gameEndedResult.and.returnValue({
+      winnerId: 'u_222',
+      winnerName: 'Beta',
+      ranking: [
+        { playerId: 'u_222', points: 9, place: 1, coinsEarned: 50 },
+        { playerId: 'u_111', points: 7, place: 2, coinsEarned: 35 },
+      ],
+      receivedAt: 3,
+    });
+
+    fixture = TestBed.createComponent(DixitStella);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.phase).toBe('FINISHED');
+    expect(component.finalWinners.map((player) => player.id)).toEqual(['u_222']);
+    expect(component.players[0]?.score).toBe(9);
+  });
+
+  it('disconnects realtime before returning to the games list from the final overlay', () => {
+    component.returnToGames();
+
+    expect(realtimeStub.disconnect).toHaveBeenCalledOnceWith(false);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/games']);
+  });
 });
 
 function createCardsFixture(count: number): DeckCard[] {
@@ -300,6 +370,7 @@ function createLobbyFixture(): Game {
 function createRealtimeState(
   overrides: {
     phase?: string;
+    playerNames?: Record<string, string>;
     currentRound?: Partial<Record<string, unknown>>;
   } = {}
 ): { state: Record<string, unknown>; receivedAt: number } {
@@ -311,6 +382,7 @@ function createRealtimeState(
       phase: overrides.phase ?? 'STELLA_MARKING',
       status: 'playing',
       players: ['u_111', 'u_222', 'u_333', 'u_444'],
+      playerNames: overrides.playerNames ?? {},
       disconnectedPlayers: [],
       scores: {
         u_111: 0,

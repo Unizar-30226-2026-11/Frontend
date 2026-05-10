@@ -857,8 +857,9 @@ export class DixitRealtime {
       return null;
     }
 
+    const playerNames = this.normalizePlayerNamesRecord(data['playerNames']);
     const players = readArray(data, 'players')
-      .map((player) => this.normalizeLobbyPlayer(player))
+      .map((player) => this.normalizeLobbyPlayer(player, playerNames))
       .filter((player): player is RealtimeLobbyPlayer => player !== null);
 
     return {
@@ -871,7 +872,10 @@ export class DixitRealtime {
 
   // Convierte cada jugador de lobby a un objeto homogéneo; acepta strings simples
   // o registros con varios alias de campos.
-  private normalizeLobbyPlayer(payload: unknown): RealtimeLobbyPlayer | null {
+  private normalizeLobbyPlayer(
+    payload: unknown,
+    playerNames: Record<string, string> = {}
+  ): RealtimeLobbyPlayer | null {
     if (typeof payload === 'string') {
       const normalizedId = payload.trim();
       if (!normalizedId) {
@@ -880,7 +884,7 @@ export class DixitRealtime {
 
       return {
         id: normalizedId,
-        username: normalizedId,
+        username: playerNames[normalizedId] ?? normalizedId,
       };
     }
 
@@ -891,7 +895,11 @@ export class DixitRealtime {
 
     const id = readString(player, 'id') ?? readString(player, 'userId') ?? readString(player, 'playerId');
     const username =
-      readString(player, 'username') ?? readString(player, 'name') ?? id ?? '';
+      readString(player, 'username') ??
+      readString(player, 'name') ??
+      (id ? playerNames[id] : null) ??
+      id ??
+      '';
 
     if (!id || !username) {
       return null;
@@ -1397,9 +1405,33 @@ export class DixitRealtime {
     this.persistGameState(nextGameState);
 
     const activeLobbyCode = this.sessionState()?.lobbyCode ?? this.auth.activeGameId();
-    if (activeLobbyCode) {
+    const normalizedPhase = readString(nextGameState.state, 'phase')?.trim().toUpperCase() ?? '';
+    if (normalizedPhase === 'FINISHED') {
+      this.auth.setActiveGameId(null);
+      this.activeGameNoticeSignal.set('');
+    } else if (activeLobbyCode) {
       this.auth.setActiveGameId(activeLobbyCode, this.resolveGameEngine(nextGameState.state));
     }
+  }
+
+  private normalizePlayerNamesRecord(value: unknown): Record<string, string> {
+    const playerNames = asRecord(value);
+    if (!playerNames) {
+      return {};
+    }
+
+    return Object.entries(playerNames).reduce<Record<string, string>>(
+      (accumulator, [playerId, username]) => {
+        const normalizedPlayerId = playerId.trim();
+        const normalizedUsername =
+          typeof username === 'string' ? username.trim() : '';
+        if (normalizedPlayerId && normalizedUsername) {
+          accumulator[normalizedPlayerId] = normalizedUsername;
+        }
+        return accumulator;
+      },
+      {}
+    );
   }
 
   // Busca el gameState utilizable dentro de los distintos envoltorios que puede

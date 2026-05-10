@@ -790,7 +790,7 @@ export class Dixit implements OnInit, OnDestroy {
     // garantiza que cada jugador tenga entrada en el marcador local.
     const nextRoster = lobbyState.players.map((player, index) => ({
       id: player.id,
-      name: player.username,
+      name: this.formatPlayerLabel(player.id, player.username),
       color: DEFAULT_PLAYER_COLORS[index % DEFAULT_PLAYER_COLORS.length],
     }));
 
@@ -942,6 +942,7 @@ export class Dixit implements OnInit, OnDestroy {
     const shouldApplyRealtimeScores =
       this.phase !== 'points' || this.pointsStage === 'ranking';
     const playerEntries = this.readArrayFromCandidates(state, ['players', 'participants']);
+    const playerNames = this.readStringRecord(state['playerNames']);
     const existingRosterById = new Map(this.playerRoster.map((player) => [player.id, player]));
     const scoresRecord = asRecord(state['scores']);
     if (!playerEntries.length) {
@@ -976,12 +977,13 @@ export class Dixit implements OnInit, OnDestroy {
       const existingPlayer = existingRosterById.get(playerId);
       const playerName =
         this.readStringFromCandidates(entry ?? {}, ['username', 'name']) ??
+        playerNames[playerId] ??
         existingPlayer?.name ??
         (playerId === this.currentUserId ? this.auth.username() || playerId : playerId);
 
       resolvedRoster.push({
         id: playerId,
-        name: playerName,
+        name: this.formatPlayerLabel(playerId, playerName),
         color: existingPlayer?.color ?? DEFAULT_PLAYER_COLORS[index % DEFAULT_PLAYER_COLORS.length],
       });
 
@@ -1254,7 +1256,8 @@ export class Dixit implements OnInit, OnDestroy {
       Math.max(this.playerRoster.length - 1, 0);
 
     const revealedCards = this.normalizeRevealedCards(
-      this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults'])
+      this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults']),
+      this.resolveStorytellerId(state)
     );
     const roundRevealCards =
       revealedCards.length > 0
@@ -1313,6 +1316,7 @@ export class Dixit implements OnInit, OnDestroy {
       },
       ownerName: this.playerRoster.find((player) => player.id === ownerId)?.name ?? ownerId,
       votes: voteCounts.get(cardCode) ?? 0,
+      isStorytellerCard: !!storytellerId && ownerId === storytellerId,
     }));
   }
 
@@ -1397,6 +1401,14 @@ export class Dixit implements OnInit, OnDestroy {
       return resolvedPhaseFromState;
     }
 
+    const structuralPhaseFallback = this.resolveStructuralPhaseFallback(
+      state,
+      normalizedAction
+    );
+    if (structuralPhaseFallback) {
+      return structuralPhaseFallback;
+    }
+
     if (normalizedAction.includes('ended') || normalizedAction.includes('finish')) {
       return { phase: 'finished', pointsStage: 'ranking' };
     }
@@ -1423,6 +1435,38 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     return { phase: 'hand', pointsStage: 'waiting' };
+  }
+
+  private resolveStructuralPhaseFallback(
+    state: Record<string, unknown>,
+    normalizedAction: string
+  ): ResolvedPhaseState | null {
+    const currentRoundState = this.resolveCurrentRoundState(state);
+    const storytellerId = this.resolveStorytellerId(state);
+    const hasVotes = this.normalizeRoundVotes(currentRoundState).length > 0;
+    const hasRevealPayload =
+      this.normalizeRevealedCards(
+        this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults'])
+      ).length > 0;
+    const hasRankingPayload =
+      this.normalizeRanking(this.readArrayFromCandidates(state, ['ranking', 'scoreboard'])).length >
+      0;
+
+    // Despues de un minijuego o conflicto el backend puede mandar un update de la
+    // nueva ronda sin state.phase, mientras lastAction conserva un valor antiguo
+    // relacionado con reveal/ranking. Si ya vemos storyteller de nueva ronda y no
+    // hay ninguna senal estructural de scoring, debemos volver a la fase de mano.
+    if (
+      storytellerId &&
+      (normalizedAction.includes('reveal') || normalizedAction.includes('ranking')) &&
+      !hasVotes &&
+      !hasRevealPayload &&
+      !hasRankingPayload
+    ) {
+      return { phase: 'hand', pointsStage: 'waiting' };
+    }
+
+    return null;
   }
 
   private mapRealtimePhase(rawPhase: string): ResolvedPhaseState | null {
@@ -1923,7 +1967,10 @@ export class Dixit implements OnInit, OnDestroy {
     );
   }
 
-  private normalizeRevealedCards(entries: unknown[]): DixitRevealedCard[] {
+  private normalizeRevealedCards(
+    entries: unknown[],
+    storytellerId: string | null = null
+  ): DixitRevealedCard[] {
     // Normaliza estructuras de reveal ya preparadas por backend si vienen disponibles.
     return entries
       .map((entry, index) => {
@@ -1940,12 +1987,20 @@ export class Dixit implements OnInit, OnDestroy {
           return null;
         }
 
+        const ownerId =
+          this.readStringFromCandidates(result, ['ownerId', 'playerId', 'userId']) ?? '';
+        const storytellerCardFlag = result['isStorytellerCard'] ?? result['storytellerCard'];
+
         return {
           card,
           ownerName:
             this.readStringFromCandidates(result, ['ownerName', 'username', 'playerName']) ??
             'Jugador',
           votes: this.readNumber(result, ['votes', 'voteCount']) ?? 0,
+          isStorytellerCard:
+            typeof storytellerCardFlag === 'boolean'
+              ? storytellerCardFlag
+              : !!storytellerId && !!ownerId && ownerId === storytellerId,
         };
       })
       .filter((entry): entry is DixitRevealedCard => entry !== null);
@@ -2420,7 +2475,8 @@ export class Dixit implements OnInit, OnDestroy {
       this.choiceCards,
       this.playerRoster,
       this.selectedChoiceCardCode,
-      this.localCurrentPlayerId
+      this.localCurrentPlayerId,
+      this.resolveStorytellerId(this.realtime.gameState()?.state ?? {}) ?? ''
     );
   }
 
@@ -2918,6 +2974,40 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     return this.playerRoster.find((player) => player.id === playerId)?.name ?? playerId;
+  }
+
+  private formatPlayerLabel(playerId: string, username: string | null | undefined): string {
+    const normalizedPlayerId = playerId.trim();
+    const normalizedUsername = username?.trim() ?? '';
+    if (!normalizedPlayerId) {
+      return normalizedUsername;
+    }
+
+    if (normalizedUsername.endsWith(`(${normalizedPlayerId})`)) {
+      return normalizedUsername;
+    }
+
+    if (!normalizedUsername || normalizedUsername === normalizedPlayerId) {
+      return normalizedPlayerId;
+    }
+
+    return `${normalizedUsername} (${normalizedPlayerId})`;
+  }
+
+  private readStringRecord(value: unknown): Record<string, string> {
+    const source = asRecord(value);
+    if (!source) {
+      return {};
+    }
+
+    return Object.entries(source).reduce<Record<string, string>>((accumulator, [playerId, username]) => {
+      const normalizedPlayerId = playerId.trim();
+      const normalizedUsername = typeof username === 'string' ? username.trim() : '';
+      if (normalizedPlayerId && normalizedUsername) {
+        accumulator[normalizedPlayerId] = normalizedUsername;
+      }
+      return accumulator;
+    }, {});
   }
 
   formatPlace(place: number): string {

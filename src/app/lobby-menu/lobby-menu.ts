@@ -435,12 +435,12 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
         ? this.currentLobbyPlayers
         : lobby.players.map((playerId) => ({
             id: playerId,
-            username: playerId,
+            username: lobby.playerNames?.[playerId] ?? playerId,
           }));
 
     const occupiedSlots = players.map((player, index) => ({
       slotId: index + 1,
-      name: player.username,
+      name: this.formatPlayerLabel(player.id, player.username),
       state:
         player.id === lobby.hostId
           ? 'anfitrion'
@@ -607,6 +607,10 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
       id: lobbyState.code,
       hostId: lobbyState.hostId || fallbackLobby.hostId,
       players: lobbyState.players.map((player) => player.id),
+      playerNames: lobbyState.players.reduce<Record<string, string>>((accumulator, player) => {
+        accumulator[player.id] = player.username;
+        return accumulator;
+      }, {}),
       playerCount: this.playersInRoom,
       maxPlayers: this.roomCapacity,
     };
@@ -627,5 +631,23 @@ export class LobbyMenu extends MenuShowcaseState implements OnInit {
 
   private resolveStartedGameEngine(gameStarted: RealtimeGameStarted): LobbyEngine {
     return gameStarted.engine ?? this.resolveCurrentLobbyEngine(gameStarted.state);
+  }
+
+  private formatPlayerLabel(playerId: string, username: string | null | undefined): string {
+    const normalizedPlayerId = playerId.trim();
+    const normalizedUsername = username?.trim() ?? '';
+    if (!normalizedPlayerId) {
+      return normalizedUsername;
+    }
+
+    if (normalizedUsername.endsWith(`(${normalizedPlayerId})`)) {
+      return normalizedUsername;
+    }
+
+    if (!normalizedUsername || normalizedUsername === normalizedPlayerId) {
+      return normalizedPlayerId;
+    }
+
+    return `${normalizedUsername} (${normalizedPlayerId})`;
   }
 }

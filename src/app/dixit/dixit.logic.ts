@@ -28,7 +28,8 @@ export function buildRevealAndRanking(
   choiceCards: DeckCard[],
   playerRoster: readonly RosterPlayer[],
   selectedChoiceCardCode: string,
-  currentPlayerId: string
+  currentPlayerId: string,
+  storytellerId: string
 ): {
   revealedCards: DixitRevealedCard[];
   ranking: DixitRankingRow[];
@@ -70,6 +71,7 @@ export function buildRevealAndRanking(
     card,
     ownerName: activePlayers[index].name,
     votes: voteCounts.get(card.code) ?? 0,
+    isStorytellerCard: activePlayers[index].id === storytellerId,
   }));
 
   const ranking = activePlayers
