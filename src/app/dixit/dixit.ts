@@ -1490,14 +1490,15 @@ export class Dixit implements OnInit, OnDestroy {
         'result',
         'results',
         'resolution',
-        'score',
-        'scores',
-        'scoring',
         'points',
         'point',
       ])
     ) {
       return { phase: 'points', pointsStage: 'reveal' };
+    }
+
+    if (this.phaseMatches(normalizedPhase, ['ranking', 'rank', 'score', 'scores', 'scoring'])) {
+      return { phase: 'points', pointsStage: 'ranking' };
     }
 
     if (
@@ -2296,6 +2297,7 @@ export class Dixit implements OnInit, OnDestroy {
     }
 
     this.isMinigameCountdownOpen = false;
+    this.closeActiveMinigameViews();
     this.minigameResultSent = true;
     this.minigameUiState = 'waiting';
     this.minigameStatusMessage = 'Puntuacion enviada. Esperando al rival...';
@@ -2308,6 +2310,7 @@ export class Dixit implements OnInit, OnDestroy {
       this.minigameResultSent = false;
       this.minigameUiState = 'playing';
       this.minigameStatusMessage = '';
+      this.openMinigameView(this.resolveMinigameView(this.activeMinigame.type));
       return;
     }
   }
@@ -2756,25 +2759,26 @@ export class Dixit implements OnInit, OnDestroy {
 
   private openMinigameView(minigameView: 1 | 2 | 3 | null): void {
     if (minigameView === null) {
-      this.isMinigame1Open = false;
-      this.isMinigame2Open = false;
-      this.isMinigame3Open = false;
+      this.closeActiveMinigameViews();
       this.minigameUiState = 'waiting';
       this.minigameStatusMessage = 'Este minijuego aun no esta disponible. Enviando resultado neutro...';
       this.scheduleUnavailableMinigameSubmit(this.activeMinigameDurationMs);
     } else if (minigameView === 2) {
-      this.isMinigame1Open = false;
+      this.closeActiveMinigameViews();
       this.isMinigame2Open = true;
-      this.isMinigame3Open = false;
     } else if (minigameView === 3) {
-      this.isMinigame1Open = false;
-      this.isMinigame2Open = false;
+      this.closeActiveMinigameViews();
       this.isMinigame3Open = true;
     } else {
+      this.closeActiveMinigameViews();
       this.isMinigame1Open = true;
-      this.isMinigame2Open = false;
-      this.isMinigame3Open = false;
     }
+  }
+
+  private closeActiveMinigameViews(): void {
+    this.isMinigame1Open = false;
+    this.isMinigame2Open = false;
+    this.isMinigame3Open = false;
   }
 
   onMinigameCountdownFinished(): void {
