@@ -1,8 +1,9 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { buildGameRoute } from '../interfaces/game';
+import { isApiRequestErrorStatus } from '../interfaces/api';
 import { Auth } from '../services/auth';
+import { DixitRealtime } from '../services/dixit-realtime';
 import { LoginForm } from './components/login-form/login-form';
 
 @Component({
@@ -152,6 +153,7 @@ import { LoginForm } from './components/login-form/login-form';
 export class Login {
   private readonly router = inject(Router);
   private readonly auth = inject(Auth);
+  private readonly realtime = inject(DixitRealtime);
 
   error: string | null = null;
   submitting = false;
@@ -166,9 +168,19 @@ export class Login {
 
     try {
       const session = await this.auth.logIn(email, password);
-      const targetRoute = session.activeGameId
-        ? buildGameRoute(session.activeGameId, session.activeGameEngine ?? 'Classic')
-        : '/menu';
+      if (session.activeGameId) {
+        this.auth.setActiveGameId(session.activeGameId, session.activeGameEngine);
+        try {
+          await this.realtime.restoreActiveGameConnection(session.activeGameId);
+        } catch (error) {
+          console.error('[Login] No se pudo restaurar la partida activa tras iniciar sesion:', error);
+          if (isApiRequestErrorStatus(error, 404) && this.auth.activeGameId() === session.activeGameId) {
+            this.auth.setActiveGameId(null);
+          }
+        }
+      }
+
+      const targetRoute = '/menu';
       await this.router.navigateByUrl(targetRoute);
     } catch (error: unknown) {
       this.error =

@@ -184,7 +184,11 @@ describe('Dixit', () => {
       receivedAt: Date.now(),
     });
 
-    expect(component.playerRows.map((player) => player.name)).toEqual(['Ada', 'Bruno', 'Carla']);
+    expect(component.playerRows.map((player) => player.name)).toEqual([
+      'Ada (u_18)',
+      'Bruno (u_19)',
+      'Carla (u_53)',
+    ]);
     expect(component.playerRows.map((player) => player.points)).toEqual([4, 1, 7]);
     expect(component.boardTokens.map((token) => ({ id: token.id, position: token.position }))).toEqual([
       { id: 'u_18', position: 4 },
@@ -835,6 +839,43 @@ describe('Dixit', () => {
     expect(component.pointsRanking[0].playerId).toBe('cpu_1');
   });
 
+  it('highlights the storyteller card during revealed scoring', async () => {
+    await initializeComponent(fixture);
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'SCORING',
+        scores: {
+          u_self: 3,
+          cpu_1: 5,
+          cpu_2: 2,
+        },
+        currentRound: {
+          storytellerId: 'cpu_1',
+          storytellerCardId: '17',
+          playedCards: {
+            u_self: 42,
+            cpu_1: 17,
+            cpu_2: 89,
+          },
+          votes: [
+            { voterId: 'u_self', targetCardId: 17 },
+            { voterId: 'cpu_2', targetCardId: 17 },
+          ],
+        },
+      },
+      receivedAt: Date.now(),
+    });
+    fixture.detectChanges();
+
+    const storytellerCard = component.pointsRevealedCards.find((entry) => entry.card.code === '17');
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    expect(storytellerCard?.isStorytellerCard).toBeTrue();
+    expect(compiled.textContent).toContain('Carta del cuenta-cuentos');
+    expect(compiled.querySelector('.storyteller-card')).not.toBeNull();
+  });
+
   it('uses currentRound.boardCardsDetailed image urls during revealed scoring', async () => {
     await initializeComponent(fixture);
 
@@ -1125,6 +1166,7 @@ describe('Dixit', () => {
         card: createCardsFixture()[0],
         ownerName: 'Jugador test',
         votes: 1,
+        isStorytellerCard: true,
       },
     ];
     component.pointsRanking = [
@@ -1203,6 +1245,41 @@ describe('Dixit', () => {
     expect(component.handSubmitted).toBeFalse();
     expect(component.selectedHandCardCode).toBe('');
     expect(component.clueDraft).toBe('');
+  });
+
+  it('does not fall back to reveal when a new storytelling update omits phase after a minigame', async () => {
+    await initializeComponent(fixture);
+
+    component.phase = 'points';
+    component.pointsStage = 'reveal';
+
+    component['applyRealtimeGameState']({
+      state: {
+        phase: 'STORYTELLING',
+        roundNumber: 2,
+        currentRound: {
+          storytellerId: 'u_self',
+        },
+      },
+      lastAction: 'CONFLICT_RESOLVED',
+      receivedAt: Date.now(),
+    });
+
+    component['applyRealtimeGameState']({
+      state: {
+        roundNumber: 2,
+        currentRound: {
+          storytellerId: 'u_self',
+        },
+      },
+      lastAction: 'CARD_REVEALED',
+      receivedAt: Date.now() + 1,
+    });
+
+    expect(component.phase).toBe('hand');
+    expect(component.pointsStage).toBe('waiting');
+    expect(component.pointsRevealedCards).toEqual([]);
+    expect(component.pointsRanking).toEqual([]);
   });
 
   it('prepares the next round from the ranking state', async () => {

@@ -66,4 +66,31 @@ describe('GamesPull', () => {
 
     expect(result.route).toBe('/game/ROOM7');
   });
+
+  it('preserves playerNames from lobby details responses', async () => {
+    apiClientSpy.request.and.resolveTo({
+      message: 'Detalle',
+      lobby: {
+        lobbyCode: 'ABCD',
+        name: 'Sala con nombres',
+        hostId: 'u_111',
+        players: ['u_111', 'u_222'],
+        playerNames: {
+          u_111: 'probando',
+          u_222: 'TesterFullUnlock',
+        },
+        maxPlayers: 4,
+        engine: 'STANDARD',
+        status: 'waiting',
+        isPrivate: false,
+      },
+    });
+
+    const result = await service.getGameDetails('ABCD');
+
+    expect(result.playerNames).toEqual({
+      u_111: 'probando',
+      u_222: 'TesterFullUnlock',
+    });
+  });
 });

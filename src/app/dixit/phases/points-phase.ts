@@ -10,6 +10,7 @@ export interface DixitRevealedCard {
   card: DeckCard;
   ownerName: string;
   votes: number;
+  isStorytellerCard: boolean;
 }
 
 export interface DixitRankingRow {
@@ -47,7 +48,10 @@ export interface DixitRankingRow {
           <h3>Cartas reveladas</h3>
           <div class="reveal-grid">
             @for (result of revealedCards; track result.card.code; let cardIndex = $index) {
-              <article class="reveal-card" [style.--reveal-index]="cardIndex">
+              <article
+                class="reveal-card"
+                [class.storyteller-card]="result.isStorytellerCard"
+                [style.--reveal-index]="cardIndex">
                 <div class="reveal-card-media">
                   <img
                     draggable="false"
@@ -55,6 +59,9 @@ export interface DixitRankingRow {
                     [alt]="result.card.value + ' de ' + result.card.suit"
                   />
                 </div>
+                @if (result.isStorytellerCard) {
+                  <p class="storyteller-badge">Carta del cuenta-cuentos</p>
+                }
                 <p class="owner">{{ result.ownerName }}</p>
                 <p class="votes">{{ result.votes }} voto{{ result.votes === 1 ? '' : 's' }}</p>
               </article>
@@ -152,6 +159,7 @@ export interface DixitRankingRow {
     .reveal-card {
       --reveal-index: 0;
       background: rgba(0, 0, 0, 0.18);
+      border: 2px solid transparent;
       border-radius: 10px;
       padding: 8px;
       text-align: center;
@@ -159,6 +167,15 @@ export interface DixitRankingRow {
       transform: translateY(14px) scale(0.98);
       animation: reveal-card-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
       animation-delay: calc(var(--reveal-index) * 70ms);
+    }
+
+    .reveal-card.storyteller-card {
+      border-color: rgba(214, 68, 68, 0.95);
+      box-shadow:
+        0 0 0 1px rgba(255, 214, 214, 0.2),
+        0 12px 28px rgba(128, 19, 19, 0.25);
+      background:
+        linear-gradient(180deg, rgba(133, 21, 21, 0.28), rgba(0, 0, 0, 0.18));
     }
 
     .reveal-card-media {
@@ -179,6 +196,15 @@ export interface DixitRankingRow {
       display: block;
       object-fit: cover;
       object-position: center;
+    }
+
+    .storyteller-badge {
+      margin: 2px 0 8px;
+      color: #ffd6d6;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     .owner {

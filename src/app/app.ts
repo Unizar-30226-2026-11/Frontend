@@ -64,6 +64,7 @@ export class App {
     }
 
     return (
+      this.currentPath() !== '/' &&
       !this.currentPath().startsWith('/game/') &&
       !this.currentPath().startsWith('/dixit/') &&
       !this.currentPath().startsWith('/test/dixit') &&
@@ -94,6 +95,10 @@ export class App {
     return this.router.url.split('?')[0].split('#')[0] || '/';
   }
 
+  private shouldKeepCurrentRouteWithActiveGame(currentPath: string): boolean {
+    return currentPath === '/menu' || currentPath === '/games';
+  }
+
   private async bootstrapRecoveredGameSession(): Promise<void> {
     const session = await this.auth.ensureInitialized();
     const activeGameId = session?.activeGameId;
@@ -121,7 +126,11 @@ export class App {
 
     const activeGameRoute =
       this.auth.activeGameRoute() ?? `/game/${encodeURIComponent(activeGameId)}`;
-    if (this.currentPath() !== activeGameRoute) {
+    const currentPath = this.currentPath();
+    if (
+      currentPath !== activeGameRoute &&
+      !this.shouldKeepCurrentRouteWithActiveGame(currentPath)
+    ) {
       await this.router.navigateByUrl(activeGameRoute);
     }
   }

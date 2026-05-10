@@ -168,8 +168,8 @@ describe('LobbyMenu', () => {
     expect(component.playersInRoom).toBe(2);
     expect(component.roomCapacity).toBe(4);
     expect(component.roomSlots).toEqual([
-      { slotId: 1, name: 'u_111', state: 'anfitrion' },
-      { slotId: 2, name: 'u_222', state: 'jugador' },
+      { slotId: 1, name: 'probando (u_111)', state: 'anfitrion' },
+      { slotId: 2, name: 'TesterFullUnlock (u_222)', state: 'jugador' },
       { slotId: 3, name: 'slot libre', state: 'abierto' },
       { slotId: 4, name: 'slot libre', state: 'abierto' },
     ]);
@@ -406,6 +406,10 @@ function createLobbyFixture(): Game {
     image: '/assets/Tablero.png',
     hostId: 'u_111',
     players: ['u_111', 'u_222'],
+    playerNames: {
+      u_111: 'probando',
+      u_222: 'TesterFullUnlock',
+    },
     playerCount: 2,
     maxPlayers: 4,
     engine: 'Classic',

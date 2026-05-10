@@ -1,7 +1,9 @@
 import {
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   Input,
+  inject,
   OnChanges,
   OnDestroy,
   Output,
@@ -137,6 +139,7 @@ export const MINIGAME_COUNTDOWN_MS = MINIGAME_COUNTDOWN_SECONDS * 1000;
   `,
 })
 export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
+  private readonly cdr = inject(ChangeDetectorRef);
   @Input() eyebrow = 'Desempate';
   @Input() title = 'Minijuego';
   @Input() copy = 'El minijuego empezara en';
@@ -169,8 +172,10 @@ export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
   private startCountdown(): void {
     this.clearTimer();
     this.secondsLeft = Math.max(1, Math.ceil(this.seconds));
+    this.cdr.detectChanges();
     this.timer = setInterval(() => {
       this.secondsLeft = Math.max(0, this.secondsLeft - 1);
+      this.cdr.detectChanges();
       if (this.secondsLeft === 0) {
         this.clearTimer();
         this.finished.emit();

@@ -6,6 +6,7 @@ export interface LobbySummaryApi {
   name: string;
   hostId: string;
   players: string[];
+  playerNames?: Record<string, string>;
   maxPlayers: number;
   engine: LobbyEngineApi;
   status: string;
@@ -77,6 +78,7 @@ export interface Game {
   image: string;
   hostId: string;
   players: string[];
+  playerNames?: Record<string, string>;
   playerCount: number;
   maxPlayers: number;
   engine: LobbyEngine;

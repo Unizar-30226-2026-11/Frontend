@@ -4,7 +4,8 @@
 @if (shouldShowActiveGameBanner()) {
   <section class="active-game-banner" role="status" aria-live="polite">
     <div class="active-game-copy">
-      <strong>Partida en curso</strong>
+      <p class="active-game-eyebrow">Partida activa detectada</p>
+      <strong>Tu sesion tiene una partida en curso</strong>
       <span>{{ activeGameBannerMessage() }}</span>
     </div>
     <button type="button" class="active-game-button" (click)="goToActiveGame()">
