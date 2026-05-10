@@ -81,14 +81,6 @@
                 <p class="eyebrow">Carta de palabra</p>
                 <h2>{{ activeWord }}</h2>
               </div>
-
-              @if (activeWordCard; as wordCard) {
-                <div class="word-card">
-                  <span>{{ wordCard.terms[0] }}</span>
-                  <strong>{{ activeWord }}</strong>
-                  <span>{{ wordCard.terms[1] }}</span>
-                </div>
-              }
             </section>
 
             <section class="board-grid" [class.limit-hit]="limitFeedbackActive">
@@ -478,12 +470,30 @@
 
     @if (isMinigameCountdownVisible) {
       <app-minigame-countdown-overlay
-        [eyebrow]="activeMinigameCountdownEyebrow"
-        [title]="activeMinigameCountdownTitle"
+        eyebrow="Desempate"
+        [title]="'¡Vaya! has empatado con ' + activeMinigameOpponentName"
         copy="Preparate para el minijuego en..."
         [resetKey]="activeMinigameSeedKey"
         (finished)="onMinigameCountdownFinished()"
       />
+    }
+
+    @if (activeMinigame && isCurrentPlayerInActiveMinigame && minigameUiState !== 'playing') {
+      <div class="modal-backdrop" style="z-index: 44">
+        <article
+          class="modal-card minigame-status-card minigame-result-card"
+          [class.result-won]="minigameUiState === 'won'"
+          [class.result-lost]="minigameUiState === 'lost'"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div class="modal-copy">
+            <p class="eyebrow">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
+            <h3>{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h3>
+            <p>{{ minigameStatusMessage }}</p>
+          </div>
+        </article>
+      </div>
     }
 
     @if (isMinigame1Open) {
@@ -495,17 +505,6 @@
         (close)="closeMinigame1()"
         (finished)="onMinigameFinished($event)"
       />
-      @if (activeMinigame && minigameUiState !== 'playing') {
-        <div class="modal-backdrop">
-          <article class="modal-card minigame-status-card" role="dialog" aria-modal="true">
-            <div class="modal-copy">
-              <p class="eyebrow">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
-              <h3>{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h3>
-              <p>{{ minigameStatusMessage }}</p>
-            </div>
-          </article>
-        </div>
-      }
     }
 
     @if (isMinigame2Open) {
@@ -517,17 +516,6 @@
         (close)="closeMinigame2()"
         (finished)="onMinigameFinished($event)"
       />
-      @if (activeMinigame && minigameUiState !== 'playing') {
-        <div class="modal-backdrop">
-          <article class="modal-card minigame-status-card" role="dialog" aria-modal="true">
-            <div class="modal-copy">
-              <p class="eyebrow">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
-              <h3>{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h3>
-              <p>{{ minigameStatusMessage }}</p>
-            </div>
-          </article>
-        </div>
-      }
     }
 
     @if (isMinigame3Open) {
@@ -538,17 +526,6 @@
         (close)="closeMinigame3()"
         (finished)="onMinigameFinished($event)"
       />
-      @if (activeMinigame && minigameUiState !== 'playing') {
-        <div class="modal-backdrop">
-          <article class="modal-card minigame-status-card" role="dialog" aria-modal="true">
-            <div class="modal-copy">
-              <p class="eyebrow">{{ activeMinigame.isDuel ? 'Duelo' : 'Desempate' }}</p>
-              <h3>{{ minigameUiState === 'won' ? 'Victoria' : minigameUiState === 'lost' ? 'Derrota' : 'Minijuego' }}</h3>
-              <p>{{ minigameStatusMessage }}</p>
-            </div>
-          </article>
-        </div>
-      }
     }
 
     @if (phase === 'FINISHED') {

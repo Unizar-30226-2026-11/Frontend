@@ -836,7 +836,12 @@ describe('Dixit', () => {
     expect(component.phase).toBe('points');
     expect(component.pointsStage).toBe('reveal');
     expect(component.pointsRevealedCards.length).toBe(3);
+    expect(
+      component.pointsRevealedCards.find((entry) => entry.card.code === '17')?.isStorytellerCard
+    ).toBeTrue();
     expect(component.pointsRanking[0].playerId).toBe('cpu_1');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent as string).toContain('Carta del cuenta-cuentos');
   });
 
   it('highlights the storyteller card during revealed scoring', async () => {

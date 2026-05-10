@@ -2,10 +2,11 @@ import {
   ChangeDetectorRef,
   Component,
   EventEmitter,
-  Input,
   inject,
+  Input,
   OnChanges,
   OnDestroy,
+  OnInit,
   Output,
   SimpleChanges,
 } from '@angular/core';
@@ -138,8 +139,9 @@ export const MINIGAME_COUNTDOWN_MS = MINIGAME_COUNTDOWN_SECONDS * 1000;
     }
   `,
 })
-export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
+export class MinigameCountdownOverlay implements OnChanges, OnDestroy, OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
+
   @Input() eyebrow = 'Desempate';
   @Input() title = 'Minijuego';
   @Input() copy = 'El minijuego empezara en';
@@ -150,6 +152,10 @@ export class MinigameCountdownOverlay implements OnChanges, OnDestroy {
 
   secondsLeft = MINIGAME_COUNTDOWN_SECONDS;
   private timer: ReturnType<typeof setInterval> | null = null;
+
+  ngOnInit(): void {
+    this.startCountdown();
+  }
 
   get displayTitle(): string {
     return this.sanitizeCopy(this.title);

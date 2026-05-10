@@ -1256,8 +1256,7 @@ export class Dixit implements OnInit, OnDestroy {
       Math.max(this.playerRoster.length - 1, 0);
 
     const revealedCards = this.normalizeRevealedCards(
-      this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults']),
-      this.resolveStorytellerId(state)
+      this.readArrayFromCandidates(state, ['revealedCards', 'results', 'roundResults'])
     );
     const roundRevealCards =
       revealedCards.length > 0
@@ -1285,7 +1284,9 @@ export class Dixit implements OnInit, OnDestroy {
     // cuando el backend aún no manda una estructura de reveal más elaborada.
     const cardOwners = new Map<string, string>();
     const storytellerId = this.resolveStorytellerId({ currentRound: currentRoundState });
-    const storytellerCardCode = this.normalizeDynamicCardCode(currentRoundState['storytellerCardId']);
+    const storytellerCardCode =
+      this.normalizeDynamicCardCode(currentRoundState['storytellerCardId']) ??
+      this.normalizeDynamicCardCode(currentRoundState['storytellerCardCode']);
     if (storytellerId && storytellerCardCode) {
       cardOwners.set(storytellerCardCode, storytellerId);
     }
@@ -1316,7 +1317,7 @@ export class Dixit implements OnInit, OnDestroy {
       },
       ownerName: this.playerRoster.find((player) => player.id === ownerId)?.name ?? ownerId,
       votes: voteCounts.get(cardCode) ?? 0,
-      isStorytellerCard: !!storytellerId && ownerId === storytellerId,
+      isStorytellerCard: !!storytellerCardCode && cardCode === storytellerCardCode,
     }));
   }
 
@@ -1747,7 +1748,7 @@ export class Dixit implements OnInit, OnDestroy {
     const knownCard = this.findKnownCardByCode(code);
     const image =
       this.preferKnownCardImage(
-          this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
+        this.readStringFromCandidates(card, ['url_image', 'image', 'imageUrl', 'image_url', 'url']) ??
           this.dynamicCardUrls.get(code) ??
           this.resolveDefaultCardImage(),
         knownCard
@@ -1967,13 +1968,10 @@ export class Dixit implements OnInit, OnDestroy {
     );
   }
 
-  private normalizeRevealedCards(
-    entries: unknown[],
-    storytellerId: string | null = null
-  ): DixitRevealedCard[] {
+  private normalizeRevealedCards(entries: unknown[]): DixitRevealedCard[] {
     // Normaliza estructuras de reveal ya preparadas por backend si vienen disponibles.
     return entries
-      .map((entry, index) => {
+      .map((entry, index): DixitRevealedCard | null => {
         const result = asRecord(entry);
         if (!result) {
           return null;
@@ -1986,21 +1984,13 @@ export class Dixit implements OnInit, OnDestroy {
         if (!card) {
           return null;
         }
-
-        const ownerId =
-          this.readStringFromCandidates(result, ['ownerId', 'playerId', 'userId']) ?? '';
-        const storytellerCardFlag = result['isStorytellerCard'] ?? result['storytellerCard'];
-
         return {
           card,
           ownerName:
             this.readStringFromCandidates(result, ['ownerName', 'username', 'playerName']) ??
             'Jugador',
           votes: this.readNumber(result, ['votes', 'voteCount']) ?? 0,
-          isStorytellerCard:
-            typeof storytellerCardFlag === 'boolean'
-              ? storytellerCardFlag
-              : !!storytellerId && !!ownerId && ownerId === storytellerId,
+          isStorytellerCard: false,
         };
       })
       .filter((entry): entry is DixitRevealedCard => entry !== null);
