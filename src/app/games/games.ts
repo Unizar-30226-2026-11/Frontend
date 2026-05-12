@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -16,36 +16,62 @@ import { Auth } from '../services/auth';
       <header class="games-header">
         <div class="games-header-copy">
           <h1>Salas disponibles</h1>
-          <span class="games-count">{{ games().length }} resultados</span>
+          <span class="games-count">{{ filteredGames().length }} resultados</span>
         </div>
 
         <div class="lobby-header-actions">
-          <button
-            type="button"
-            class="create-lobby-button"
-            [disabled]="!auth.isLoggedIn() || createLobbyLoading()"
-            (click)="toggleCreateLobbyPanel()"
-          >
-            {{ isCreateLobbyPanelOpen() ? 'Cerrar' : 'Crear lobby' }}
-          </button>
+          <div class="lobby-search-group">
+            <label class="lobby-search-field">
+              <span class="sr-only">Buscar lobby por nombre completo</span>
+              <input
+                type="text"
+                maxlength="50"
+                [value]="searchLobbyName"
+                [disabled]="!auth.isLoggedIn() || loading()"
+                placeholder="Nombre exacto de la sala"
+                autocomplete="off"
+                (input)="updateSearchLobbyName($event)"
+              />
+            </label>
 
-          <button
-            type="button"
-            class="create-lobby-button"
-            [disabled]="!auth.isLoggedIn() || privateLobbyLoading()"
-            (click)="togglePrivateLobbyPanel()"
-          >
-            {{ isPrivateLobbyPanelOpen() ? 'Cerrar' : 'Insertar codigo' }}
-          </button>
+            <button
+              type="button"
+              class="submit-lobby-button search-lobby-button"
+              [disabled]="!auth.isLoggedIn() || loading() || !canSearchLobby()"
+              (click)="submitLobbySearch()"
+            >
+              {{ loading() ? 'Buscando...' : 'Buscar' }}
+            </button>
+          </div>
 
-          <button
-            type="button"
-            class="create-lobby-button"
-            [disabled]="!auth.isLoggedIn() || loading()"
-            (click)="refreshLobbies()"
-          >
-            {{ loading() ? 'Actualizando...' : 'Actualizar lobbies' }}
-          </button>
+          <div class="lobby-action-group">
+            <button
+              type="button"
+              class="create-lobby-button"
+              [disabled]="!auth.isLoggedIn() || createLobbyLoading()"
+              (click)="toggleCreateLobbyPanel()"
+            >
+              {{ isCreateLobbyPanelOpen() ? 'Cerrar' : 'Crear lobby' }}
+            </button>
+
+            <button
+              type="button"
+              class="create-lobby-button"
+              [disabled]="!auth.isLoggedIn() || privateLobbyLoading()"
+              (click)="togglePrivateLobbyPanel()"
+            >
+              {{ isPrivateLobbyPanelOpen() ? 'Cerrar' : 'Insertar codigo' }}
+            </button>
+
+            <button
+              type="button"
+              class="create-lobby-button"
+              [disabled]="!auth.isLoggedIn() || loading()"
+              (click)="refreshLobbies()"
+            >
+              {{ loading() ? 'Actualizando...' : 'Actualizar lobbies' }}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -171,13 +197,13 @@ import { Auth } from '../services/auth';
         <div class="loading-error">
           {{ error() }}
         </div>
-      } @else if (games().length === 0) {
+      } @else if (filteredGames().length === 0) {
         <div class="loading-error">
           No hay salas disponibles.
         </div>
       } @else {
         <div class="games-grid">
-          @for (game of games(); track game.id) {
+          @for (game of filteredGames(); track game.id) {
             <app-game-card
               [gameTitle]="game.title"
               [gameImage]="game.image"
@@ -223,10 +249,10 @@ import { Auth } from '../services/auth';
     }
 
     .lobby-header-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
+      display: grid;
+      gap: 12px;
+      width: min(100%, 780px);
+      margin-left: auto;
     }
 
     .create-lobby-button,
@@ -237,6 +263,7 @@ import { Auth } from '../services/auth';
       font-weight: 700;
       cursor: pointer;
       transition: transform 160ms ease, opacity 160ms ease;
+      min-height: 48px;
     }
 
     .create-lobby-button {
@@ -253,6 +280,55 @@ import { Auth } from '../services/auth';
     .submit-lobby-button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    .lobby-search-group {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .lobby-action-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .lobby-action-group .create-lobby-button {
+      flex: 1 1 180px;
+    }
+
+    .lobby-search-field {
+      min-width: 0;
+    }
+
+    .lobby-search-field input {
+      width: 100%;
+      min-height: 48px;
+      border-radius: 999px;
+      border: 1px solid rgba(16, 18, 24, 0.16);
+      padding: 0 18px;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.92);
+      color: #1d2430;
+      box-sizing: border-box;
+    }
+
+    .search-lobby-button {
+      min-width: 116px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .code-field input {
@@ -384,9 +460,21 @@ import { Auth } from '../services/auth';
     }
 
     @media (max-width: 760px) {
-      .lobby-header-actions,
-      .lobby-header-actions .create-lobby-button {
+      .lobby-header-actions {
         width: 100%;
+      }
+
+      .lobby-search-group {
+        grid-template-columns: 1fr;
+      }
+
+      .search-lobby-button,
+      .lobby-action-group .create-lobby-button {
+        width: 100%;
+      }
+
+      .lobby-action-group {
+        display: grid;
       }
 
       .private-lobby-grid {
@@ -401,6 +489,16 @@ export class Games {
   private readonly router = inject(Router);
 
   readonly games = signal<Game[]>([]);
+  readonly filteredGames = computed(() => {
+    const normalizedSearch = this.appliedSearchLobbyName().trim().toLocaleLowerCase();
+    if (!normalizedSearch) {
+      return this.games();
+    }
+
+    return this.games().filter(
+      (game) => game.title.trim().toLocaleLowerCase() === normalizedSearch
+    );
+  });
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly isCreateLobbyPanelOpen = signal(false);
@@ -421,6 +519,8 @@ export class Games {
   createLobbyEngine: LobbyEngine = 'Classic';
   createLobbyPrivate = false;
   privateLobbyCode = '';
+  searchLobbyName = '';
+  private readonly appliedSearchLobbyName = signal('');
 
   constructor() {
     if (this.auth.isLoggedIn()) {
@@ -457,7 +557,37 @@ export class Games {
       return Promise.resolve();
     }
 
-    return this.loadGames(1, 20, { forceRefresh: true });
+    this.searchLobbyName = '';
+    this.appliedSearchLobbyName.set('');
+
+    return this.loadGames(1, 20, {
+      forceRefresh: true,
+    });
+  }
+
+  canSearchLobby(): boolean {
+    return this.searchLobbyName.trim().length > 0;
+  }
+
+  updateSearchLobbyName(event: Event): void {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    this.searchLobbyName = target.value;
+  }
+
+  submitLobbySearch(): Promise<void> {
+    if (!this.auth.isLoggedIn() || this.loading() || !this.canSearchLobby()) {
+      return Promise.resolve();
+    }
+
+    const normalizedSearch = this.searchLobbyName.trim();
+    this.searchLobbyName = normalizedSearch;
+    this.appliedSearchLobbyName.set(normalizedSearch);
+
+    return Promise.resolve();
   }
 
   canCreateLobby(): boolean {

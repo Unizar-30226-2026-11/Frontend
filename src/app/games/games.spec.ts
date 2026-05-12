@@ -83,6 +83,84 @@ describe('Games', () => {
     expect(gamesPullSpy.getGames).toHaveBeenCalledOnceWith(1, 20, { forceRefresh: true });
   });
 
+  it('searches lobbies only when the search button action is submitted', async () => {
+    gamesPullSpy.getGames.calls.reset();
+    component.games.set([
+      {
+        id: 'ROOM1',
+        title: 'Sala exacta',
+        description: 'Classic - 1/4 jugadores - Esperando jugadores - Publica',
+        image: '/assets/Tablero.png',
+        hostId: 'user-1',
+        players: ['user-1'],
+        playerCount: 1,
+        maxPlayers: 4,
+        engine: 'Classic',
+        status: 'waiting',
+        isPrivate: false,
+        selectedDeckId: null,
+      },
+      {
+        id: 'ROOM2',
+        title: 'Otra sala',
+        description: 'Classic - 2/4 jugadores - Esperando jugadores - Publica',
+        image: '/assets/Tablero.png',
+        hostId: 'user-2',
+        players: ['user-2', 'user-3'],
+        playerCount: 2,
+        maxPlayers: 4,
+        engine: 'Classic',
+        status: 'waiting',
+        isPrivate: false,
+        selectedDeckId: null,
+      },
+    ]);
+
+    component.searchLobbyName = '  Sala exacta  ';
+
+    expect(gamesPullSpy.getGames).not.toHaveBeenCalled();
+
+    await component.submitLobbySearch();
+
+    expect(gamesPullSpy.getGames).not.toHaveBeenCalled();
+    expect(component.filteredGames()).toEqual([
+      jasmine.objectContaining({
+        id: 'ROOM1',
+        title: 'Sala exacta',
+      }),
+    ]);
+  });
+
+  it('keeps the applied search when refreshing lobbies', async () => {
+    gamesPullSpy.getGames.calls.reset();
+    component.games.set([
+      {
+        id: 'ROOM1',
+        title: 'Sala exacta',
+        description: 'Classic - 1/4 jugadores - Esperando jugadores - Publica',
+        image: '/assets/Tablero.png',
+        hostId: 'user-1',
+        players: ['user-1'],
+        playerCount: 1,
+        maxPlayers: 4,
+        engine: 'Classic',
+        status: 'waiting',
+        isPrivate: false,
+        selectedDeckId: null,
+      },
+    ]);
+    component.searchLobbyName = 'Sala exacta';
+
+    await component.submitLobbySearch();
+    gamesPullSpy.getGames.calls.reset();
+
+    await component.refreshLobbies();
+
+    expect(gamesPullSpy.getGames).toHaveBeenCalledOnceWith(1, 20, { forceRefresh: true });
+    expect(component.searchLobbyName).toBe('');
+    expect(component.filteredGames()).toEqual(component.games());
+  });
+
   it('creates a classic lobby and navigates to it', async () => {
     component.createLobbyName = 'Sala de prueba';
     component.createLobbyMaxPlayers = 5;
